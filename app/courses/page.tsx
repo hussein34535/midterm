@@ -9,62 +9,60 @@ import { courses } from '../../lib/data';
 
 export default function CoursesPage() {
     return (
-        <div className="bg-noise min-h-screen flex flex-col">
+        <div className="bg-warm-mesh min-h-screen flex flex-col" dir="rtl">
             <Header />
 
             <main className="flex-grow pt-40 pb-20">
                 {/* 🌌 Page Hero */}
-                <div className="container-wide mb-16 relative">
-                    <div className="max-w-3xl ml-auto text-right relative z-10">
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-purple-500/10 border border-purple-500/20 mb-6">
-                            <Sparkles className="w-4 h-4 text-purple-400" />
-                            <span className="text-sm font-bold text-purple-300">رحلات التعافي</span>
+                <div className="container mx-auto px-6 mb-16 relative">
+                    <div className="max-w-3xl ml-auto text-right relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6">
+                            <Sparkles className="w-4 h-4 text-primary" />
+                            <span className="text-sm font-bold text-primary">رحلات التعافي</span>
                         </div>
-                        <h1 className="text-5xl md:text-7xl font-black text-white mb-6 leading-tight">
+                        <h1 className="text-5xl md:text-7xl font-serif font-black text-foreground mb-6 leading-tight">
                             اختر مسارك <br />
-                            <span className="text-aurora">نحو السكينة</span>
+                            <span className="text-primary">نحو السكينة</span>
                         </h1>
-                        <p className="text-xl text-gray-400 font-light leading-relaxed max-w-2xl border-r-2 border-white/10 pr-6 mr-0">
+                        <p className="text-xl text-muted-foreground font-light leading-relaxed max-w-2xl border-r-4 border-primary/20 pr-6 mr-0">
                             مكتبة متكاملة من الجلسات الصوتية، الكورسات المكثفة، وورش العمل التفاعلية المصممة لمساعدتك على تجاوز التحديات اليومية.
                         </p>
                     </div>
                 </div>
 
-                <div className="container-wide">
-                    {/* 🔍 Glass Search Bar */}
-                    <div className="glass-panel p-2 mb-16 flex flex-col md:flex-row gap-2 max-w-4xl mx-auto -mt-8 relative z-20 shadow-2xl shadow-purple-900/20">
+                <div className="container mx-auto px-6">
+                    {/* 🔍 Search Bar */}
+                    <div className="card-love p-2 mb-16 flex flex-col md:flex-row gap-2 max-w-4xl mx-auto -mt-8 relative z-20 shadow-xl shadow-primary/5 animate-in fade-in slide-in-from-bottom-6 duration-1000 delay-100">
                         <div className="flex-grow relative group">
                             <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
-                                <Search className="w-5 h-5 text-gray-400 group-focus-within:text-purple-400 transition-colors" />
+                                <Search className="w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
                             </div>
                             <input
                                 type="text"
                                 placeholder="ابحث عن موضوع، شعور، أو اسم جلسة..."
-                                className="w-full bg-transparent border-none rounded-xl py-4 pr-12 pl-6 text-white placeholder-gray-500 focus:ring-0 focus:bg-white/5 transition-all text-lg"
+                                className="w-full bg-transparent border-none rounded-xl py-4 pr-12 pl-6 text-foreground placeholder:text-muted-foreground/70 focus:bg-secondary/50 transition-all text-lg outline-none"
                             />
                         </div>
-                        <button className="btn-glow px-8 py-4 whitespace-nowrap rounded-xl flex items-center gap-2">
+                        <button className="btn-primary px-8 py-4 whitespace-nowrap rounded-xl flex items-center gap-2 shadow-none">
                             <Filter className="w-5 h-5" />
                             <span>تصفية</span>
                         </button>
                     </div>
 
-                    {/* 📦 Floating Grid */}
+                    {/* 📦 Grid */}
                     {courses.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200">
                             {courses.map((course) => (
-                                <div key={course.id} className="group perspective-1000">
-                                    <div className="transform transition-all duration-500 group-hover:-translate-y-2 group-hover:rotate-x-2">
-                                        <CourseCard {...course} />
-                                    </div>
+                                <div key={course.id} className="group">
+                                    <CourseCard {...course} />
                                 </div>
                             ))}
                         </div>
                     ) : (
-                        <div className="glass-panel py-32 text-center max-w-2xl mx-auto">
-                            <BookOpen className="w-16 h-16 text-white/20 mx-auto mb-6" />
-                            <h3 className="text-2xl font-bold text-white mb-2">لم نعثر على نتائج</h3>
-                            <p className="text-gray-400">حاول البحث بكلمات مختلفة أو تصفح الأقسام الرئيسية.</p>
+                        <div className="card-love py-32 text-center max-w-2xl mx-auto">
+                            <BookOpen className="w-16 h-16 text-muted-foreground/20 mx-auto mb-6" />
+                            <h3 className="text-2xl font-bold text-foreground mb-2">لم نعثر على نتائج</h3>
+                            <p className="text-muted-foreground">حاول البحث بكلمات مختلفة أو تصفح الأقسام الرئيسية.</p>
                         </div>
                     )}
                 </div>

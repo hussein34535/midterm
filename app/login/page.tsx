@@ -4,68 +4,83 @@ import Link from "next/link";
 import { useState } from "react";
 import { Heart, Mail, Lock, Eye, EyeOff, ArrowLeft } from "lucide-react";
 
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+
 export default function LoginPage() {
+    const router = useRouter();
+    const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const [formData, setFormData] = useState({
         email: "",
         password: "",
     });
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        console.log("Login:", formData);
-    };
+        setIsLoading(true);
 
-    const inputStyle = {
-        paddingRight: '3rem',
-        paddingLeft: '1rem',
-        paddingTop: '0.75rem',
-        paddingBottom: '0.75rem',
-    };
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
-    const inputWithEyeStyle = {
-        paddingRight: '3rem',
-        paddingLeft: '3rem',
-        paddingTop: '0.75rem',
-        paddingBottom: '0.75rem',
+        // Mock Login Logic
+        try {
+            // Check if user exists in localStorage (optional, but good for demo)
+            const storedUser = localStorage.getItem('user');
+
+            // If no user found, create a mock one for this session to ensure they can proceed
+            if (!storedUser) {
+                const mockUser = {
+                    id: "mock-id-123",
+                    nickname: formData.email.split('@')[0],
+                    email: formData.email
+                };
+                localStorage.setItem('user', JSON.stringify(mockUser));
+            }
+
+            toast.success("تم تسجيل الدخول بنجاح");
+            router.push('/dashboard');
+        } catch (error) {
+            toast.error("حدث خطأ أثناء تسجيل الدخول");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
-        <div className="gradient-bg min-h-screen flex items-center justify-center px-6 py-12" style={{ direction: 'rtl' }}>
-            <div className="w-full max-w-md">
+        <div className="bg-warm-mesh min-h-screen flex items-center justify-center px-4 py-12" dir="rtl">
+            <div className="w-full max-w-md animate-in fade-in slide-in-from-bottom-4 duration-700">
                 {/* Logo */}
-                <Link href="/" className="flex items-center justify-center gap-3 mb-8">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] flex items-center justify-center">
-                        <Heart className="w-6 h-6 text-white" />
+                <Link href="/" className="flex items-center justify-center gap-3 mb-8 group">
+                    <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-white font-serif font-bold text-2xl group-hover:rotate-12 transition-transform shadow-lg shadow-primary/20">
+                        س
                     </div>
-                    <span className="text-3xl font-bold bg-gradient-to-l from-[var(--primary)] to-[var(--secondary)] bg-clip-text text-transparent">
-                        سكينة
-                    </span>
+                    <span className="text-3xl font-serif font-bold tracking-tight text-foreground">سكينة</span>
                 </Link>
 
                 {/* Form Card */}
-                <div className="glass-card p-8">
-                    <h1 className="text-2xl font-bold text-white text-center mb-2">
-                        مرحباً بعودتك
-                    </h1>
-                    <p className="text-[var(--text-secondary)] text-center mb-8">
-                        سجل دخول للمتابعة
-                    </p>
+                <div className="card-love p-8">
+                    <div className="text-center mb-8">
+                        <h1 className="text-2xl font-serif font-bold text-foreground mb-2">
+                            مرحباً بعودتك
+                        </h1>
+                        <p className="text-muted-foreground">
+                            سجل دخول للمتابعة
+                        </p>
+                    </div>
 
-                    <form onSubmit={handleSubmit} className="space-y-5">
+                    <form onSubmit={handleSubmit} className="space-y-6">
                         {/* Email */}
-                        <div>
-                            <label className="block text-sm text-[var(--text-secondary)] mb-2">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-foreground">
                                 البريد الإلكتروني
                             </label>
-                            <div className="relative flex items-center">
-                                <span className="absolute right-4 text-[var(--text-muted)] pointer-events-none">
-                                    <Mail className="w-5 h-5" />
-                                </span>
+                            <div className="relative">
+                                <Mail className="absolute right-3 top-3 w-5 h-5 text-muted-foreground" />
                                 <input
                                     type="email"
                                     placeholder="example@email.com"
-                                    className="input-field pl-4 pr-12 text-left"
+                                    className="w-full pl-4 pr-10 py-3 rounded-xl border border-input bg-background/50 focus:bg-background focus:ring-2 focus:ring-primary/20 transition-all outline-none text-left"
                                     dir="ltr"
                                     value={formData.email}
                                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -75,18 +90,16 @@ export default function LoginPage() {
                         </div>
 
                         {/* Password */}
-                        <div>
-                            <label className="block text-sm text-[var(--text-secondary)] mb-2">
-                                كلمة السر
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-foreground">
+                                كلمة السـر
                             </label>
-                            <div className="relative flex items-center">
-                                <span className="absolute right-4 text-[var(--text-muted)] pointer-events-none">
-                                    <Lock className="w-5 h-5" />
-                                </span>
+                            <div className="relative">
+                                <Lock className="absolute right-3 top-3 w-5 h-5 text-muted-foreground" />
                                 <input
                                     type={showPassword ? "text" : "password"}
                                     placeholder="••••••••"
-                                    className="input-field pl-12 pr-12 text-left"
+                                    className="w-full pl-10 pr-10 py-3 rounded-xl border border-input bg-background/50 focus:bg-background focus:ring-2 focus:ring-primary/20 transition-all outline-none text-left"
                                     dir="ltr"
                                     value={formData.password}
                                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
@@ -95,7 +108,7 @@ export default function LoginPage() {
                                 <button
                                     type="button"
                                     onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute left-4 text-[var(--text-muted)] hover:text-white transition-colors"
+                                    className="absolute left-3 top-3 text-muted-foreground hover:text-primary transition-colors"
                                 >
                                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                                 </button>
@@ -104,22 +117,35 @@ export default function LoginPage() {
 
                         {/* Forgot Password */}
                         <div className="text-left">
-                            <Link href="/forgot-password" className="text-sm text-[var(--primary)] hover:underline">
+                            <Link href="/forgot-password" className="text-sm font-medium text-primary hover:underline">
                                 نسيت كلمة السر؟
                             </Link>
                         </div>
 
                         {/* Submit Button */}
-                        <button type="submit" className="btn-primary w-full text-lg">
-                            تسجيل الدخول
-                            <ArrowLeft className="w-5 h-5" />
+                        {/* Submit Button */}
+                        <button
+                            type="submit"
+                            className="btn-primary w-full shadow-lg shadow-primary/25 disabled:opacity-70 disabled:cursor-not-allowed"
+                            disabled={isLoading}
+                        >
+                            {isLoading ? (
+                                <span className="flex items-center gap-2 justify-center">
+                                    جاري الدخول...
+                                </span>
+                            ) : (
+                                <>
+                                    <span className="font-bold">تسجيل الدخول</span>
+                                    <ArrowLeft className="w-5 h-5" />
+                                </>
+                            )}
                         </button>
                     </form>
 
                     {/* Register Link */}
-                    <p className="text-center text-[var(--text-secondary)] mt-6">
+                    <p className="text-center text-muted-foreground mt-8">
                         ليس لديك حساب؟{" "}
-                        <Link href="/register" className="text-[var(--primary)] hover:underline font-semibold">
+                        <Link href="/register" className="text-primary font-bold hover:underline">
                             سجل الآن
                         </Link>
                     </p>

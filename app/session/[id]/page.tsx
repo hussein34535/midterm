@@ -14,7 +14,8 @@ import {
     Users,
     Clock,
     Send,
-    Wand2
+    Wand2,
+    Sparkles
 } from "lucide-react";
 
 interface PageProps {
@@ -66,206 +67,221 @@ export default function SessionPage({ params }: PageProps) {
     };
 
     return (
-        <div className="bg-[var(--bg-dark)] min-h-screen flex flex-col">
+        <div className="bg-warm-mesh min-h-screen flex flex-col" dir="rtl">
             {/* Header */}
-            <header className="glass-card border-t-0 border-l-0 border-r-0 rounded-none px-6 py-4">
+            <header className="bg-background/80 backdrop-blur-md border-b border-border px-6 py-4 sticky top-0 z-50">
                 <div className="container mx-auto flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-[var(--primary)] flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
                             <span className="text-white font-bold">3</span>
                         </div>
                         <div>
-                            <h1 className="text-lg font-semibold text-white">الجلسة 3: التعبير عن المشاعر</h1>
-                            <p className="text-sm text-[var(--text-muted)]">التعامل مع القلق</p>
+                            <h1 className="text-lg font-bold text-foreground flex items-center gap-2">
+                                الجلسة 3: التعبير عن المشاعر
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 animate-pulse">
+                                    مباشر
+                                </span>
+                            </h1>
+                            <p className="text-sm text-muted-foreground">التعامل مع القلق</p>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-6">
-                        <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-                            <Clock className="w-5 h-5" />
-                            <span className="font-mono">{sessionTime}</span>
+                        <div className="hidden md:flex items-center gap-2 text-muted-foreground bg-secondary/50 px-3 py-1.5 rounded-lg">
+                            <Clock className="w-4 h-4 text-primary" />
+                            <span className="font-mono font-medium">{sessionTime}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-                            <Users className="w-5 h-5" />
+                        <div className="hidden md:flex items-center gap-2 text-muted-foreground bg-secondary/50 px-3 py-1.5 rounded-lg">
+                            <Users className="w-4 h-4 text-primary" />
                             <span>{participants.length}</span>
                         </div>
                         <Link
                             href="/dashboard"
-                            className="flex items-center gap-2 text-[var(--error)] hover:bg-[var(--error)]/10 px-4 py-2 rounded-xl transition-colors"
+                            className="flex items-center gap-2 text-destructive hover:bg-destructive/10 px-4 py-2 rounded-xl transition-colors font-medium"
                         >
                             <LogOut className="w-5 h-5" />
-                            خروج
+                            <span className="hidden md:inline">خروج</span>
                         </Link>
                     </div>
                 </div>
             </header>
 
             {/* Main Content */}
-            <div className="flex-1 flex">
+            <div className="flex-1 flex overflow-hidden">
                 {/* Participants Grid */}
-                <div className="flex-1 p-6">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+                <div className="flex-1 p-6 overflow-y-auto">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto">
                         {participants.map((participant) => (
                             <div
                                 key={participant.id}
-                                className={`glass-card p-6 flex flex-col items-center gap-3 relative ${participant.isSpeaking ? "border-[var(--success)] animate-pulse-glow" : ""
+                                className={`card-love p-6 flex flex-col items-center gap-4 relative transition-all duration-300 ${participant.isSpeaking ? "ring-2 ring-primary shadow-lg shadow-primary/20 scale-105" : "hover:border-primary/30"
                                     }`}
                             >
                                 {/* Avatar */}
-                                <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl relative ${participant.isSpecialist
-                                    ? "bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)]"
-                                    : "bg-[var(--bg-card)]"
+                                <div className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl relative transition-all ${participant.isSpecialist
+                                    ? "bg-gradient-to-br from-primary to-primary/60 text-white shadow-lg"
+                                    : "bg-secondary text-foreground"
                                     }`}>
                                     {participant.isSpecialist ? "⭐" : "👤"}
+
                                     {/* Speaking indicator */}
                                     {participant.isSpeaking && (
-                                        <div className="absolute inset-0 rounded-full border-2 border-[var(--success)] animate-pulse-glow" />
+                                        <span className="absolute -bottom-1 -right-1 flex h-4 w-4">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-4 w-4 bg-green-500 border-2 border-white"></span>
+                                        </span>
                                     )}
                                 </div>
 
-                                {/* Nickname */}
-                                <span className={`font-semibold ${participant.isSpecialist ? "text-[var(--primary)]" : "text-white"
-                                    }`}>
-                                    {participant.nickname}
-                                </span>
+                                <div className="text-center">
+                                    <h3 className={`font-bold ${participant.isSpecialist ? "text-primary" : "text-foreground"}`}>
+                                        {participant.nickname}
+                                    </h3>
+                                    {participant.isSpecialist && <span className="text-xs text-muted-foreground">أخصائي</span>}
+                                </div>
 
                                 {/* Muted badge */}
                                 {participant.isMuted && (
-                                    <span className="absolute top-3 left-3 bg-[var(--error)]/20 p-1.5 rounded-full">
-                                        <MicOff className="w-4 h-4 text-[var(--error)]" />
+                                    <span className="absolute top-3 left-3 bg-destructive/10 p-1.5 rounded-full">
+                                        <MicOff className="w-3 h-3 text-destructive" />
                                     </span>
                                 )}
 
                                 {/* Speaking waves */}
                                 {participant.isSpeaking && !participant.isMuted && (
-                                    <div className="flex items-center gap-1">
-                                        <div className="w-1 h-3 bg-[var(--success)] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                                        <div className="w-1 h-5 bg-[var(--success)] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                                        <div className="w-1 h-4 bg-[var(--success)] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                                        <div className="w-1 h-3 bg-[var(--success)] rounded-full animate-bounce" style={{ animationDelay: "450ms" }} />
+                                    <div className="flex items-center gap-1 h-4">
+                                        <div className="w-1 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                                        <div className="w-1 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                                        <div className="w-1 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                                        <div className="w-1 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "450ms" }} />
                                     </div>
                                 )}
                             </div>
                         ))}
                     </div>
-
-                    {/* Controls */}
-                    <div className="fixed bottom-0 left-0 right-0 glass-card border-b-0 border-l-0 border-r-0 rounded-none p-6">
-                        <div className="container mx-auto flex items-center justify-center gap-4">
-                            {/* Mic */}
-                            <button
-                                onClick={() => setIsMuted(!isMuted)}
-                                className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${isMuted
-                                    ? "bg-[var(--error)] hover:bg-[var(--error)]/80"
-                                    : "bg-[var(--success)] hover:bg-[var(--success)]/80"
-                                    }`}
-                            >
-                                {isMuted ? <MicOff className="w-6 h-6 text-white" /> : <Mic className="w-6 h-6 text-white" />}
-                            </button>
-
-                            {/* Speaker */}
-                            <button
-                                onClick={() => setIsSpeakerOn(!isSpeakerOn)}
-                                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${isSpeakerOn
-                                    ? "bg-[var(--bg-card)] hover:bg-[var(--bg-card-hover)]"
-                                    : "bg-[var(--warning)] hover:bg-[var(--warning)]/80"
-                                    }`}
-                            >
-                                {isSpeakerOn ? <Volume2 className="w-5 h-5 text-white" /> : <VolumeX className="w-5 h-5 text-white" />}
-                            </button>
-
-                            {/* Voice Changer */}
-                            <button
-                                onClick={() => setVoiceChanger(!voiceChanger)}
-                                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${voiceChanger
-                                    ? "bg-[var(--primary)] hover:bg-[var(--primary-dark)]"
-                                    : "bg-[var(--bg-card)] hover:bg-[var(--bg-card-hover)]"
-                                    }`}
-                                title="تغيير الصوت"
-                            >
-                                <Wand2 className="w-5 h-5 text-white" />
-                            </button>
-
-                            {/* Raise Hand */}
-                            <button
-                                onClick={() => setHandRaised(!handRaised)}
-                                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${handRaised
-                                    ? "bg-[var(--warning)] hover:bg-[var(--warning)]/80"
-                                    : "bg-[var(--bg-card)] hover:bg-[var(--bg-card-hover)]"
-                                    }`}
-                                title="رفع اليد"
-                            >
-                                <Hand className="w-5 h-5 text-white" />
-                            </button>
-
-                            {/* Chat Toggle */}
-                            <button
-                                onClick={() => setShowChat(!showChat)}
-                                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${showChat
-                                    ? "bg-[var(--primary)] hover:bg-[var(--primary-dark)]"
-                                    : "bg-[var(--bg-card)] hover:bg-[var(--bg-card-hover)]"
-                                    }`}
-                            >
-                                <MessageCircle className="w-5 h-5 text-white" />
-                            </button>
-
-                            {/* Emergency Exit */}
-                            <button
-                                className="w-12 h-12 rounded-full bg-[var(--error)]/20 hover:bg-[var(--error)] flex items-center justify-center transition-all group"
-                                title="خروج سريع"
-                            >
-                                <AlertCircle className="w-5 h-5 text-[var(--error)] group-hover:text-white" />
-                            </button>
-                        </div>
-                    </div>
                 </div>
 
                 {/* Chat Sidebar */}
                 {showChat && (
-                    <div className="w-80 border-r border-[var(--glass-border)] bg-[var(--bg-darker)] flex flex-col">
-                        <div className="p-4 border-b border-[var(--glass-border)]">
-                            <h2 className="font-semibold text-white flex items-center gap-2">
-                                <MessageCircle className="w-5 h-5 text-[var(--primary)]" />
+                    <div className="w-80 border-r border-l border-border bg-background/50 backdrop-blur-sm flex flex-col shadow-xl z-20 animate-in slide-in-from-left duration-300">
+                        <div className="p-4 border-b border-border bg-background/80">
+                            <h2 className="font-bold text-foreground flex items-center gap-2">
+                                <MessageCircle className="w-5 h-5 text-primary" />
                                 المحادثة
                             </h2>
                         </div>
 
                         {/* Messages */}
-                        <div className="flex-1 overflow-y-auto p-4 space-y-4 mb-20">
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24">
                             {messages.map((msg) => (
                                 <div
                                     key={msg.id}
-                                    className={`${msg.isAnnouncement ? "bg-[var(--primary)]/10 border border-[var(--primary)]/30 rounded-xl p-3" : ""}`}
+                                    className={`rounded-2xl p-3 max-w-[90%] ${msg.isAnnouncement
+                                        ? "bg-primary/5 border border-primary/20 mx-auto w-full text-center"
+                                        : msg.sender === "نجمة"
+                                            ? "bg-primary text-primary-foreground mr-auto rounded-tl-none"
+                                            : "bg-secondary text-foreground ml-auto rounded-tr-none"}`}
                                 >
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className={`text-sm font-semibold ${msg.isAnnouncement ? "text-[var(--primary)]" : "text-[var(--secondary)]"
-                                            }`}>
-                                            {msg.sender}
-                                        </span>
-                                        <span className="text-xs text-[var(--text-muted)]">{msg.time}</span>
-                                    </div>
-                                    <p className="text-[var(--text-secondary)] text-sm">{msg.message}</p>
+                                    {!msg.isAnnouncement && (
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className={`text-xs font-bold ${msg.sender === "نجمة" ? "text-white/90" : "text-primary"}`}>
+                                                {msg.sender}
+                                            </span>
+                                            <span className={`text-[10px] ${msg.sender === "نجمة" ? "text-white/70" : "text-muted-foreground"}`}>{msg.time}</span>
+                                        </div>
+                                    )}
+                                    <p className={`text-sm ${msg.isAnnouncement ? "text-primary font-medium" : ""}`}>{msg.message}</p>
                                 </div>
                             ))}
                         </div>
 
                         {/* Message Input */}
-                        <form onSubmit={sendMessage} className="p-4 border-t border-[var(--glass-border)] mb-16">
-                            <div className="flex gap-2">
+                        <div className="p-4 border-t border-border bg-background/80 absolute bottom-[90px] w-full md:relative md:bottom-0">
+                            <form onSubmit={sendMessage} className="flex gap-2">
                                 <input
                                     type="text"
                                     value={newMessage}
                                     onChange={(e) => setNewMessage(e.target.value)}
                                     placeholder="اكتب رسالة..."
-                                    className="input-field flex-1 py-3 px-4 text-sm"
+                                    className="flex-1 bg-secondary/50 border-none rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all placeholder:text-muted-foreground"
                                 />
-                                <button type="submit" className="btn-primary p-2">
-                                    <Send className="w-5 h-5" />
+                                <button type="submit" className="btn-primary p-3 rounded-xl shadow-none">
+                                    <Send className="w-4 h-4" />
                                 </button>
-                            </div>
-                        </form>
+                            </form>
+                        </div>
                     </div>
                 )}
+            </div>
+
+            {/* Controls */}
+            <div className="bg-background/80 backdrop-blur-md border-t border-border p-4 md:p-6 sticky bottom-0 z-50">
+                <div className="container mx-auto flex items-center justify-center gap-3 md:gap-6">
+                    {/* Mic */}
+                    <button
+                        onClick={() => setIsMuted(!isMuted)}
+                        className={`w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center transition-all shadow-lg ${isMuted
+                            ? "bg-destructive text-white hover:bg-destructive/90 shadow-destructive/20"
+                            : "bg-green-500 text-white hover:bg-green-600 shadow-green-500/20"
+                            }`}
+                    >
+                        {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+                    </button>
+
+                    {/* Speaker */}
+                    <button
+                        onClick={() => setIsSpeakerOn(!isSpeakerOn)}
+                        className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-all ${isSpeakerOn
+                            ? "bg-secondary text-foreground hover:bg-secondary/80"
+                            : "bg-yellow-500/10 text-yellow-600 hover:bg-yellow-500/20 border border-yellow-500/20"
+                            }`}
+                    >
+                        {isSpeakerOn ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+                    </button>
+
+                    {/* Voice Changer */}
+                    <button
+                        onClick={() => setVoiceChanger(!voiceChanger)}
+                        className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-all ${voiceChanger
+                            ? "bg-primary text-white shadow-lg shadow-primary/20"
+                            : "bg-secondary text-foreground hover:bg-secondary/80"
+                            }`}
+                        title="تغيير الصوت"
+                    >
+                        <Wand2 className="w-5 h-5" />
+                    </button>
+
+                    {/* Raise Hand */}
+                    <button
+                        onClick={() => setHandRaised(!handRaised)}
+                        className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-all ${handRaised
+                            ? "bg-yellow-400 text-white shadow-lg shadow-yellow-400/20 animate-bounce"
+                            : "bg-secondary text-foreground hover:bg-secondary/80"
+                            }`}
+                        title="رفع اليد"
+                    >
+                        <Hand className="w-5 h-5" />
+                    </button>
+
+                    {/* Chat Toggle */}
+                    <button
+                        onClick={() => setShowChat(!showChat)}
+                        className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-all ${showChat
+                            ? "bg-primary text-white shadow-lg shadow-primary/20"
+                            : "bg-secondary text-foreground hover:bg-secondary/80"
+                            }`}
+                    >
+                        <MessageCircle className="w-5 h-5" />
+                    </button>
+
+                    {/* Emergency Exit */}
+                    <button
+                        className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-destructive/10 hover:bg-destructive hover:text-white text-destructive flex items-center justify-center transition-all group ml-2 md:ml-4"
+                        title="خروج سريع"
+                    >
+                        <AlertCircle className="w-5 h-5" />
+                    </button>
+                </div>
             </div>
         </div>
     );

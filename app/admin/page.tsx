@@ -14,7 +14,8 @@ import {
     ArrowUpRight,
     ArrowDownRight,
     Calendar,
-    Wifi
+    Wifi,
+    LogOut
 } from "lucide-react";
 import { useState } from "react";
 
@@ -38,17 +39,15 @@ const Sidebar = () => {
     ];
 
     return (
-        <aside className="fixed right-0 top-0 h-screen w-72 bg-[var(--bg-darker)] border-l border-[var(--glass-border)] hidden lg:flex flex-col z-50">
+        <aside className="fixed right-0 top-0 h-screen w-72 bg-background border-l border-border hidden lg:flex flex-col z-50">
             {/* Logo Area */}
-            <div className="h-20 flex items-center px-8 border-b border-[var(--glass-border)]">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--primary)] to-[var(--secondary)] flex items-center justify-center shadow-lg shadow-[var(--primary)]/20">
-                        <Wifi className="w-6 h-6 text-white" />
+            <div className="h-20 flex items-center px-8 border-b border-border">
+                <Link href="/" className="flex items-center gap-3 group">
+                    <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white font-serif font-bold text-xl group-hover:rotate-12 transition-transform shadow-lg shadow-primary/20">
+                        س
                     </div>
-                    <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-[var(--text-secondary)]">
-                        سكينة
-                    </span>
-                </div>
+                    <span className="text-2xl font-serif font-bold tracking-tight text-foreground">سكينة</span>
+                </Link>
             </div>
 
             {/* Navigation */}
@@ -57,27 +56,27 @@ const Sidebar = () => {
                     <button
                         key={index}
                         className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-200 group ${item.active
-                                ? "bg-[var(--primary)]/10 text-[var(--primary)] shadow-sm border border-[var(--primary)]/20"
-                                : "text-[var(--text-muted)] hover:bg-[var(--bg-card)] hover:text-white"
+                            ? "bg-primary text-primary-foreground shadow-md"
+                            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                             }`}
                     >
-                        <item.icon className={`w-5 h-5 ${item.active ? "text-[var(--primary)]" : "group-hover:text-white transition-colors"}`} />
-                        <span className="font-medium">{item.label}</span>
+                        <item.icon className="w-5 h-5 shrink-0" />
+                        <span className="font-bold">{item.label}</span>
                     </button>
                 ))}
             </nav>
 
             {/* User Profile Snippet */}
-            <div className="p-4 border-t border-[var(--glass-border)]">
-                <div className="glass-card p-3 flex items-center gap-3 cursor-pointer hover:bg-[var(--surface-glass-hover)]">
-                    <div className="w-10 h-10 rounded-full bg-[var(--primary)]/20 flex items-center justify-center text-[var(--primary)] font-bold">
+            <div className="p-4 border-t border-border bg-secondary/30">
+                <div className="flex items-center gap-3 cursor-pointer hover:bg-background p-2 rounded-xl transition-colors">
+                    <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold border border-primary/10">
                         A
                     </div>
                     <div className="flex-1 overflow-hidden">
-                        <p className="text-sm font-semibold text-white truncate">أدمن النظام</p>
-                        <p className="text-xs text-[var(--text-muted)] truncate">admin@sakina.app</p>
+                        <p className="text-sm font-bold text-foreground truncate">مدير النظام</p>
+                        <p className="text-xs text-muted-foreground truncate">admin@sakina.app</p>
                     </div>
-                    <ChevronDown className="w-4 h-4 text-[var(--text-muted)]" />
+                    <LogOut className="w-4 h-4 text-muted-foreground hover:text-red-500 transition-colors" />
                 </div>
             </div>
         </aside>
@@ -87,25 +86,25 @@ const Sidebar = () => {
 // Top Header Component
 const Header = () => {
     return (
-        <header className="h-20 border-b border-[var(--glass-border)] bg-[var(--bg-dark)]/80 backdrop-blur-xl sticky top-0 z-40 px-8 flex items-center justify-between">
+        <header className="h-20 border-b border-border bg-background/80 backdrop-blur-xl sticky top-0 z-40 px-8 flex items-center justify-between">
             <div className="flex items-center gap-4 flex-1 max-w-xl">
                 <div className="relative w-full">
-                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[var(--text-muted)]" />
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <input
                         type="text"
-                        placeholder="بحث في النظام..."
-                        className="w-full input-field rounded-xl py-2.5 pr-10 pl-4 text-sm text-white focus:outline-none focus:border-[var(--primary)]/50 focus:ring-1 focus:ring-[var(--primary)]/50 transition-all placeholder:text-[var(--text-muted)]"
+                        placeholder="بحث في السجلات..."
+                        className="w-full bg-secondary/50 border border-transparent rounded-xl py-2.5 pr-10 pl-4 text-sm text-foreground focus:outline-none focus:border-primary focus:bg-background transition-all placeholder:text-muted-foreground"
                     />
                 </div>
             </div>
 
             <div className="flex items-center gap-4 mr-4">
-                <button className="relative w-10 h-10 rounded-xl bg-[var(--bg-card)] border border-[var(--glass-border)] flex items-center justify-center text-[var(--text-muted)] hover:text-white hover:border-[var(--text-muted)]/30 transition-all">
+                <button className="relative w-10 h-10 rounded-xl bg-background border border-border flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/50 transition-all shadow-sm">
                     <Bell className="w-5 h-5" />
-                    <span className="absolute top-2 left-2.5 w-2 h-2 rounded-full bg-[var(--error)] border border-[var(--bg-dark)]"></span>
+                    <span className="absolute top-2 left-2.5 w-2 h-2 rounded-full bg-red-500 border border-background"></span>
                 </button>
-                <Link href="/" className="btn-secondary py-2 px-4 text-sm">
-                    العودة للموقع
+                <Link href="/" className="px-4 py-2 rounded-xl bg-background border border-border text-sm font-bold text-foreground hover:border-primary hover:text-primary transition-all shadow-sm">
+                    زيارة الموقع
                 </Link>
             </div>
         </header>
@@ -114,19 +113,21 @@ const Header = () => {
 
 // Stat Card Component
 const StatCard = ({ title, value, change, isPositive, icon: Icon, colorClass }: any) => {
+    // Extract base color name (e.g., 'primary', 'blue-500') roughly or use standardized approach
+    // For simplicity with new design system, we'll use consistent styling
     return (
-        <div className="glass-card p-6 relative overflow-hidden group">
-            <div className={`absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity ${colorClass}`}>
-                <Icon className="w-24 h-24" />
+        <div className="card-love p-6 relative overflow-hidden group hover:shadow-lg transition-all">
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                <Icon className="w-24 h-24 text-primary" />
             </div>
 
             <div className="flex justify-between items-start mb-4 relative z-10">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${colorClass} bg-opacity-10`}>
-                    <Icon className={`w-6 h-6 ${colorClass.replace('bg-', 'text-')}`} />
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center bg-primary/10 text-primary">
+                    <Icon className="w-6 h-6" />
                 </div>
-                <div className={`flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full border ${isPositive
-                        ? "bg-[var(--success)]/10 text-[var(--success)] border-[var(--success)]/20"
-                        : "bg-[var(--error)]/10 text-[var(--error)] border-[var(--error)]/20"
+                <div className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full border ${isPositive
+                    ? "bg-green-100 text-green-700 border-green-200"
+                    : "bg-red-100 text-red-700 border-red-200"
                     }`}>
                     {isPositive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
                     {change}
@@ -134,8 +135,8 @@ const StatCard = ({ title, value, change, isPositive, icon: Icon, colorClass }: 
             </div>
 
             <div className="relative z-10">
-                <h3 className="text-[var(--text-muted)] text-sm font-medium mb-1">{title}</h3>
-                <p className="text-2xl font-bold text-white tracking-tight">{value}</p>
+                <h3 className="text-muted-foreground text-sm font-medium mb-1">{title}</h3>
+                <p className="text-3xl font-black text-foreground tracking-tight">{value}</p>
             </div>
         </div>
     );
@@ -143,44 +144,41 @@ const StatCard = ({ title, value, change, isPositive, icon: Icon, colorClass }: 
 
 export default function AdminPage() {
     return (
-        <div className="min-h-screen bg-[var(--bg-dark)] lg:pr-72">
+        <div className="min-h-screen bg-warm-mesh lg:pr-72" dir="rtl">
             <Sidebar />
 
             <div className="flex flex-col min-h-screen">
                 <Header />
 
-                <main className="flex-1 p-8 animate-fade-in">
+                <main className="flex-1 p-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
                     {/* Page Title */}
                     <div className="mb-8">
-                        <h1 className="text-3xl font-bold text-white mb-2">لوحة المعلومات</h1>
-                        <p className="text-[var(--text-muted)]">نظرة عامة على أداء المنصة والإحصائيات الرئيسية.</p>
+                        <h1 className="text-3xl font-serif font-bold text-foreground mb-2">لوحة المعلومات</h1>
+                        <p className="text-muted-foreground">نظرة عامة على أداء المنصة والإحصائيات الحيوية.</p>
                     </div>
 
                     {/* Stats Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                         <StatCard
-                            title="إجمالي المستخدمين"
+                            title="إجمالي الأعضاء"
                             value="12,345"
                             change="+12%"
                             isPositive={true}
                             icon={Users}
-                            colorClass="text-[var(--primary)] bg-[var(--primary)]"
                         />
                         <StatCard
-                            title="الكورسات النشطة"
+                            title="الجلسات النشطة"
                             value="24"
                             change="+4%"
                             isPositive={true}
                             icon={BookOpen}
-                            colorClass="text-[var(--secondary)] bg-[var(--secondary)]"
                         />
                         <StatCard
-                            title="إيرادات الشهر"
-                            value="45,230 ج.م"
+                            title="الإيرادات (شهر)"
+                            value="45,230"
                             change="-2.5%"
                             isPositive={false}
                             icon={CreditCard}
-                            colorClass="text-[var(--accent-teal)] bg-[var(--accent-teal)]"
                         />
                         <StatCard
                             title="جلسات اليوم"
@@ -188,7 +186,6 @@ export default function AdminPage() {
                             change="+1"
                             isPositive={true}
                             icon={Calendar}
-                            colorClass="text-[var(--accent-orange)] bg-[var(--accent-orange)]"
                         />
                     </div>
 
@@ -196,60 +193,60 @@ export default function AdminPage() {
                     <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
 
                         {/* Active Courses Table */}
-                        <div className="xl:col-span-2 glass-card p-6">
+                        <div className="xl:col-span-2 card-love p-6">
                             <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-lg font-bold text-white">الكورسات النشطة</h2>
-                                <button className="text-xs font-semibold text-[var(--primary)] hover:text-[var(--primary-hover)] transition-colors">
+                                <h2 className="text-lg font-bold text-foreground">الجلسات النشطة</h2>
+                                <button className="text-xs font-bold text-primary hover:underline transition-all">
                                     عرض الكل
                                 </button>
                             </div>
 
                             <div className="overflow-x-auto">
-                                <table className="table-base">
+                                <table className="w-full">
                                     <thead>
-                                        <tr>
-                                            <th>اسم الكورس</th>
-                                            <th className="text-center">المقاعد</th>
-                                            <th className="text-center">الحالة</th>
-                                            <th className="text-center">التقدم</th>
+                                        <tr className="border-b border-border/50">
+                                            <th className="text-right py-3 text-muted-foreground font-medium text-sm">اسم الجلسة</th>
+                                            <th className="text-center py-3 text-muted-foreground font-medium text-sm">المقاعد</th>
+                                            <th className="text-center py-3 text-muted-foreground font-medium text-sm">الحالة</th>
+                                            <th className="text-center py-3 text-muted-foreground font-medium text-sm">التقدم</th>
                                             <th></th>
                                         </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody className="divide-y divide-border/50">
                                         {[
                                             { name: "التعامل مع القلق المزمن", seats: "8/10", status: "نشط", progress: 60 },
                                             { name: "بناء تقدير الذات", seats: "12/15", status: "مكتمل", progress: 100 },
                                             { name: "إدارة ضغوط العمل", seats: "5/10", status: "قريباً", progress: 0 },
                                             { name: "التشافي من الصدمات", seats: "10/10", status: "نشط", progress: 25 },
                                         ].map((course, idx) => (
-                                            <tr key={idx} className="group hover:bg-[var(--bg-card-hover)] transition-colors">
-                                                <td className="font-medium text-white">
+                                            <tr key={idx} className="group hover:bg-secondary/30 transition-colors">
+                                                <td className="py-4">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-lg bg-[var(--bg-dark)] flex items-center justify-center text-[var(--text-muted)] text-xs font-bold border border-[var(--glass-border)]">
+                                                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary text-xs font-bold">
                                                             {idx + 1}
                                                         </div>
-                                                        {course.name}
+                                                        <span className="font-bold text-foreground text-sm">{course.name}</span>
                                                     </div>
                                                 </td>
-                                                <td className="text-center text-[var(--text-secondary)] font-mono text-sm">{course.seats}</td>
+                                                <td className="text-center text-muted-foreground font-mono text-sm">{course.seats}</td>
                                                 <td className="text-center">
-                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${course.status === "نشط" ? "bg-[var(--success)]/10 text-[var(--success)] border-[var(--success)]/20" :
-                                                            course.status === "مكتمل" ? "bg-[var(--primary)]/10 text-[var(--primary)] border-[var(--primary)]/20" :
-                                                                "bg-[var(--warning)]/10 text-[var(--warning)] border-[var(--warning)]/20"
+                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${course.status === "نشط" ? "bg-green-100 text-green-700 border-green-200" :
+                                                        course.status === "مكتمل" ? "bg-blue-100 text-blue-700 border-blue-200" :
+                                                            "bg-yellow-100 text-yellow-700 border-yellow-200"
                                                         }`}>
                                                         {course.status}
                                                     </span>
                                                 </td>
-                                                <td className="text-center align-middle">
-                                                    <div className="w-24 h-1.5 bg-[var(--bg-dark)] rounded-full mx-auto overflow-hidden">
+                                                <td className="text-center align-middle px-4">
+                                                    <div className="w-full h-1.5 bg-secondary rounded-full overflow-hidden">
                                                         <div
-                                                            className="h-full bg-[var(--primary)] rounded-full"
+                                                            className="h-full bg-primary rounded-full"
                                                             style={{ width: `${course.progress}%` }}
                                                         />
                                                     </div>
                                                 </td>
                                                 <td className="text-left">
-                                                    <button className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-[var(--bg-dark)] transition-colors">
+                                                    <button className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-secondary transition-colors">
                                                         <MoreHorizontal className="w-4 h-4" />
                                                     </button>
                                                 </td>
@@ -261,11 +258,11 @@ export default function AdminPage() {
                         </div>
 
                         {/* Recent Transactions */}
-                        <div className="glass-card p-6">
+                        <div className="card-love p-6">
                             <div className="flex items-center justify-between mb-6">
-                                <h2 className="text-lg font-bold text-white">أحدث العمليات</h2>
-                                <button className="p-1.5 rounded-lg hover:bg-[var(--bg-dark)] transition-colors">
-                                    <Settings className="w-4 h-4 text-[var(--text-muted)]" />
+                                <h2 className="text-lg font-bold text-foreground">أحدث العمليات</h2>
+                                <button className="p-1.5 rounded-lg hover:bg-secondary transition-colors">
+                                    <Settings className="w-4 h-4 text-muted-foreground" />
                                 </button>
                             </div>
 
@@ -276,20 +273,20 @@ export default function AdminPage() {
                                     { user: "محمود حسن", type: "استرداد", amount: "-450", time: "منذ ساعة", status: "error" },
                                     { user: "نور الهدى", type: "اشتراك كورس", amount: "+350", time: "منذ ساعتين", status: "pending" },
                                 ].map((tx, idx) => (
-                                    <div key={idx} className="flex items-center justify-between p-3 rounded-xl hover:bg-[var(--bg-dark)]/50 transition-colors border border-transparent hover:border-[var(--border-glass)] cursor-pointer">
+                                    <div key={idx} className="flex items-center justify-between p-3 rounded-xl hover:bg-secondary/50 transition-colors border border-transparent hover:border-border cursor-pointer">
                                         <div className="flex items-center gap-3">
-                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg ${tx.status === "success" ? "bg-[var(--success)]/10 text-[var(--success)]" :
-                                                    tx.status === "error" ? "bg-[var(--error)]/10 text-[var(--error)]" :
-                                                        "bg-[var(--warning)]/10 text-[var(--warning)]"
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg shadow-sm border ${tx.status === "success" ? "bg-green-100 text-green-700 border-green-200" :
+                                                tx.status === "error" ? "bg-red-100 text-red-700 border-red-200" :
+                                                    "bg-yellow-100 text-yellow-700 border-yellow-200"
                                                 }`}>
                                                 {tx.status === "success" ? "↓" : tx.status === "error" ? "↑" : "•"}
                                             </div>
                                             <div>
-                                                <p className="text-sm font-bold text-white">{tx.user}</p>
-                                                <p className="text-xs text-[var(--text-muted)]">{tx.type} • {tx.time}</p>
+                                                <p className="text-sm font-bold text-foreground">{tx.user}</p>
+                                                <p className="text-xs text-muted-foreground">{tx.type} • {tx.time}</p>
                                             </div>
                                         </div>
-                                        <div className={`text-sm font-mono font-bold ${tx.status === "error" ? "text-[var(--text-primary)]" : "text-[var(--success)]"
+                                        <div className={`text-sm font-mono font-bold ${tx.status === "error" ? "text-red-600" : "text-green-600"
                                             }`}>
                                             {tx.amount}
                                         </div>
@@ -297,7 +294,7 @@ export default function AdminPage() {
                                 ))}
                             </div>
 
-                            <button className="w-full mt-6 btn-secondary py-2 text-sm justify-center">
+                            <button className="w-full mt-6 btn-outline py-2.5 text-sm justify-center font-bold">
                                 عرض كل العمليات
                             </button>
                         </div>
