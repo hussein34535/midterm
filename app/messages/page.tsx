@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { useRouter } from "next/navigation";
-import { MessageCircle, Send, Loader2, User, Users, Calendar, Clock, ArrowRight, Phone, Video, MoreVertical, Check, CheckCheck, Smile, X, Reply, Image as ImageIcon } from "lucide-react";
+import { MessageCircle, Send, Loader2, User, Users, Calendar, Clock, ArrowRight, Phone, Video, MoreVertical, Check, CheckCheck, Smile, X, Reply, Image as ImageIcon, Plus, Search } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
@@ -33,7 +33,7 @@ interface Message {
     senderId: string;
     senderName?: string;
     senderAvatar?: string;
-    type: 'text' | 'schedule' | 'alert';
+    type: 'text' | 'schedule' | 'alert' | 'image' | 'sticker';
     metadata?: any;
     createdAt: string;
     read: boolean;
@@ -60,6 +60,12 @@ export default function MessagesPage() {
     const [selectedImage, setSelectedImage] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [uploadingImage, setUploadingImage] = useState(false);
+
+    // User Search (Owner/Specialist)
+    const [showUserSearch, setShowUserSearch] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<User[]>([]);
+    const [searching, setSearching] = useState(false);
 
     // Scheduling State
     const [showSchedule, setShowSchedule] = useState(false);
@@ -198,6 +204,10 @@ export default function MessagesPage() {
                 setMessages(data.messages || []);
             }
         } catch (err) {
+            // Ignore network errors during polling (common when server restarts)
+            if (err instanceof TypeError && err.message === 'Failed to fetch') {
+                return;
+            }
             console.error('Failed to fetch messages:', err);
         }
     };
@@ -427,6 +437,50 @@ export default function MessagesPage() {
         </div>;
     }
 
+    const handleSearchUsers = async (query: string) => {
+        setSearchQuery(query);
+        if (query.length < 2) {
+            setSearchResults([]);
+            return;
+        }
+
+        setSearching(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/api/users/search?q=${query}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            setSearchResults(data.users || []);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setSearching(false);
+        }
+    };
+
+    const startConversationWithUser = (user: User) => {
+        // Check if conversation exists
+        const existing = conversations.find(c => c.user.id === user.id);
+        if (existing) {
+            handleSelectConversation(existing);
+        } else {
+            // Create temporary conversation
+            const newConv: Conversation = {
+                id: user.id,
+                type: 'direct',
+                user: user,
+                unreadCount: 0,
+                lastMessage: ''
+            };
+            setConversations([newConv, ...conversations]);
+            handleSelectConversation(newConv);
+        }
+        setShowUserSearch(false);
+        setSearchQuery('');
+        setSearchResults([]);
+    };
+
     const directMessages = conversations.filter(c => c.type === 'direct');
     const groupMessages = conversations.filter(c => c.type === 'group');
 
@@ -450,9 +504,19 @@ export default function MessagesPage() {
                                     <button
                                         onClick={handleContactSupport}
                                         className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors"
+                                        title="الدعم الفني"
                                     >
                                         <Users className="w-5 h-5" />
                                     </button>
+                                    {(currentUser?.role === 'owner' || currentUser?.role === 'specialist') && (
+                                        <button
+                                            onClick={() => setShowUserSearch(true)}
+                                            className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white hover:bg-primary/90 transition-colors shadow-md mr-2"
+                                            title="رسالة جديدة"
+                                        >
+                                            <Plus className="w-5 h-5" />
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
@@ -531,8 +595,13 @@ export default function MessagesPage() {
                                         </div>
 
                                         {/* Name */}
-                                        <div className="flex-1">
+                                        <div className="flex-1 min-w-0">
                                             <p className="font-semibold text-gray-900">{selectedConversation.user.nickname}</p>
+                                            {(currentUser?.role === 'owner' || currentUser?.role === 'specialist') && (
+                                                <p className="text-[10px] text-gray-400 font-mono select-all cursor-pointer hover:text-primary" onClick={() => { navigator.clipboard.writeText(selectedConversation.user.id); toast.success('تم نسخ ID'); }}>
+                                                    ID: {selectedConversation.user.id}
+                                                </p>
+                                            )}
                                         </div>
 
                                         {/* Actions */}
@@ -736,6 +805,69 @@ export default function MessagesPage() {
                     </div>
                 </div>
             </main >
+
+            {/* User Search Modal */}
+            {
+                showUserSearch && (
+                    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="font-bold text-lg text-gray-900">رسالة جديدة</h3>
+                                <button onClick={() => setShowUserSearch(false)} className="text-gray-400 hover:text-gray-600">
+                                    <X className="w-6 h-6" />
+                                </button>
+                            </div>
+
+                            <div className="relative mb-4">
+                                <Search className="w-5 h-5 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                                <input
+                                    type="text"
+                                    placeholder="بحث بالاسم، البريد أو ID..."
+                                    className="w-full pr-10 pl-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20"
+                                    value={searchQuery}
+                                    onChange={(e) => handleSearchUsers(e.target.value)}
+                                    autoFocus
+                                />
+                            </div>
+
+                            <div className="max-h-[300px] overflow-y-auto space-y-2">
+                                {searching ? (
+                                    <div className="flex justify-center py-8">
+                                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                                    </div>
+                                ) : searchResults.length > 0 ? (
+                                    searchResults.map(user => (
+                                        <button
+                                            key={user.id}
+                                            onClick={() => startConversationWithUser(user)}
+                                            className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl transition-colors text-right group"
+                                        >
+                                            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden shrink-0">
+                                                {user.avatar ? (
+                                                    <img src={user.avatar} alt="" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <User className="w-5 h-5 text-gray-500" />
+                                                )}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-bold text-gray-800 text-sm group-hover:text-primary transition-colors">{user.nickname}</p>
+                                                <p className="text-xs text-gray-400 font-mono truncate">ID: {user.id}</p>
+                                            </div>
+                                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <MessageCircle className="w-4 h-4" />
+                                            </div>
+                                        </button>
+                                    ))
+                                ) : searchQuery.length > 1 ? (
+                                    <p className="text-center text-gray-400 text-sm py-4">لم يتم العثور على مستخدمين</p>
+                                ) : (
+                                    <p className="text-center text-gray-400 text-sm py-4">ابحث عن مستخدم للمراسلة</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
         </div >
     );
 }

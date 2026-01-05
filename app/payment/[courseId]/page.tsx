@@ -37,13 +37,14 @@ export default function PaymentPage({ params }: PageProps) {
     const [copied, setCopied] = useState(false);
     const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
     const [confirmed, setConfirmed] = useState(false);
+    const [enabledMethods, setEnabledMethods] = useState<string[]>([]);
     // These MUST be before any early returns
     const [paymentCode] = useState(() =>
         `EWA-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
     );
     const [submitting, setSubmitting] = useState(false);
 
-    // Auth Gate + Fetch Course
+    // Auth Gate + Fetch Course + Settings
     useEffect(() => {
         const storedUser = localStorage.getItem('user');
         if (!storedUser) {
@@ -51,8 +52,8 @@ export default function PaymentPage({ params }: PageProps) {
             return;
         }
 
-        // Fetch course from API
         fetchCourse();
+        fetchSettings();
     }, [router, courseId]);
 
     const fetchCourse = async () => {
@@ -69,6 +70,20 @@ export default function PaymentPage({ params }: PageProps) {
             router.push('/courses');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchSettings = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/settings`);
+            if (res.ok) {
+                const data = await res.json();
+                const methods = data.settings?.payment_methods || ['bank_transfer', 'vodafone_cash'];
+                setEnabledMethods(methods);
+            }
+        } catch (err) {
+            console.error('Failed to fetch settings');
+            setEnabledMethods(['vodafone_cash', 'fawry', 'instapay']);
         }
     };
 
@@ -119,11 +134,15 @@ export default function PaymentPage({ params }: PageProps) {
         }
     };
 
-    const paymentMethods = [
-        { id: "vodafone", name: "فودافون كاش", icon: Smartphone, number: "01012345678" },
+    const allPaymentMethods = [
+        { id: "bank_transfer", name: "تحويل بنكي", icon: Building2, number: "1234567890" },
+        { id: "vodafone_cash", name: "فودافون كاش", icon: Smartphone, number: "01012345678" },
         { id: "fawry", name: "فوري", icon: Building2, code: "7823456" },
         { id: "instapay", name: "InstaPay", icon: Wallet, username: "@sakina_pay" },
     ];
+
+    // Filter methods based on settings
+    const paymentMethods = allPaymentMethods.filter(m => enabledMethods.includes(m.id));
 
     return (
         <div className="bg-warm-mesh min-h-screen" dir="rtl">

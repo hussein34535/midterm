@@ -465,7 +465,7 @@ router.patch('/payments/:id', requireOwner, async (req, res) => {
         // Update payment status
         const { error } = await supabase
             .from('payments')
-            .update({ status, updated_at: new Date().toISOString() })
+            .update({ status })
             .eq('id', id);
 
         if (error) {
@@ -587,4 +587,66 @@ router.delete('/messages/:id', requireOwner, async (req, res) => {
 });
 
 module.exports = router;
+
+/**
+ * GET /api/admin/reports
+ * Get advanced platform statistics
+ */
+router.get('/reports', requireAdmin, async (req, res) => {
+    try {
+        // Run queries in parallel for performance
+        const [usersRes, coursesRes, sessionsRes, paymentsRes] = await Promise.all([
+            supabase.from('users').select('id, created_at', { count: 'exact' }),
+            supabase.from('courses').select('id', { count: 'exact' }),
+            supabase.from('sessions').select('id', { count: 'exact' }),
+            supabase.from('payments').select('amount, created_at').eq('status', 'confirmed')
+        ]);
+
+        if (usersRes.error) throw usersRes.error;
+        if (coursesRes.error) throw coursesRes.error;
+        if (sessionsRes.error) throw sessionsRes.error;
+        if (paymentsRes.error) throw paymentsRes.error;
+
+        const payments = paymentsRes.data || [];
+        const users = usersRes.data || [];
+
+        // Calculate Total Revenue
+        const totalRevenue = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+        // Prepare Chart Data (Last 30 days revenue)
+        const last30Days = [...Array(30)].map((_, i) => {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            return d.toISOString().split('T')[0];
+        }).reverse();
+
+        const revenueChart = last30Days.map(date => {
+            const dayRevenue = payments
+                .filter(p => p.created_at.startsWith(date))
+                .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+            return { date, revenue: dayRevenue };
+        });
+
+        // User Growth (Last 30 days)
+        const userGrowthChart = last30Days.map(date => {
+            const dayUsers = users.filter(u => u.created_at.startsWith(date)).length;
+            return { date, users: dayUsers };
+        });
+
+        res.json({
+            stats: {
+                totalUsers: usersRes.count,
+                totalCourses: coursesRes.count,
+                totalSessions: sessionsRes.count,
+                totalRevenue,
+                recentRevenue: revenueChart,
+                recentUsers: userGrowthChart
+            }
+        });
+
+    } catch (error) {
+        console.error('Reports error:', error);
+        res.status(500).json({ error: 'حدث خطأ في جلب التقارير' });
+    }
+});
 

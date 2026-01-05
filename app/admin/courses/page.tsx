@@ -19,32 +19,35 @@ interface Course {
     created_at: string;
 }
 
-interface Specialist {
-    id: string;
-    nickname: string;
-}
+
 
 export default function AdminCoursesPage() {
     const [courses, setCourses] = useState<Course[]>([]);
-    const [specialists, setSpecialists] = useState<Specialist[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
     // Form state
     const [showForm, setShowForm] = useState(false);
     const [editingCourse, setEditingCourse] = useState<Course | null>(null);
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<{
+        title: string;
+        description: string;
+        price: number | string;
+        total_sessions: number | string;
+    }>({
         title: '',
         description: '',
         price: 0,
         total_sessions: 4,
-        specialist_id: ''
+        title: '',
+        description: '',
+        price: 0,
+        total_sessions: 4
     });
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
         fetchCourses();
-        fetchSpecialists();
     }, []);
 
     const fetchCourses = async () => {
@@ -65,28 +68,14 @@ export default function AdminCoursesPage() {
         }
     };
 
-    const fetchSpecialists = async () => {
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_URL}/api/admin/specialists`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
 
-            if (res.ok) {
-                const data = await res.json();
-                setSpecialists(data.specialists || []);
-            }
-        } catch (err) {
-            console.error('Failed to fetch specialists');
-        }
-    };
 
     const handleDelete = async (courseId: string) => {
         if (!confirm('هل أنت متأكد من حذف هذا الكورس؟')) return;
 
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(`${API_URL}/api/courses/${courseId}`, {
+            const res = await fetch(`${API_URL}/api/admin/courses/${courseId}`, {
                 method: 'DELETE',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -109,7 +98,7 @@ export default function AdminCoursesPage() {
             description: course.description || '',
             price: course.price,
             total_sessions: course.total_sessions,
-            specialist_id: course.specialist_id || course.specialist?.id || ''
+            total_sessions: course.total_sessions
         });
         setShowForm(true);
     };
@@ -121,7 +110,7 @@ export default function AdminCoursesPage() {
             description: '',
             price: 0,
             total_sessions: 4,
-            specialist_id: ''
+            total_sessions: 4
         });
         setShowForm(true);
     };
@@ -140,13 +129,19 @@ export default function AdminCoursesPage() {
                 ? `${API_URL}/api/courses/${editingCourse.id}`
                 : `${API_URL}/api/courses`;
 
+            const payload = {
+                ...formData,
+                price: Number(formData.price),
+                total_sessions: Number(formData.total_sessions)
+            };
+
             const res = await fetch(url, {
                 method: editingCourse ? 'PUT' : 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(payload)
             });
 
             if (res.ok) {
@@ -235,7 +230,7 @@ export default function AdminCoursesPage() {
                                             <input
                                                 type="number"
                                                 value={formData.price}
-                                                onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+                                                onChange={(e) => setFormData({ ...formData, price: e.target.value === '' ? '' : Number(e.target.value) })}
                                                 className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:border-primary outline-none"
                                                 min="0"
                                             />
@@ -245,26 +240,14 @@ export default function AdminCoursesPage() {
                                             <input
                                                 type="number"
                                                 value={formData.total_sessions}
-                                                onChange={(e) => setFormData({ ...formData, total_sessions: Number(e.target.value) })}
+                                                onChange={(e) => setFormData({ ...formData, total_sessions: e.target.value === '' ? '' : Number(e.target.value) })}
                                                 className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:border-primary outline-none"
                                                 min="1"
                                             />
                                         </div>
                                     </div>
 
-                                    <div>
-                                        <label className="block text-sm font-bold text-foreground mb-2">الأخصائي</label>
-                                        <select
-                                            value={formData.specialist_id}
-                                            onChange={(e) => setFormData({ ...formData, specialist_id: e.target.value })}
-                                            className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:border-primary outline-none"
-                                        >
-                                            <option value="">-- اختر أخصائي --</option>
-                                            {specialists.map(s => (
-                                                <option key={s.id} value={s.id}>{s.nickname}</option>
-                                            ))}
-                                        </select>
-                                    </div>
+
 
                                     <div className="flex gap-3 pt-4">
                                         <button
@@ -317,10 +300,6 @@ export default function AdminCoursesPage() {
                                         </h3>
                                         <p className="text-sm text-muted-foreground line-clamp-1">{course.description}</p>
                                         <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                                            <span className="flex items-center gap-1">
-                                                <Users className="w-3 h-3" />
-                                                {course.specialist?.nickname || 'بدون أخصائي'}
-                                            </span>
                                             <span>{course.total_sessions} جلسات</span>
                                             <span className="font-bold text-primary">
                                                 {course.price === 0 ? 'مجاني' : `${course.price} ج.م`}

@@ -112,53 +112,72 @@ export default function DashboardPage() {
 
                             {/* Upcoming Session Card */}
                             {upcomingSessions.length > 0 ? (
-                                <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
-                                    <div className="flex items-center gap-2 mb-4">
-                                        <Calendar className="w-5 h-5 text-primary" />
-                                        <h2 className="font-bold text-gray-800">جلستك القادمة</h2>
-                                    </div>
+                                <div className="bg-gradient-to-br from-violet-500 to-purple-600 rounded-3xl p-6 shadow-xl shadow-purple-500/25 relative overflow-hidden">
+                                    {/* Background decoration removed */}
+                                    <div className="absolute bottom-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-3xl" />
 
-                                    {upcomingSessions.slice(0, 2).map((session) => (
-                                        <Link
-                                            key={session.id}
-                                            href={`/session/${session.id}`}
-                                            className="flex items-center gap-4 p-4 bg-purple-50 rounded-2xl mb-2 last:mb-0 hover:bg-purple-100 transition-colors"
-                                        >
-                                            <div className="w-14 h-14 bg-white rounded-xl flex flex-col items-center justify-center shadow-sm">
-                                                <span className="text-primary font-bold text-lg">
-                                                    {new Date(session.scheduled_at).getDate()}
-                                                </span>
-                                                <span className="text-gray-400 text-[10px] font-medium">
-                                                    {new Date(session.scheduled_at).toLocaleDateString('ar-EG', { month: 'short' })}
-                                                </span>
+                                    <div className="relative z-10">
+                                        {/* Header */}
+                                        <div className="flex items-center gap-3 mb-5">
+                                            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center animate-bounce" style={{ animationDuration: '2s' }}>
+                                                <Calendar className="w-6 h-6 text-white" />
                                             </div>
-                                            <div className="flex-1">
-                                                <h3 className="font-bold text-gray-800 text-sm">{session.title}</h3>
-                                                <p className="text-xs text-gray-500 mt-0.5">{session.course_title}</p>
-                                                <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-400">
-                                                    <span className="flex items-center gap-1">
-                                                        <Clock className="w-3 h-3" />
-                                                        {new Date(session.scheduled_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
-                                                    </span>
-                                                    <span className="flex items-center gap-1">
-                                                        <User className="w-3 h-3" />
-                                                        {session.specialist_name}
-                                                    </span>
+                                            <div>
+                                                <h2 className="font-bold text-white text-lg">جلستك القادمة ✨</h2>
+                                                <p className="text-white/60 text-xs">لا تنسَ الحضور!</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Session Cards */}
+                                        {upcomingSessions.slice(0, 2).map((session, idx) => (
+                                            <Link
+                                                key={session.id}
+                                                href={`/session/${session.id}`}
+                                                className={`block p-4 bg-white/15 backdrop-blur-sm rounded-2xl border border-white/20 hover:bg-white/25 hover:scale-[1.02] transition-all duration-300 mb-3 last:mb-0 ${idx === 0 ? 'ring-2 ring-white/40 shadow-lg' : 'opacity-80'}`}
+                                            >
+                                                <div className="flex items-start gap-4">
+                                                    {/* BIG Date Badge - More Prominent */}
+                                                    <div className="w-20 h-20 bg-white rounded-2xl flex flex-col items-center justify-center shadow-xl shrink-0 border-2 border-purple-200">
+                                                        <span className="text-purple-600 font-black text-3xl leading-none">
+                                                            {new Date(session.scheduled_at).getDate()}
+                                                        </span>
+                                                        <span className="text-purple-500 text-xs font-bold mt-1">
+                                                            {new Date(session.scheduled_at).toLocaleDateString('ar-EG', { month: 'short' })}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Session Info */}
+                                                    <div className="flex-1 min-w-0 pt-1">
+                                                        <h3 className="font-bold text-white text-base truncate mb-1">{session.title}</h3>
+                                                        <p className="text-sm text-white/60 truncate mb-3">{session.course_title}</p>
+
+                                                        {/* TIME - Visible with color, simple font */}
+                                                        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-yellow-400 text-purple-900 rounded-lg text-sm">
+                                                            <Clock className="w-4 h-4" />
+                                                            {new Date(session.scheduled_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                                                        </div>
+
+                                                        <div className="flex items-center gap-1 mt-2">
+                                                            <span className="text-white/80 text-xs font-medium">
+                                                                مع الأخصائي {session.specialist_name}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Arrow */}
+                                                    <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center hover:bg-white/30 transition-colors shrink-0 mt-5">
+                                                        <ChevronLeft className="w-5 h-5 text-white" />
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <ChevronLeft className="w-5 h-5 text-gray-300" />
-                                        </Link>
-                                    ))}
+                                            </Link>
+                                        ))}
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 text-center">
-                                    <img src="/meditation.png" alt="" className="w-32 h-32 mx-auto mb-4 opacity-80" />
-                                    <p className="text-gray-600 font-medium mb-1">لا توجد جلسات قادمة</p>
-                                    <p className="text-gray-400 text-sm mb-4">استكشف الكورسات للانضمام</p>
-                                    <Link href="/courses" className="inline-flex items-center gap-2 text-primary font-bold text-sm hover:underline">
-                                        تصفح الكورسات
-                                        <ArrowLeft className="w-4 h-4 rotate-180" />
-                                    </Link>
+                                    <img src="/meditation.png" alt="" className="w-32 h-32 mx-auto mb-4" />
+                                    <p className="text-gray-700 font-bold mb-1">لا توجد جلسات قادمة</p>
+
                                 </div>
                             )}
 
@@ -204,26 +223,36 @@ export default function DashboardPage() {
                             )}
 
                             {/* Quick Actions */}
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-2 gap-4">
                                 <Link
                                     href="/messages"
-                                    className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow text-center"
+                                    className="bg-gradient-to-br from-purple-400/90 to-violet-500/90 rounded-2xl p-5 shadow-lg shadow-purple-400/20 hover:shadow-xl hover:scale-[1.02] transition-all text-center relative overflow-hidden group"
                                 >
-                                    <div className="w-12 h-12 mx-auto mb-3 bg-purple-100 rounded-xl flex items-center justify-center">
-                                        <MessageCircle className="w-6 h-6 text-primary" />
+                                    <div className="absolute -bottom-2 -right-2 w-24 h-24 opacity-40 group-hover:opacity-50 transition-opacity">
+                                        <img src="/voice.png" alt="" className="w-full h-full object-contain" />
                                     </div>
-                                    <p className="font-bold text-gray-800 text-sm">الرسائل</p>
-                                    <p className="text-xs text-gray-400 mt-0.5">تواصل مع أخصائيك</p>
+                                    <div className="relative z-10">
+                                        <div className="w-14 h-14 mx-auto mb-3 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
+                                            <MessageCircle className="w-7 h-7 text-white" />
+                                        </div>
+                                        <p className="font-bold text-white">الرسائل</p>
+                                        <p className="text-xs text-white/70 mt-1">تواصل مع أخصائيك</p>
+                                    </div>
                                 </Link>
                                 <Link
                                     href="/courses"
-                                    className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow text-center"
+                                    className="bg-gradient-to-br from-teal-400/90 to-cyan-500/90 rounded-2xl p-5 shadow-lg shadow-teal-400/20 hover:shadow-xl hover:scale-[1.02] transition-all text-center relative overflow-hidden group"
                                 >
-                                    <div className="w-12 h-12 mx-auto mb-3 bg-amber-100 rounded-xl flex items-center justify-center">
-                                        <BookOpen className="w-6 h-6 text-amber-600" />
+                                    <div className="absolute -bottom-4 -right-4 w-20 h-20 opacity-20 group-hover:opacity-30 transition-opacity">
+                                        <img src="/therapy.png" alt="" className="w-full h-full object-contain" />
                                     </div>
-                                    <p className="font-bold text-gray-800 text-sm">الكورسات</p>
-                                    <p className="text-xs text-gray-400 mt-0.5">اكتشف رحلات جديدة</p>
+                                    <div className="relative z-10">
+                                        <div className="w-14 h-14 mx-auto mb-3 bg-white/20 backdrop-blur rounded-2xl flex items-center justify-center">
+                                            <BookOpen className="w-7 h-7 text-white" />
+                                        </div>
+                                        <p className="font-bold text-white">الكورسات</p>
+                                        <p className="text-xs text-white/70 mt-1">اكتشف رحلات جديدة</p>
+                                    </div>
                                 </Link>
                             </div>
 

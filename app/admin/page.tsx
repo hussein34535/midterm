@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, LayoutDashboard, Settings, LogOut, ShieldAlert, DollarSign, Sparkles, Loader2 } from "lucide-react";
+import { Users, LayoutDashboard, Settings, LogOut, ShieldAlert, DollarSign, Sparkles, Loader2, TrendingUp } from "lucide-react";
 import Header from "@/components/layout/Header";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -144,6 +144,24 @@ export default function AdminDashboard() {
                                 <p className="text-muted-foreground text-sm">إنشاء وتعديل الكورسات</p>
                             </div>
                         </Link>
+                        <Link href="/admin/groups" className="card-love p-6 flex items-center gap-4 group hover:border-primary/50 transition-all">
+                            <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-500 group-hover:bg-indigo-500/20 transition-colors">
+                                <Users className="w-7 h-7" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-foreground group-hover:text-indigo-500 transition-colors">إدارة المجموعات</h3>
+                                <p className="text-muted-foreground text-sm">توزيع المجموعات والأخصائيين</p>
+                            </div>
+                        </Link>
+                        <Link href="/admin/payments" className="card-love p-6 flex items-center gap-4 group hover:border-primary/50 transition-all">
+                            <div className="w-14 h-14 rounded-2xl bg-green-500/10 flex items-center justify-center text-green-500 group-hover:bg-green-500/20 transition-colors">
+                                <DollarSign className="w-7 h-7" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-foreground group-hover:text-green-500 transition-colors">إدارة المدفوعات</h3>
+                                <p className="text-muted-foreground text-sm">تأكيد ورفض الدفعات</p>
+                            </div>
+                        </Link>
                         <Link href="/admin/specialists" className="card-love p-6 flex items-center gap-4 group hover:border-primary/50 transition-all">
                             <div className="w-14 h-14 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 group-hover:bg-amber-500/20 transition-colors">
                                 <ShieldAlert className="w-7 h-7" />
@@ -151,6 +169,33 @@ export default function AdminDashboard() {
                             <div>
                                 <h3 className="text-lg font-bold text-foreground group-hover:text-amber-500 transition-colors">إدارة الأخصائيين</h3>
                                 <p className="text-muted-foreground text-sm">إدارة حسابات الأخصائيين</p>
+                            </div>
+                        </Link>
+                        <Link href="/admin/messages" className="card-love p-6 flex items-center gap-4 group hover:border-primary/50 transition-all">
+                            <div className="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-500 group-hover:bg-purple-500/20 transition-colors">
+                                <Sparkles className="w-7 h-7" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-foreground group-hover:text-purple-500 transition-colors">إدارة الرسائل</h3>
+                                <p className="text-muted-foreground text-sm">عرض وحذف الرسائل</p>
+                            </div>
+                        </Link>
+                        <Link href="/admin/reports" className="card-love p-6 flex items-center gap-4 group hover:border-primary/50 transition-all">
+                            <div className="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500 group-hover:bg-blue-500/20 transition-colors">
+                                <TrendingUp className="w-7 h-7" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-foreground group-hover:text-blue-500 transition-colors">التقارير والإحصائيات</h3>
+                                <p className="text-muted-foreground text-sm">متابعة أداء المنصة</p>
+                            </div>
+                        </Link>
+                        <Link href="/admin/settings" className="card-love p-6 flex items-center gap-4 group hover:border-primary/50 transition-all">
+                            <div className="w-14 h-14 rounded-2xl bg-gray-500/10 flex items-center justify-center text-gray-500 group-hover:bg-gray-500/20 transition-colors">
+                                <Settings className="w-7 h-7" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-foreground group-hover:text-gray-500 transition-colors">إعدادات المنصة</h3>
+                                <p className="text-muted-foreground text-sm">تخصيص الإعدادات (المالك فقط)</p>
                             </div>
                         </Link>
                     </div>

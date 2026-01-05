@@ -15,6 +15,8 @@ const adminRoutes = require('./routes/admin');
 const specialistRoutes = require('./routes/specialist');
 const courseRoutes = require('./routes/courses');
 const messageRoutes = require('./routes/messages');
+const settingsRoutes = require('./routes/settings');
+const agoraRoutes = require('./routes/agora');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -32,6 +34,9 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/specialist', specialistRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/messages', messageRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/groups', require('./routes/groups')); // Groups Management
+app.use('/api/agora', agoraRoutes);
 
 // Health Check
 app.get('/api/health', (req, res) => {

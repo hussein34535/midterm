@@ -48,6 +48,7 @@ export default function MobileBottomNav() {
     // Don't show if not logged in or on certain pages or if chat is open
     if (!user) return null;
     if (pathname === '/login' || pathname === '/register' || pathname === '/' || pathname === '/home') return null;
+    if (pathname.startsWith('/session')) return null; // Hide on voice room pages
     if (chatOpen && pathname === '/messages') return null;
 
     // Build nav items - max 4 items for clean look

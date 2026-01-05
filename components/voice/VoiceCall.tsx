@@ -6,8 +6,8 @@ import ParticipantsList from "./ParticipantsList";
 import ChatBox from "./ChatBox";
 import { io } from "socket.io-client";
 
-const APP_ID = "19d2ae52aa924cc48c65e996affd8560";
-const TEMP_TOKEN = "007eJxTYOCQ36bQcbT6bpnznH1fRL5l/7m/TzWV7cqcSUtqnfg/sKkqMBhaphglppoaJSZaGpkkJ5tYJJuZplpamiWmpaVYmJoZfGALzmwIZGSIuqvFwsgAgSC+LENxYnZmXqJucWpxcWZ+nm5JanEJnGPIwAAADz0pFg==";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID || "19d2ae52aa924cc48c65e996affd8560";
 
 interface VoiceCallProps {
     channelName: string;
@@ -65,7 +65,7 @@ export default function VoiceCall({
                 const client = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
                 clientRef.current = client;
 
-                client.on("user-published", async (user: any, mediaType: string) => {
+                client.on("user-published", async (user: any, mediaType: "audio" | "video") => {
                     await client.subscribe(user, mediaType);
                     if (mediaType === "audio") {
                         user.audioTrack?.play();
@@ -277,12 +277,25 @@ export default function VoiceCall({
 
         setIsConnecting(true);
         try {
+            // Get token from backend
+            const token = localStorage.getItem('token');
+            const uid = Math.floor(Math.random() * 100000);
+
+            const tokenRes = await fetch(`${API_URL}/api/agora/token?channelName=${channelName}&uid=${uid}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!tokenRes.ok) {
+                throw new Error('Failed to get Agora token');
+            }
+
+            const tokenData = await tokenRes.json();
+            console.log('Got Agora token:', tokenData);
+
             const audioTrack = await AgoraRTCRef.current.createMicrophoneAudioTrack();
             audioTrackRef.current = audioTrack;
 
-            const uid = Math.floor(Math.random() * 100000);
-
-            await clientRef.current.join(APP_ID, channelName, TEMP_TOKEN, uid);
+            await clientRef.current.join(tokenData.appId || APP_ID, channelName, tokenData.token, uid);
 
             const actualUid = clientRef.current.uid;
             myUidRef.current = String(actualUid);
@@ -305,6 +318,8 @@ export default function VoiceCall({
             console.error("Error joining channel:", error);
             if (error.message?.includes("Permission denied") || error.code === "PERMISSION_DENIED") {
                 alert("يرجى السماح بالوصول للميكروفون من المتصفح");
+            } else if (error.message?.includes("token")) {
+                alert("حدث خطأ في الحصول على صلاحيات المكالمة. تأكد من تسجيل الدخول.");
             } else {
                 alert("حدث خطأ في الاتصال. تأكد من السماح بالميكروفون.");
             }
@@ -389,13 +404,6 @@ export default function VoiceCall({
     return (
         <div className={`relative bg-background/95 backdrop-blur-sm border border-border rounded-xl overflow-hidden ${className || 'p-6 md:p-8 max-w-lg mx-auto border border-border shadow-xl'}`} dir="rtl">
 
-            {/* Socket Status Indicator */}
-            <div className="absolute top-4 left-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-md border border-white/10 shadow-lg pointer-events-none">
-                <div className={`w-2.5 h-2.5 rounded-full transition-colors duration-500 ${socketConnected ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-red-500 animate-pulse'}`} />
-                <span className={`text-[10px] font-bold ${socketConnected ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {socketConnected ? 'متصل ✓' : 'غير متصل'}
-                </span>
-            </div>
 
             {/* Notification Toast */}
             {notification && (
@@ -419,11 +427,6 @@ export default function VoiceCall({
                     <span className="text-sm font-medium text-muted-foreground">
                         {isJoined ? 'متصل' : 'غير متصل'}
                     </span>
-                    {isJoined && (
-                        <span className="text-[10px] text-muted-foreground font-mono bg-muted px-1.5 py-0.5 rounded">
-                            ID: {myUidRef.current}
-                        </span>
-                    )}
                 </div>
                 {isJoined && (
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -458,144 +461,134 @@ export default function VoiceCall({
                     />
 
                     {/* Controls */}
-                    <div className="flex items-center justify-center gap-4 mt-8 pt-6 border-t border-border">
+                    <div className="flex items-center justify-center gap-4 mt-6 animate-slide-up" style={{ animationDelay: '0.1s' }}>
+                        {/* Chat Button */}
+                        <button
+                            onClick={() => setIsChatOpen(true)}
+                            className="w-14 h-14 rounded-full bg-secondary text-foreground flex items-center justify-center hover:bg-secondary/80 transition-all hover:scale-110 active:scale-95 shadow-lg btn-ripple"
+                            title="الدردشة"
+                        >
+                            <MessageCircle className="w-6 h-6" />
+                            {chatMessages.length > 0 && (
+                                <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-primary-foreground rounded-full text-xs flex items-center justify-center font-bold">
+                                    {chatMessages.length > 99 ? '99+' : chatMessages.length}
+                                </span>
+                            )}
+                        </button>
+
+                        {/* Mute Button (Disabled if force muted) */}
                         <button
                             onClick={toggleMute}
                             disabled={isForceMuted}
-                            className={`
-                                w-14 h-14 rounded-full flex items-center justify-center transition-all
-                                ${isMuted || isForceMuted
-                                    ? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
-                                    : 'bg-muted text-foreground hover:bg-muted/80'
-                    {/* Control Panel */}
-                    <div className="flex items-center justify-center gap-4 mt-6 animate-slide-up" style={{ animationDelay: '0.1s' }}>
-                            {/* Chat Button */}
-                            <button
-                                onClick={() => setIsChatOpen(true)}
-                                className="w-14 h-14 rounded-full bg-secondary text-foreground flex items-center justify-center hover:bg-secondary/80 transition-all hover:scale-110 active:scale-95 shadow-lg btn-ripple"
-                                title="الدردشة"
-                            >
-                                <MessageCircle className="w-6 h-6" />
-                                {chatMessages.length > 0 && (
-                                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-primary text-primary-foreground rounded-full text-xs flex items-center justify-center font-bold">
-                                        {chatMessages.length > 99 ? '99+' : chatMessages.length}
-                                    </span>
-                                )}
-                            </button>
-
-                            {/* Mute Button (Disabled if force muted) */}
-                            <button
-                                onClick={toggleMute}
-                                disabled={isForceMuted}
-                                className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl btn-ripple ${isMuted || isForceMuted
-                                        ? 'bg-gradient-to-br from-red-500 to-red-600 text-white animate-mute glow-primary shadow-red-500/40 hover:shadow-red-500/60'
-                                        : 'bg-gradient-to-br from-secondary to-secondary/80 text-foreground hover:scale-110 hover:shadow-2xl shadow-secondary/30'
-                                    } ${isForceMuted ? 'opacity-70 cursor-not-allowed' : 'hover:scale-105 active:scale-95'}`}
-                                title={isMuted ? "تشغيل الميكروفون" : "كتم الميكروفون"}
-                            >
-                                {isMuted || isForceMuted ? <MicOff className="w-7 h-7 animate-breathe" /> : <Mic className="w-7 h-7" />}
-                            </button>
-
-                            {/* End Call Button */}
-                            <button
-                                onClick={() => leaveChannel(true)}
-                                className="w-16 h-16 rounded-full bg-gradient-to-br from-red-500 to-red-600 text-white flex items-center justify-center hover:from-red-600 hover:to-red-700 transition-all duration-300 shadow-xl shadow-red-500/40 hover:shadow-red-500/60 hover:scale-105 active:scale-95 btn-ripple"
-                                title="إنهاء المكالمة"
-                            >
-                                <PhoneOff className="w-7 h-7" />
-                            </button>
-                        </div>
-
-                        {/* Chat Overlay */}
-                        <ChatBox
-                            messages={chatMessages}
-                            onSendMessage={sendChatMessage}
-                            myName={userName}
-                            isOpen={isChatOpen}
-                            onClose={() => setIsChatOpen(false)}
-                        />
-
-                        {(isMuted || isForceMuted) && (
-                            <div className="text-center mt-4 animate-slide-up">
-                                <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${isForceMuted ? 'bg-red-100 text-red-600' : 'bg-muted text-muted-foreground'}`}>
-                                    <MicOff className="w-4 h-4" />
-                                    {isForceMuted ? 'مكتوم من الأخصائي' : 'الميكروفون مغلق'}
-                                </span>
-                            </div>
-                        )}
-                    </>
-                    ) : (
-                    <div className="text-center py-8">
-                        <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
-                            <Phone className="w-10 h-10 text-primary" />
-                        </div>
-
-                        <h3 className="text-xl font-bold text-foreground mb-2">
-                            {isConnecting ? 'جاري العودة للمكالمة...' : 'انضم للغرفة'}
-                        </h3>
-
-                        {/* Participants Preview */}
-                        <div className="flex flex-col items-center gap-3 mb-6">
-                            <span className="text-muted-foreground text-sm">المتواجدون الآن:</span>
-
-                            {participatingUsers.length > 0 ? (
-                                <div className="flex flex-col items-center gap-2">
-                                    {/* Avatar Stack */}
-                                    <div className="flex -space-x-3 rtl:space-x-reverse">
-                                        {participatingUsers.slice(0, 5).map((user, idx) => (
-                                            <div
-                                                key={user.socketId}
-                                                className="w-10 h-10 rounded-full border-2 border-background flex items-center justify-center bg-gradient-to-br from-primary/30 to-primary/60 overflow-hidden"
-                                                style={user.avatar ? {
-                                                    backgroundImage: `url(${user.avatar})`,
-                                                    backgroundSize: 'cover',
-                                                    backgroundPosition: 'center'
-                                                } : {}}
-                                                title={user.name}
-                                            >
-                                                {!user.avatar && (
-                                                    <span className="text-sm font-bold text-primary">
-                                                        {user.name.charAt(0).toUpperCase()}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        ))}
-                                        {participatingUsers.length > 5 && (
-                                            <div className="w-10 h-10 rounded-full border-2 border-background bg-muted flex items-center justify-center">
-                                                <span className="text-xs font-bold text-muted-foreground">+{participatingUsers.length - 5}</span>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Names List */}
-                                    <p className="text-xs text-muted-foreground">
-                                        {participatingUsers.slice(0, 3).map(u => u.name).join('، ')}
-                                        {participatingUsers.length > 3 && ` و ${participatingUsers.length - 3} آخرين`}
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="flex items-center gap-2 px-4 py-2 bg-muted/50 rounded-full">
-                                    <Users className="w-4 h-4 text-muted-foreground" />
-                                    <span className="text-sm text-muted-foreground">لا يوجد أحد بعد</span>
-                                </div>
-                            )}
-                        </div>
-
-                        <button
-                            onClick={joinChannel}
-                            disabled={isConnecting}
-                            className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto transition-all shadow-xl
-                            ${isConnecting ? 'bg-muted cursor-not-allowed' : 'bg-green-500 text-white hover:bg-green-600 shadow-green-500/30 hover:scale-105'}
-                        `}
+                            className={`w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl btn-ripple ${isMuted || isForceMuted
+                                ? 'bg-gradient-to-br from-red-500 to-red-600 text-white animate-mute glow-primary shadow-red-500/40 hover:shadow-red-500/60'
+                                : 'bg-gradient-to-br from-secondary to-secondary/80 text-foreground hover:scale-110 hover:shadow-2xl shadow-secondary/30'
+                                } ${isForceMuted ? 'opacity-70 cursor-not-allowed' : 'hover:scale-105 active:scale-95'}`}
+                            title={isMuted ? "تشغيل الميكروفون" : "كتم الميكروفون"}
                         >
-                            {isConnecting ? (
-                                <Loader2 className="w-8 h-8 animate-spin text-primary" />
-                            ) : (
-                                <Phone className="w-8 h-8" />
-                            )}
+                            {isMuted || isForceMuted ? <MicOff className="w-7 h-7 animate-breathe" /> : <Mic className="w-7 h-7" />}
+                        </button>
+
+                        {/* End Call Button */}
+                        <button
+                            onClick={() => leaveChannel(true)}
+                            className="w-16 h-16 rounded-full bg-gradient-to-br from-red-500 to-red-600 text-white flex items-center justify-center hover:from-red-600 hover:to-red-700 transition-all duration-300 shadow-xl shadow-red-500/40 hover:shadow-red-500/60 hover:scale-105 active:scale-95 btn-ripple"
+                            title="إنهاء المكالمة"
+                        >
+                            <PhoneOff className="w-7 h-7" />
                         </button>
                     </div>
-            )}
+
+                    {/* Chat Overlay */}
+                    <ChatBox
+                        messages={chatMessages}
+                        onSendMessage={sendChatMessage}
+                        myName={userName}
+                        isOpen={isChatOpen}
+                        onClose={() => setIsChatOpen(false)}
+                    />
+
+                    {(isMuted || isForceMuted) && (
+                        <div className="text-center mt-4 animate-slide-up">
+                            <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${isForceMuted ? 'bg-red-100 text-red-600' : 'bg-muted text-muted-foreground'}`}>
+                                <MicOff className="w-4 h-4" />
+                                {isForceMuted ? 'مكتوم من الأخصائي' : 'الميكروفون مغلق'}
+                            </span>
+                        </div>
+                    )}
+                </>
+            ) : (
+                <div className="text-center py-8">
+                    <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
+                        <Phone className="w-10 h-10 text-primary" />
+                    </div>
+
+                    <h3 className="text-xl font-bold text-foreground mb-2">
+                        {isConnecting ? 'جاري العودة للمكالمة...' : 'انضم للغرفة'}
+                    </h3>
+
+                    {/* Participants Preview */}
+                    <div className="flex flex-col items-center gap-3 mb-6">
+                        <span className="text-muted-foreground text-sm">المتواجدون الآن:</span>
+
+                        {participatingUsers.length > 0 ? (
+                            <div className="flex flex-col items-center gap-2">
+                                {/* Avatar Stack */}
+                                <div className="flex -space-x-3 rtl:space-x-reverse">
+                                    {participatingUsers.slice(0, 5).map((user, idx) => (
+                                        <div
+                                            key={user.socketId}
+                                            className="w-10 h-10 rounded-full border-2 border-background flex items-center justify-center bg-gradient-to-br from-primary/30 to-primary/60 overflow-hidden"
+                                            style={user.avatar ? {
+                                                backgroundImage: `url(${user.avatar})`,
+                                                backgroundSize: 'cover',
+                                                backgroundPosition: 'center'
+                                            } : {}}
+                                            title={user.name}
+                                        >
+                                            {!user.avatar && (
+                                                <span className="text-sm font-bold text-primary">
+                                                    {user.name.charAt(0).toUpperCase()}
+                                                </span>
+                                            )}
+                                        </div>
+                                    ))}
+                                    {participatingUsers.length > 5 && (
+                                        <div className="w-10 h-10 rounded-full border-2 border-background bg-muted flex items-center justify-center">
+                                            <span className="text-xs font-bold text-muted-foreground">+{participatingUsers.length - 5}</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Names List */}
+                                <p className="text-xs text-muted-foreground">
+                                    {participatingUsers.slice(0, 3).map(u => u.name).join('، ')}
+                                    {participatingUsers.length > 3 && ` و ${participatingUsers.length - 3} آخرين`}
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-2 px-4 py-2 bg-muted/50 rounded-full">
+                                <Users className="w-4 h-4 text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground">لا يوجد أحد بعد</span>
+                            </div>
+                        )}
+                    </div>
+
+                    <button
+                        onClick={joinChannel}
+                        disabled={isConnecting}
+                        className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto transition-all shadow-xl
+                            ${isConnecting ? 'bg-muted cursor-not-allowed' : 'bg-green-500 text-white hover:bg-green-600 shadow-green-500/30 hover:scale-105'}
+                        `}
+                    >
+                        {isConnecting ? (
+                            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                        ) : (
+                            <Phone className="w-8 h-8" />
+                        )}
+                    </button>
                 </div>
-            );
+            )}
+        </div>
+    );
 }

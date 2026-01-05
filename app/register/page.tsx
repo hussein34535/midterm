@@ -13,6 +13,8 @@ export default function RegisterPage() {
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [registrationAllowed, setRegistrationAllowed] = useState(true);
+    const [checkingSettings, setCheckingSettings] = useState(true);
     const [formData, setFormData] = useState({
         nickname: "",
         email: "",
@@ -21,8 +23,29 @@ export default function RegisterPage() {
         avatar: "",
     });
 
-    // Auto-redirect if already logged in
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+    // Check settings and auto-redirect if already logged in
     useEffect(() => {
+        const checkSettings = async () => {
+            try {
+                const res = await fetch(`${API_URL}/api/settings`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.settings?.allow_registration === false) {
+                        setRegistrationAllowed(false);
+                        toast.error('التسجيل مغلق حالياً');
+                        router.push('/login');
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to check settings');
+            } finally {
+                setCheckingSettings(false);
+            }
+        };
+
         const storedUser = localStorage.getItem('user');
         if (storedUser) {
             try {
@@ -34,6 +57,8 @@ export default function RegisterPage() {
                 // Invalid data, proceed to register
             }
         }
+
+        checkSettings();
     }, [router]);
 
     const handleSubmit = async (e: React.FormEvent) => {

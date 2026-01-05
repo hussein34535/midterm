@@ -206,5 +206,42 @@ router.patch('/avatar', authMiddleware, async (req, res) => {
     }
 });
 
-module.exports = router;
+// ... existing code ...
 
+/**
+ * GET /api/users/search
+ * Search users by name, email or ID
+ */
+router.get('/search', authMiddleware, async (req, res) => {
+    try {
+        const { q } = req.query;
+
+        if (!q || q.length < 2) {
+            return res.json({ users: [] });
+        }
+
+        let query = supabase
+            .from('users')
+            .select('id, nickname, email, avatar, role');
+
+        // Check if query is UUID
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q);
+
+        if (isUUID) {
+            query = query.eq('id', q);
+        } else {
+            query = query.or(`nickname.ilike.%${q}%,email.ilike.%${q}%`);
+        }
+
+        const { data, error } = await query.limit(10);
+
+        if (error) throw error;
+
+        res.json({ users: data });
+    } catch (error) {
+        console.error('Search error:', error);
+        res.status(500).json({ error: 'حدث خطأ في البحث' });
+    }
+});
+
+module.exports = router;

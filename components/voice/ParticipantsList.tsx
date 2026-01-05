@@ -1,6 +1,6 @@
 import { IAgoraRTCRemoteUser } from "agora-rtc-sdk-ng";
 import { useState, useEffect } from "react";
-import { Mic, MicOff, Volume2, UserX, Shield } from "lucide-react";
+import { Mic, MicOff, UserX, Shield } from "lucide-react";
 
 interface ParticipantsListProps {
     remoteUsers: IAgoraRTCRemoteUser[];
@@ -13,31 +13,22 @@ interface ParticipantsListProps {
     onKickUser?: (uid: string | number) => void;
 }
 
-// Speaking detection hook
-const useSpeakingDetection = (audioTrack: any, threshold: number = 0.35) => {
-    const [isSpeaking, setIsSpeaking] = useState(false);
+// Speaking detection hook with volume level
+const useSpeakingDetection = (audioTrack: any, threshold: number = 0.2) => {
+    const [volumeLevel, setVolumeLevel] = useState(0);
 
     useEffect(() => {
         if (!audioTrack) {
-            setIsSpeaking(false);
+            setVolumeLevel(0);
             return;
         }
 
         let animationId: number;
-        let lastSpeakingTime = 0;
-        const speakingTimeout = 150;
 
         const checkAudioLevel = () => {
             try {
                 const level = audioTrack.getVolumeLevel?.() || 0;
-                const now = Date.now();
-
-                if (level > threshold) {
-                    setIsSpeaking(true);
-                    lastSpeakingTime = now;
-                } else if (now - lastSpeakingTime > speakingTimeout) {
-                    setIsSpeaking(false);
-                }
+                setVolumeLevel(level);
             } catch (e) { }
             animationId = requestAnimationFrame(checkAudioLevel);
         };
@@ -46,7 +37,19 @@ const useSpeakingDetection = (audioTrack: any, threshold: number = 0.35) => {
         return () => { if (animationId) cancelAnimationFrame(animationId); };
     }, [audioTrack, threshold]);
 
-    return isSpeaking;
+    return volumeLevel;
+};
+
+// Get ring style based on volume level - same green color, different intensity
+const getVolumeRingStyle = (level: number): React.CSSProperties => {
+    const opacity = Math.min(level * 2, 1); // 0 to 1 based on volume
+    const blur = 10 + level * 25; // 10px to 35px blur
+    return {
+        boxShadow: `0 0 ${blur}px rgba(34, 197, 94, ${opacity})`,
+        borderColor: `rgba(34, 197, 94, ${0.3 + opacity * 0.7})`,
+        borderWidth: '3px',
+        borderStyle: 'solid'
+    };
 };
 
 export default function ParticipantsList({
@@ -60,27 +63,27 @@ export default function ParticipantsList({
     onKickUser
 }: ParticipantsListProps) {
 
-    const localIsSpeaking = useSpeakingDetection(localAudioTrack);
+    const localVolume = useSpeakingDetection(localAudioTrack);
     const [mutedUsers, setMutedUsers] = useState<Set<string | number>>(new Set());
-    const [remoteSpeaking, setRemoteSpeaking] = useState<Record<string | number, boolean>>({});
+    const [remoteVolumes, setRemoteVolumes] = useState<Record<string | number, number>>({});
 
     // Check remote speaking
     useEffect(() => {
         let animationId: number;
 
         const checkAllRemote = () => {
-            const speaking: Record<string | number, boolean> = {};
+            const volumes: Record<string | number, number> = {};
             remoteUsers.forEach(user => {
                 if (user.hasAudio && user.audioTrack && !mutedUsers.has(user.uid)) {
                     try {
                         const level = user.audioTrack.getVolumeLevel?.() || 0;
-                        speaking[user.uid] = level > 0.35;
-                    } catch { speaking[user.uid] = false; }
+                        volumes[user.uid] = level;
+                    } catch { volumes[user.uid] = 0; }
                 } else {
-                    speaking[user.uid] = false;
+                    volumes[user.uid] = 0;
                 }
             });
-            setRemoteSpeaking(speaking);
+            setRemoteVolumes(volumes);
             animationId = requestAnimationFrame(checkAllRemote);
         };
 
@@ -91,7 +94,7 @@ export default function ParticipantsList({
         return () => { if (animationId) cancelAnimationFrame(animationId); };
     }, [remoteUsers, mutedUsers]);
 
-    // Toggle mute user (local + send RTM message)
+    // Toggle mute user
     const toggleMuteUser = (user: IAgoraRTCRemoteUser) => {
         const uid = user.uid;
         const willMute = !mutedUsers.has(uid);
@@ -108,7 +111,6 @@ export default function ParticipantsList({
             return newSet;
         });
 
-        // Send RTM message to the user
         onMuteUser?.(uid, willMute);
     };
 
@@ -145,28 +147,25 @@ export default function ParticipantsList({
                     <div className="relative">
                         <div className={`
                             w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center
-                            transition-all duration-200
+                            transition-all duration-150
                             ${localUser.avatar ? '' : 'bg-gradient-to-br from-primary/20 to-primary/40'}
-                            ${localIsSpeaking && !isMuted
-                                ? 'ring-[3px] ring-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)]'
-                                : isForceMuted
-                                    ? 'ring-[3px] ring-red-500 grayscale'
-                                    : 'ring-2 ring-white/10'
-                            }
+                            ${isForceMuted ? 'ring-[3px] ring-red-500 grayscale' : ''}
+                            ${isMuted && !isForceMuted ? 'ring-2 ring-white/20' : ''}
                         `}
-                            style={localUser.avatar ? {
-                                backgroundImage: `url(${localUser.avatar})`,
-                                backgroundSize: 'cover',
-                                backgroundPosition: 'center'
-                            } : {}}>
+                            style={{
+                                ...(localUser.avatar ? {
+                                    backgroundImage: `url(${localUser.avatar})`,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center'
+                                } : {}),
+                                ...(!isMuted && !isForceMuted ? getVolumeRingStyle(localVolume) : {})
+                            }}>
                             {!localUser.avatar && (
                                 <span className="text-xl md:text-2xl font-bold text-primary">
                                     {localUser.name.charAt(0).toUpperCase()}
                                 </span>
                             )}
                         </div>
-
-
 
                         {(isMuted || isForceMuted) && (
                             <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center shadow-md bg-red-500">
@@ -185,7 +184,7 @@ export default function ParticipantsList({
                 {/* Remote Users */}
                 {remoteUsers.map((user) => {
                     const isUserMuted = mutedUsers.has(user.uid) || !user.hasAudio;
-                    const isUserSpeaking = remoteSpeaking[user.uid] && !isUserMuted;
+                    const userVolume = remoteVolumes[user.uid] || 0;
 
                     return (
                         <div key={user.uid} className="flex flex-col items-center gap-2 group relative">
@@ -193,18 +192,15 @@ export default function ParticipantsList({
                                 <div className={`
                                     w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center
                                     bg-gradient-to-br from-secondary to-muted
-                                    transition-all duration-200
-                                        ? 'ring-2 ring-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)] scale-105'
-                                        : isUserMuted
-                                            ? 'ring-2 ring-red-500/50 grayscale opacity-80'
-                                            : 'ring-1 ring-white/10 hover:ring-white/20'
-                                `}>
+                                    transition-all duration-150
+                                    ${isUserMuted ? 'ring-2 ring-red-500/50 grayscale opacity-80' : ''}
+                                `}
+                                    style={!isUserMuted ? getVolumeRingStyle(userVolume) : {}}
+                                >
                                     <span className="text-xl md:text-2xl font-bold text-muted-foreground">
                                         {String(user.uid).slice(-1).toUpperCase()}
                                     </span>
                                 </div>
-
-
 
                                 {isUserMuted && (
                                     <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center shadow-md bg-red-500">
@@ -256,13 +252,6 @@ export default function ParticipantsList({
             {remoteUsers.length === 0 && (
                 <p className="text-center text-sm text-muted-foreground mt-4">
                     في انتظار انضمام الآخرين...
-                </p>
-            )}
-
-            {/* Hint for specialist */}
-            {canControl && remoteUsers.length > 0 && (
-                <p className="text-center text-xs text-muted-foreground mt-6 bg-muted/50 py-2 rounded-lg">
-                    💡 مرر على أي مشارك للتحكم (كتم / طرد)
                 </p>
             )}
         </div>

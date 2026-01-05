@@ -21,22 +21,7 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_KEY
 );
 
-// Middleware to verify JWT
-const authMiddleware = (req, res, next) => {
-    try {
-        const authHeader = req.headers.authorization;
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.status(401).json({ error: 'غير مصرح' });
-        }
-
-        const token = authHeader.split(' ')[1];
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.userId = decoded.userId;
-        next();
-    } catch (error) {
-        res.status(401).json({ error: 'التوكن غير صالح' });
-    }
-};
+const { authMiddleware } = require('../middleware/auth');
 
 /**
  * GET /api/messages/conversations
@@ -478,17 +463,22 @@ router.post('/:id/schedule', authMiddleware, async (req, res) => {
         const courseId = req.params.id;
         const { date, time, title } = req.body;
 
-        // Verify user is specialist of course OR is owner
-        const { data: course } = await supabase
+        // Verify user is specialist of course OR is owner/admin
+        const { data: course, error: courseError } = await supabase
             .from('courses')
             .select('specialist_id')
             .eq('id', courseId)
             .single();
 
-        const isOwner = req.userRole === 'owner';
+        // Owner and admin can schedule for any course
+        const isOwnerOrAdmin = req.userRole === 'owner' || req.userRole === 'admin';
         const isSpecialist = course && course.specialist_id === req.userId;
 
-        if (!course || (!isOwner && !isSpecialist)) {
+        if (!course) {
+            return res.status(404).json({ error: 'الكورس غير موجود' });
+        }
+
+        if (!isOwnerOrAdmin && !isSpecialist) {
             return res.status(403).json({ error: 'غير مصرح لك بجدولة جلسات لهذا الكورس' });
         }
 
