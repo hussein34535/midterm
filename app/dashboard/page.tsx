@@ -1,150 +1,234 @@
 'use client';
 
-import React from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Sun, Calendar, Clock, User, LogOut, Settings, Bell, BookOpen, Activity, Heart, Sparkles, Shield } from 'lucide-react';
+import { Calendar, Clock, User, BookOpen, Loader2, MessageCircle, ArrowLeft, ChevronLeft } from 'lucide-react';
 import Header from '../../components/layout/Header';
 import Footer from '../../components/layout/Footer';
+import { useRouter } from 'next/navigation';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+interface Enrollment {
+    id: string;
+    course: {
+        id: string;
+        title: string;
+        total_sessions: number;
+    };
+    completed_sessions: number;
+}
+
+interface UpcomingSession {
+    id: string;
+    title: string;
+    course_title: string;
+    scheduled_at: string;
+    specialist_name: string;
+}
 
 export default function DashboardPage() {
-    const user = { nickname: 'نجمة الصباح' };
+    const router = useRouter();
+    const [user, setUser] = useState<any>(null);
+    const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+    const [upcomingSessions, setUpcomingSessions] = useState<UpcomingSession[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+            try {
+                const parsedUser = JSON.parse(storedUser);
+                setUser(parsedUser);
+                fetchUserData();
+            } catch (e) {
+                console.error("Failed to parse user data");
+                router.push('/login');
+            }
+        } else {
+            router.push('/login');
+        }
+    }, [router]);
+
+    const fetchUserData = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+
+            const enrollRes = await fetch(`${API_URL}/api/users/enrollments`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (enrollRes.ok) {
+                const data = await enrollRes.json();
+                setEnrollments(data.enrollments || []);
+            }
+
+            const scheduleRes = await fetch(`${API_URL}/api/users/schedule`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (scheduleRes.ok) {
+                const data = await scheduleRes.json();
+                setUpcomingSessions(data.sessions || []);
+            }
+        } catch (err) {
+            console.error('Failed to fetch user data:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (!user) return <div className="min-h-screen bg-gradient-to-b from-purple-50 to-white"></div>;
 
     return (
-        <div className="bg-warm-mesh min-h-screen flex flex-col" dir="rtl">
+        <div className="bg-gradient-to-b from-purple-50 via-white to-purple-50/30 min-h-screen" dir="rtl">
             <Header />
 
-            <main className="flex-grow pb-20 pt-32">
-                <div className="container mx-auto px-6">
+            <main className="pt-24 pb-20">
+                <div className="container mx-auto px-5 max-w-2xl">
 
-                    {/* 👋 Welcome Section */}
-                    <div className="mb-12 text-center md:text-right animate-in fade-in slide-in-from-bottom-4 duration-700">
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-bold mb-4">
-                            <Sparkles className="w-4 h-4 fill-current" />
-                            <span>يوم جديد، بداية جديدة</span>
+                    {/* Simple Welcome */}
+                    <div className="text-center mb-10 animate-in fade-in duration-500">
+                        <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-primary/30">
+                            {user.avatar ? (
+                                <img src={user.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+                            ) : (
+                                <span className="text-white font-bold text-2xl">
+                                    {(user.nickname || "U").charAt(0).toUpperCase()}
+                                </span>
+                            )}
                         </div>
-                        <h1 className="text-4xl md:text-5xl font-serif font-bold text-foreground mb-3">
-                            مرحباً بك، <span className="text-primary">{user.nickname}</span>
+                        <h1 className="text-2xl font-bold text-gray-800 mb-1">
+                            مرحباً {user.nickname} 👋
                         </h1>
-                        <p className="text-muted-foreground text-lg">استكمل رحلة التعافي الخاصة بك 🌿</p>
+                        <p className="text-gray-500 text-sm">نتمنى لك يوماً هادئاً</p>
                     </div>
 
-                    {/* 🌟 Hero Dashboard Card */}
-                    <div className="card-love p-8 md:p-12 mb-12 relative overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-1000">
-                        <div className="absolute top-0 left-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
-
-                        <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
-                            <div className="flex-grow flex flex-col md:flex-row items-center gap-8 text-center md:text-right">
-                                <div className="w-24 h-24 bg-primary/10 rounded-3xl flex items-center justify-center text-primary shadow-lg shadow-primary/10 rotate-3 transform hover:rotate-6 transition-transform">
-                                    <Heart className="w-10 h-10 fill-current" />
-                                </div>
-                                <div>
-                                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-100 text-green-700 text-xs font-bold mb-3 border border-green-200">
-                                        <Activity className="w-3 h-3" />
-                                        <span>نشط الآن</span>
-                                    </div>
-                                    <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">جلسة: التعامل مع القلق</h2>
-                                    <p className="text-muted-foreground text-lg max-w-md">تبدأ الجلسة خلال 15 دقيقة. هل أنت مستعد؟</p>
-                                </div>
-                            </div>
-
-                            <Link href="/courses" className="btn-primary px-8 py-4 text-lg shadow-xl shadow-primary/20 hover:scale-105">
-                                <Sun className="w-5 h-5 ml-2" />
-                                الدخول للجلسة
-                            </Link>
+                    {loading ? (
+                        <div className="flex justify-center py-20">
+                            <Loader2 className="w-8 h-8 animate-spin text-primary" />
                         </div>
-                    </div>
+                    ) : (
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-
-                        {/* 👉 Main Content Column (8) */}
-                        <div className="lg:col-span-8 space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-100">
-
-                            {/* 📅 Upcoming Session Item */}
-                            <div className="card-love p-8 group hover:border-primary/30 transition-all">
-                                <div className="flex flex-col md:flex-row items-center gap-8">
-                                    <div className="w-20 h-20 bg-primary/5 rounded-2xl flex flex-col items-center justify-center border border-primary/10 group-hover:bg-primary/10 transition-colors">
-                                        <span className="text-primary font-black text-2xl">25</span>
-                                        <span className="text-muted-foreground text-xs font-bold uppercase">يناير</span>
+                            {/* Upcoming Session Card */}
+                            {upcomingSessions.length > 0 ? (
+                                <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <Calendar className="w-5 h-5 text-primary" />
+                                        <h2 className="font-bold text-gray-800">جلستك القادمة</h2>
                                     </div>
 
-                                    <div className="flex-1 text-center md:text-right">
-                                        <h3 className="text-xl font-bold text-foreground mb-2 group-hover:text-primary transition-colors">العيش في اللحظة</h3>
-                                        <div className="flex flex-wrap justify-center md:justify-start gap-4">
-                                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                <Clock className="w-4 h-4 text-primary" />
-                                                <span>8:00 مساءً</span>
+                                    {upcomingSessions.slice(0, 2).map((session) => (
+                                        <Link
+                                            key={session.id}
+                                            href={`/session/${session.id}`}
+                                            className="flex items-center gap-4 p-4 bg-purple-50 rounded-2xl mb-2 last:mb-0 hover:bg-purple-100 transition-colors"
+                                        >
+                                            <div className="w-14 h-14 bg-white rounded-xl flex flex-col items-center justify-center shadow-sm">
+                                                <span className="text-primary font-bold text-lg">
+                                                    {new Date(session.scheduled_at).getDate()}
+                                                </span>
+                                                <span className="text-gray-400 text-[10px] font-medium">
+                                                    {new Date(session.scheduled_at).toLocaleDateString('ar-EG', { month: 'short' })}
+                                                </span>
                                             </div>
-                                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                                <User className="w-4 h-4 text-primary" />
-                                                <span>د. سارة احمد</span>
+                                            <div className="flex-1">
+                                                <h3 className="font-bold text-gray-800 text-sm">{session.title}</h3>
+                                                <p className="text-xs text-gray-500 mt-0.5">{session.course_title}</p>
+                                                <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-400">
+                                                    <span className="flex items-center gap-1">
+                                                        <Clock className="w-3 h-3" />
+                                                        {new Date(session.scheduled_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                    <span className="flex items-center gap-1">
+                                                        <User className="w-3 h-3" />
+                                                        {session.specialist_name}
+                                                    </span>
+                                                </div>
                                             </div>
+                                            <ChevronLeft className="w-5 h-5 text-gray-300" />
+                                        </Link>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 text-center">
+                                    <img src="/meditation.png" alt="" className="w-32 h-32 mx-auto mb-4 opacity-80" />
+                                    <p className="text-gray-600 font-medium mb-1">لا توجد جلسات قادمة</p>
+                                    <p className="text-gray-400 text-sm mb-4">استكشف الكورسات للانضمام</p>
+                                    <Link href="/courses" className="inline-flex items-center gap-2 text-primary font-bold text-sm hover:underline">
+                                        تصفح الكورسات
+                                        <ArrowLeft className="w-4 h-4 rotate-180" />
+                                    </Link>
+                                </div>
+                            )}
+
+                            {/* My Courses */}
+                            {enrollments.length > 0 && (
+                                <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <BookOpen className="w-5 h-5 text-primary" />
+                                            <h2 className="font-bold text-gray-800">كورساتي</h2>
                                         </div>
+                                        <Link href="/courses" className="text-primary text-sm font-medium hover:underline">
+                                            الكل
+                                        </Link>
                                     </div>
 
-                                    <button className="btn-outline px-6 py-3 text-sm">
-                                        التفاصيل
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* 📚 My Courses */}
-                            <div className="card-love p-8">
-                                <div className="flex items-center justify-between mb-8">
-                                    <h2 className="text-xl font-bold text-foreground flex items-center gap-3">
-                                        <BookOpen className="w-5 h-5 text-primary" />
-                                        رحلاتي الحالية
-                                    </h2>
-                                    <Link href="/courses" className="text-primary text-sm font-bold hover:underline transition-colors">عرض الكل</Link>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <div className="bg-secondary/30 rounded-2xl p-6 border border-border hover:bg-secondary/50 transition-colors">
-                                        <div className="flex items-center justify-between gap-4 mb-4">
-                                            <h4 className="font-bold text-foreground">التعامل مع القلق</h4>
-                                            <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-1 rounded-lg">3/8 جلسات</span>
-                                        </div>
-                                        <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                                            <div className="h-full bg-primary" style={{ width: '37%' }}></div>
-                                        </div>
+                                    <div className="space-y-3">
+                                        {enrollments.slice(0, 3).map((enrollment) => {
+                                            const progress = enrollment.course.total_sessions > 0
+                                                ? Math.round((enrollment.completed_sessions / enrollment.course.total_sessions) * 100)
+                                                : 0;
+                                            return (
+                                                <Link
+                                                    key={enrollment.id}
+                                                    href={`/courses/${enrollment.course.id}`}
+                                                    className="block p-4 bg-gray-50 rounded-2xl hover:bg-gray-100 transition-colors"
+                                                >
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <h4 className="font-bold text-gray-800 text-sm">{enrollment.course.title}</h4>
+                                                        <span className="text-xs font-bold text-primary">{progress}%</span>
+                                                    </div>
+                                                    <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-primary rounded-full transition-all"
+                                                            style={{ width: `${progress}%` }}
+                                                        />
+                                                    </div>
+                                                </Link>
+                                            );
+                                        })}
                                     </div>
                                 </div>
+                            )}
+
+                            {/* Quick Actions */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <Link
+                                    href="/messages"
+                                    className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow text-center"
+                                >
+                                    <div className="w-12 h-12 mx-auto mb-3 bg-purple-100 rounded-xl flex items-center justify-center">
+                                        <MessageCircle className="w-6 h-6 text-primary" />
+                                    </div>
+                                    <p className="font-bold text-gray-800 text-sm">الرسائل</p>
+                                    <p className="text-xs text-gray-400 mt-0.5">تواصل مع أخصائيك</p>
+                                </Link>
+                                <Link
+                                    href="/courses"
+                                    className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-shadow text-center"
+                                >
+                                    <div className="w-12 h-12 mx-auto mb-3 bg-amber-100 rounded-xl flex items-center justify-center">
+                                        <BookOpen className="w-6 h-6 text-amber-600" />
+                                    </div>
+                                    <p className="font-bold text-gray-800 text-sm">الكورسات</p>
+                                    <p className="text-xs text-gray-400 mt-0.5">اكتشف رحلات جديدة</p>
+                                </Link>
                             </div>
 
                         </div>
-
-                        {/* 👉 Sidebar Column (4) */}
-                        <div className="lg:col-span-4 space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200">
-
-                            {/* 👤 Profile Card */}
-                            <div className="card-love p-8 text-center relative overflow-hidden">
-                                <div className="absolute top-0 inset-x-0 h-24 bg-gradient-to-b from-primary/5 to-transparent" />
-
-                                <div className="relative z-10">
-                                    <div className="w-24 h-24 mx-auto bg-white rounded-full flex items-center justify-center text-4xl mb-4 border-4 border-white shadow-xl">🌸</div>
-                                    <h3 className="text-xl font-bold text-foreground mb-1">{user.nickname}</h3>
-                                    <p className="text-muted-foreground text-sm mb-8">عضو مميز منذ 2024</p>
-
-                                    <nav className="space-y-2">
-                                        <button className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground transition-all text-right group">
-                                            <Settings className="w-5 h-5 group-hover:text-primary transition-colors" />
-                                            إعدادات الحساب
-                                        </button>
-                                        <button className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-secondary text-muted-foreground hover:text-foreground transition-all text-right group">
-                                            <Bell className="w-5 h-5 group-hover:text-primary transition-colors" />
-                                            التنبيهات
-                                        </button>
-                                        <div className="h-px bg-border my-2" />
-                                        <button className="w-full flex items-center gap-3 p-4 rounded-xl hover:bg-destructive/5 text-muted-foreground hover:text-destructive transition-all text-right">
-                                            <LogOut className="w-5 h-5" />
-                                            تسجيل خروج
-                                        </button>
-                                    </nav>
-                                </div>
-                            </div>
-
-                        </div>
-
-                    </div>
+                    )}
                 </div>
             </main>
 

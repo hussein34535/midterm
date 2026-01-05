@@ -1,11 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState, use } from "react";
-import { notFound } from "next/navigation";
+import { useState, use, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import { getCourseById } from "@/lib/data";
 import {
     Copy,
     Check,
@@ -14,32 +13,110 @@ import {
     Smartphone,
     Building2,
     Wallet,
-    Shield
+    Loader2
 } from "lucide-react";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+interface Course {
+    id: string;
+    title: string;
+    price: number;
+}
 
 interface PageProps {
     params: Promise<{ courseId: string }>;
 }
 
 export default function PaymentPage({ params }: PageProps) {
+    const router = useRouter();
     const { courseId } = use(params);
-    const course = getCourseById(courseId);
 
+    const [course, setCourse] = useState<Course | null>(null);
+    const [loading, setLoading] = useState(true);
     const [copied, setCopied] = useState(false);
     const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
     const [confirmed, setConfirmed] = useState(false);
+    // These MUST be before any early returns
+    const [paymentCode] = useState(() =>
+        `EWA-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
+    );
+    const [submitting, setSubmitting] = useState(false);
 
-    if (!course) {
-        notFound();
+    // Auth Gate + Fetch Course
+    useEffect(() => {
+        const storedUser = localStorage.getItem('user');
+        if (!storedUser) {
+            router.replace(`/login?redirect=/payment/${courseId}`);
+            return;
+        }
+
+        // Fetch course from API
+        fetchCourse();
+    }, [router, courseId]);
+
+    const fetchCourse = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/courses/${courseId}`);
+            if (res.ok) {
+                const data = await res.json();
+                setCourse(data.course);
+            } else {
+                router.push('/courses');
+            }
+        } catch (err) {
+            console.error('Failed to fetch course:', err);
+            router.push('/courses');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Show loading
+    if (loading || !course) {
+        return (
+            <div className="min-h-screen bg-warm-mesh flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-primary animate-spin" />
+            </div>
+        );
     }
-
-    // Generate unique payment code
-    const paymentCode = `SKN-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
     const copyCode = () => {
         navigator.clipboard.writeText(paymentCode);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+    };
+
+    const handleConfirmPayment = async () => {
+        if (!selectedMethod) return;
+
+        setSubmitting(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/api/courses/${courseId}/payment`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    payment_method: selectedMethod,
+                    payment_code: paymentCode,
+                    amount: course.price
+                })
+            });
+
+            if (res.ok) {
+                setConfirmed(true);
+            } else {
+                const data = await res.json();
+                alert(data.error || 'حدث خطأ');
+            }
+        } catch (err) {
+            alert('حدث خطأ في الاتصال');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     const paymentMethods = [
@@ -174,12 +251,12 @@ export default function PaymentPage({ params }: PageProps) {
 
                     {/* Confirm Button */}
                     <button
-                        onClick={() => setConfirmed(true)}
-                        disabled={!selectedMethod}
-                        className={`btn-primary w-full text-lg py-4 justify-center shadow-lg shadow-primary/25 mb-8 ${!selectedMethod ? "opacity-50 cursor-not-allowed shadow-none" : ""
+                        onClick={handleConfirmPayment}
+                        disabled={!selectedMethod || submitting}
+                        className={`btn-primary w-full text-lg py-4 justify-center shadow-lg shadow-primary/25 mb-8 ${!selectedMethod || submitting ? "opacity-50 cursor-not-allowed shadow-none" : ""
                             }`}
                     >
-                        {confirmed ? "جاري التحقق..." : "✅ أكدت الدفع"}
+                        {submitting ? <><Loader2 className="w-5 h-5 animate-spin ml-2" /> جاري التسجيل...</> : "✅ أكدت الدفع"}
                     </button>
 
                     {/* Confirmation Message */}

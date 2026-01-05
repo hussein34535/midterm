@@ -1,286 +1,184 @@
 "use client";
-
-import { useState, use } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import {
-    Mic,
-    MicOff,
-    Volume2,
-    VolumeX,
-    LogOut,
-    Hand,
-    AlertCircle,
-    MessageCircle,
-    Users,
-    Clock,
-    Send,
-    Wand2,
-    Sparkles
-} from "lucide-react";
+import { ArrowRight, Users, Clock, Shield, Info, Settings, User, Edit } from "lucide-react";
+import VoiceCall from "@/components/voice/VoiceCall";
 
-interface PageProps {
-    params: Promise<{ id: string }>;
-}
+export default function SessionPage() {
+    const params = useParams();
+    const router = useRouter();
+    const sessionId = params.id as string;
 
-// Mock participants
-const participants = [
-    { id: 1, nickname: "نجمة", isSpeaking: true, isMuted: false, isSpecialist: false },
-    { id: 2, nickname: "قمر", isSpeaking: false, isMuted: true, isSpecialist: false },
-    { id: 3, nickname: "أمل", isSpeaking: false, isMuted: false, isSpecialist: false },
-    { id: 4, nickname: "صباح", isSpeaking: true, isMuted: false, isSpecialist: false },
-    { id: 5, nickname: "ورد", isSpeaking: false, isMuted: true, isSpecialist: false },
-    { id: 6, nickname: "نسيم", isSpeaking: false, isMuted: false, isSpecialist: false },
-    { id: 7, nickname: "د. أمل", isSpeaking: true, isMuted: false, isSpecialist: true },
-    { id: 8, nickname: "فجر", isSpeaking: false, isMuted: false, isSpecialist: false },
-];
+    const [user, setUser] = useState<any>(null);
+    const [isCallEnded, setIsCallEnded] = useState(false);
+    const [showSidebar, setShowSidebar] = useState(true);
 
-// Mock chat messages
-const initialMessages = [
-    { id: 1, sender: "د. أمل", message: "مرحباً بالجميع في الجلسة 📍", isAnnouncement: true, time: "20:00" },
-    { id: 2, sender: "د. أمل", message: "ثيم اليوم: التعبير عن المشاعر", isAnnouncement: true, time: "20:01" },
-    { id: 3, sender: "نجمة", message: "مساء الخير 💜", isAnnouncement: false, time: "20:02" },
-];
+    useEffect(() => {
+        const stored = localStorage.getItem('user');
+        if (stored) {
+            setUser(JSON.parse(stored));
+        } else {
+            router.push('/login');
+        }
+    }, [router]);
 
-export default function SessionPage({ params }: PageProps) {
-    const { id } = use(params);
-    const [isMuted, setIsMuted] = useState(true);
-    const [isSpeakerOn, setIsSpeakerOn] = useState(true);
-    const [voiceChanger, setVoiceChanger] = useState(false);
-    const [handRaised, setHandRaised] = useState(false);
-    const [showChat, setShowChat] = useState(true);
-    const [messages, setMessages] = useState(initialMessages);
-    const [newMessage, setNewMessage] = useState("");
-
-    const sessionTime = "45:23";
-
-    const sendMessage = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newMessage.trim()) return;
-        setMessages([...messages, {
-            id: messages.length + 1,
-            sender: "نجمة",
-            message: newMessage,
-            isAnnouncement: false,
-            time: new Date().toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }),
-        }]);
-        setNewMessage("");
+    const handleEndCall = () => {
+        setIsCallEnded(true);
     };
 
+    if (!user) return null;
+
+    const isSpecialist = user.role === 'specialist' || user.role === 'owner';
+
     return (
-        <div className="bg-warm-mesh min-h-screen flex flex-col" dir="rtl">
-            {/* Header */}
-            <header className="bg-background/80 backdrop-blur-md border-b border-border px-6 py-4 sticky top-0 z-50">
-                <div className="container mx-auto flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
-                            <span className="text-white font-bold">3</span>
-                        </div>
-                        <div>
-                            <h1 className="text-lg font-bold text-foreground flex items-center gap-2">
-                                الجلسة 3: التعبير عن المشاعر
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 animate-pulse">
-                                    مباشر
-                                </span>
-                            </h1>
-                            <p className="text-sm text-muted-foreground">التعامل مع القلق</p>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-6">
-                        <div className="hidden md:flex items-center gap-2 text-muted-foreground bg-secondary/50 px-3 py-1.5 rounded-lg">
-                            <Clock className="w-4 h-4 text-primary" />
-                            <span className="font-mono font-medium">{sessionTime}</span>
-                        </div>
-                        <div className="hidden md:flex items-center gap-2 text-muted-foreground bg-secondary/50 px-3 py-1.5 rounded-lg">
-                            <Users className="w-4 h-4 text-primary" />
-                            <span>{participants.length}</span>
-                        </div>
-                        <Link
-                            href="/dashboard"
-                            className="flex items-center gap-2 text-destructive hover:bg-destructive/10 px-4 py-2 rounded-xl transition-colors font-medium"
-                        >
-                            <LogOut className="w-5 h-5" />
-                            <span className="hidden md:inline">خروج</span>
-                        </Link>
-                    </div>
-                </div>
-            </header>
-
-            {/* Main Content */}
-            <div className="flex-1 flex overflow-hidden">
-                {/* Participants Grid */}
-                <div className="flex-1 p-6 overflow-y-auto">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto">
-                        {participants.map((participant) => (
-                            <div
-                                key={participant.id}
-                                className={`card-love p-6 flex flex-col items-center gap-4 relative transition-all duration-300 ${participant.isSpeaking ? "ring-2 ring-primary shadow-lg shadow-primary/20 scale-105" : "hover:border-primary/30"
-                                    }`}
-                            >
-                                {/* Avatar */}
-                                <div className={`w-20 h-20 rounded-full flex items-center justify-center text-3xl relative transition-all ${participant.isSpecialist
-                                    ? "bg-gradient-to-br from-primary to-primary/60 text-white shadow-lg"
-                                    : "bg-secondary text-foreground"
-                                    }`}>
-                                    {participant.isSpecialist ? "⭐" : "👤"}
-
-                                    {/* Speaking indicator */}
-                                    {participant.isSpeaking && (
-                                        <span className="absolute -bottom-1 -right-1 flex h-4 w-4">
-                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                            <span className="relative inline-flex rounded-full h-4 w-4 bg-green-500 border-2 border-white"></span>
-                                        </span>
-                                    )}
-                                </div>
-
-                                <div className="text-center">
-                                    <h3 className={`font-bold ${participant.isSpecialist ? "text-primary" : "text-foreground"}`}>
-                                        {participant.nickname}
-                                    </h3>
-                                    {participant.isSpecialist && <span className="text-xs text-muted-foreground">أخصائي</span>}
-                                </div>
-
-                                {/* Muted badge */}
-                                {participant.isMuted && (
-                                    <span className="absolute top-3 left-3 bg-destructive/10 p-1.5 rounded-full">
-                                        <MicOff className="w-3 h-3 text-destructive" />
-                                    </span>
-                                )}
-
-                                {/* Speaking waves */}
-                                {participant.isSpeaking && !participant.isMuted && (
-                                    <div className="flex items-center gap-1 h-4">
-                                        <div className="w-1 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                                        <div className="w-1 h-4 bg-primary rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                                        <div className="w-1 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-                                        <div className="w-1 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "450ms" }} />
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Chat Sidebar */}
-                {showChat && (
-                    <div className="w-80 border-r border-l border-border bg-background/50 backdrop-blur-sm flex flex-col shadow-xl z-20 animate-in slide-in-from-left duration-300">
-                        <div className="p-4 border-b border-border bg-background/80">
-                            <h2 className="font-bold text-foreground flex items-center gap-2">
-                                <MessageCircle className="w-5 h-5 text-primary" />
-                                المحادثة
-                            </h2>
-                        </div>
-
-                        {/* Messages */}
-                        <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-24">
-                            {messages.map((msg) => (
-                                <div
-                                    key={msg.id}
-                                    className={`rounded-2xl p-3 max-w-[90%] ${msg.isAnnouncement
-                                        ? "bg-primary/5 border border-primary/20 mx-auto w-full text-center"
-                                        : msg.sender === "نجمة"
-                                            ? "bg-primary text-primary-foreground mr-auto rounded-tl-none"
-                                            : "bg-secondary text-foreground ml-auto rounded-tr-none"}`}
-                                >
-                                    {!msg.isAnnouncement && (
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className={`text-xs font-bold ${msg.sender === "نجمة" ? "text-white/90" : "text-primary"}`}>
-                                                {msg.sender}
-                                            </span>
-                                            <span className={`text-[10px] ${msg.sender === "نجمة" ? "text-white/70" : "text-muted-foreground"}`}>{msg.time}</span>
-                                        </div>
-                                    )}
-                                    <p className={`text-sm ${msg.isAnnouncement ? "text-primary font-medium" : ""}`}>{msg.message}</p>
-                                </div>
-                            ))}
-                        </div>
-
-                        {/* Message Input */}
-                        <div className="p-4 border-t border-border bg-background/80 absolute bottom-[90px] w-full md:relative md:bottom-0">
-                            <form onSubmit={sendMessage} className="flex gap-2">
-                                <input
-                                    type="text"
-                                    value={newMessage}
-                                    onChange={(e) => setNewMessage(e.target.value)}
-                                    placeholder="اكتب رسالة..."
-                                    className="flex-1 bg-secondary/50 border-none rounded-xl py-3 px-4 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all placeholder:text-muted-foreground"
-                                />
-                                <button type="submit" className="btn-primary p-3 rounded-xl shadow-none">
-                                    <Send className="w-4 h-4" />
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                )}
+        <div className="relative min-h-screen overflow-hidden bg-slate-900 text-slate-100 font-sans" dir="rtl">
+            {/* Dynamic Aurora Background */}
+            <div className="absolute inset-0 z-0">
+                <div className="absolute top-[-20%] right-[-10%] w-[60%] h-[60%] rounded-full bg-teal-500/20 blur-[120px] animate-pulse"></div>
+                <div className="absolute bottom-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-blue-600/20 blur-[100px] animate-pulse delay-700"></div>
+                <div className="absolute top-[40%] left-[20%] w-[40%] h-[40%] rounded-full bg-indigo-500/10 blur-[80px] animate-pulse delay-1000"></div>
             </div>
 
-            {/* Controls */}
-            <div className="bg-background/80 backdrop-blur-md border-t border-border p-4 md:p-6 sticky bottom-0 z-50">
-                <div className="container mx-auto flex items-center justify-center gap-3 md:gap-6">
-                    {/* Mic */}
-                    <button
-                        onClick={() => setIsMuted(!isMuted)}
-                        className={`w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center transition-all shadow-lg ${isMuted
-                            ? "bg-destructive text-white hover:bg-destructive/90 shadow-destructive/20"
-                            : "bg-green-500 text-white hover:bg-green-600 shadow-green-500/20"
-                            }`}
-                    >
-                        {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-                    </button>
+            {/* Glass Overlay Texture */}
+            <div className="absolute inset-0 z-0 bg-slate-950/40 backdrop-blur-[1px]"></div>
 
-                    {/* Speaker */}
-                    <button
-                        onClick={() => setIsSpeakerOn(!isSpeakerOn)}
-                        className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-all ${isSpeakerOn
-                            ? "bg-secondary text-foreground hover:bg-secondary/80"
-                            : "bg-yellow-500/10 text-yellow-600 hover:bg-yellow-500/20 border border-yellow-500/20"
-                            }`}
-                    >
-                        {isSpeakerOn ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-                    </button>
+            {/* Content Container */}
+            <div className="relative z-10 flex h-screen">
 
-                    {/* Voice Changer */}
-                    <button
-                        onClick={() => setVoiceChanger(!voiceChanger)}
-                        className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-all ${voiceChanger
-                            ? "bg-primary text-white shadow-lg shadow-primary/20"
-                            : "bg-secondary text-foreground hover:bg-secondary/80"
-                            }`}
-                        title="تغيير الصوت"
-                    >
-                        <Wand2 className="w-5 h-5" />
-                    </button>
+                {/* Main Voice Area */}
+                <div className={`flex-1 flex flex-col transition-all duration-500 ${showSidebar ? 'mr-0' : 'mr-0'}`}>
 
-                    {/* Raise Hand */}
-                    <button
-                        onClick={() => setHandRaised(!handRaised)}
-                        className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-all ${handRaised
-                            ? "bg-yellow-400 text-white shadow-lg shadow-yellow-400/20 animate-bounce"
-                            : "bg-secondary text-foreground hover:bg-secondary/80"
-                            }`}
-                        title="رفع اليد"
-                    >
-                        <Hand className="w-5 h-5" />
-                    </button>
+                    {/* Top Nav (Floating) */}
+                    <div className="p-6 flex items-center justify-between">
+                        <Link href="/dashboard" className="p-3 rounded-full bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/5 transition-all group">
+                            <ArrowRight className="w-5 h-5 text-slate-300 group-hover:text-white" />
+                        </Link>
 
-                    {/* Chat Toggle */}
-                    <button
-                        onClick={() => setShowChat(!showChat)}
-                        className={`w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-all ${showChat
-                            ? "bg-primary text-white shadow-lg shadow-primary/20"
-                            : "bg-secondary text-foreground hover:bg-secondary/80"
-                            }`}
-                    >
-                        <MessageCircle className="w-5 h-5" />
-                    </button>
+                        <div className="flex items-center gap-3 px-4 py-2 rounded-full bg-white/5 backdrop-blur-md border border-white/5">
+                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                            <h1 className="text-sm font-medium text-slate-200">
+                                {isSpecialist ? 'لوحة تحكم الأخصائي' : 'جلسة دعم نفسي'}
+                            </h1>
+                        </div>
 
-                    {/* Emergency Exit */}
-                    <button
-                        className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-destructive/10 hover:bg-destructive hover:text-white text-destructive flex items-center justify-center transition-all group ml-2 md:ml-4"
-                        title="خروج سريع"
-                    >
-                        <AlertCircle className="w-5 h-5" />
-                    </button>
+                        <button
+                            onClick={() => setShowSidebar(!showSidebar)}
+                            className={`p-3 rounded-full bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/5 transition-all ${!showSidebar ? 'bg-white/20 text-white' : 'text-slate-300'}`}
+                        >
+                            <Info className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    {/* Central Stage */}
+                    <div className="flex-1 flex items-center justify-center p-4">
+                        {isCallEnded ? (
+                            <div className="text-center animate-in zoom-in duration-500">
+                                <div className="w-24 h-24 rounded-full bg-emerald-500/20 border border-emerald-500/50 flex items-center justify-center mx-auto mb-6 shadow-[0_0_50px_-12px_rgba(16,185,129,0.5)]">
+                                    <span className="text-4xl">✨</span>
+                                </div>
+                                <h2 className="text-3xl font-light text-white mb-3">انتهت الجلسة</h2>
+                                <p className="text-slate-400 mb-8 font-light">نتمنى لك يوماً مليئاً بالسكينة</p>
+                                <Link href="/dashboard" className="px-8 py-3 rounded-full bg-white text-slate-900 font-medium hover:bg-slate-200 transition-colors shadow-lg shadow-white/10">
+                                    العودة للرئيسية
+                                </Link>
+                            </div>
+                        ) : (
+                            <VoiceCall
+                                channelName={`sakina-session-${sessionId}`}
+                                userName={user.nickname || "مستخدم"}
+                                userAvatar={user.avatar}
+                                userRole={user.role}
+                                onEndCall={handleEndCall}
+                                className="w-full max-w-2xl bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] shadow-2xl shadow-black/20 p-8 md:p-12 transition-all duration-500 hover:border-white/20"
+                            />
+                        )}
+                    </div>
+
+                    {/* Footer Quote */}
+                    <div className="p-6 text-center text-slate-500 text-xs font-light tracking-widest opacity-60">
+                        SAKINA • SPACE OF CALM
+                    </div>
+                </div>
+
+                {/* Sidebar (Info Panel) */}
+                <div className={`w-80 border-l border-white/5 bg-slate-950/30 backdrop-blur-xl transition-all duration-500 transform ${showSidebar ? 'translate-x-0' : 'translate-x-full hidden'} absolute right-0 top-0 bottom-0 z-20 md:relative md:block`}>
+                    <div className="p-8 space-y-8">
+
+                        {/* User Profile Card */}
+                        <div className="p-4 rounded-2xl bg-white/5 border border-white/5">
+                            <div className="flex items-center gap-4">
+                                <div
+                                    className="w-14 h-14 rounded-full bg-gradient-to-br from-primary/30 to-primary/60 flex items-center justify-center overflow-hidden shrink-0"
+                                    style={user.avatar ? {
+                                        backgroundImage: `url(${user.avatar})`,
+                                        backgroundSize: 'cover',
+                                        backgroundPosition: 'center'
+                                    } : {}}
+                                >
+                                    {!user.avatar && (
+                                        <User className="w-7 h-7 text-primary" />
+                                    )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h4 className="text-sm font-bold text-white truncate">{user.nickname || 'مستخدم'}</h4>
+                                    <p className="text-xs text-slate-400 truncate">{user.email}</p>
+                                    <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${user.role === 'specialist' || user.role === 'owner'
+                                            ? 'bg-primary/20 text-primary'
+                                            : 'bg-slate-700 text-slate-300'
+                                        }`}>
+                                        {user.role === 'specialist' ? 'أخصائي' : user.role === 'owner' ? 'مالك' : 'مستخدم'}
+                                    </span>
+                                </div>
+                            </div>
+                            <Link
+                                href="/settings"
+                                className="mt-3 w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-slate-300 text-sm transition-colors"
+                            >
+                                <Edit className="w-4 h-4" />
+                                <span>تعديل الحساب</span>
+                            </Link>
+                        </div>
+
+                        <div>
+                            <h3 className="text-xs font-bold text-slate-500 tracking-wider mb-4 uppercase">معلومات الجلسة</h3>
+                            <div className="space-y-4">
+                                <div className="p-4 rounded-2xl bg-white/5 border border-white/5 flex items-start gap-4">
+                                    <div className="p-2 rounded-lg bg-indigo-500/20 text-indigo-400">
+                                        <Shield className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm font-medium text-slate-200">خصوصية تامة</h4>
+                                        <p className="text-xs text-slate-400 mt-1 leading-relaxed">المحادثة مشفرة بالكامل ولا يتم تسجيل أي صوت.</p>
+                                    </div>
+                                </div>
+
+                                <div className="p-4 rounded-2xl bg-white/5 border border-white/5 flex items-start gap-4">
+                                    <div className="p-2 rounded-lg bg-teal-500/20 text-teal-400">
+                                        <Users className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm font-medium text-slate-200">مساحة آمنة</h4>
+                                        <p className="text-xs text-slate-400 mt-1 leading-relaxed">هذه المساحة مخصصة للدعم والاحترام المتبادل.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 className="text-xs font-bold text-slate-500 tracking-wider mb-4 uppercase">أدوات</h3>
+                            <div className="grid grid-cols-2 gap-3">
+                                <button className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-2 transition-colors">
+                                    <Clock className="w-5 h-5 text-slate-400" />
+                                    <span className="text-xs text-slate-300">مؤقت التنفس</span>
+                                </button>
+                                <Link href="/settings" className="p-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 flex flex-col items-center gap-2 transition-colors">
+                                    <Settings className="w-5 h-5 text-slate-400" />
+                                    <span className="text-xs text-slate-300">الإعدادات</span>
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

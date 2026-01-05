@@ -1,13 +1,53 @@
 'use client';
 
-import React from 'react';
-import { Search, Filter, Sparkles, BookOpen } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Filter, Sparkles, BookOpen, Loader2 } from 'lucide-react';
 import Header from '../../components/layout/Header';
 import Footer from '../../components/layout/Footer';
 import CourseCard from '../../components/ui/CourseCard';
-import { courses } from '../../lib/data';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
+interface Course {
+    id: string;
+    title: string;
+    description: string;
+    price: number;
+    total_sessions: number;
+    specialist?: {
+        nickname: string;
+    };
+}
 
 export default function CoursesPage() {
+    const [courses, setCourses] = useState<Course[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    useEffect(() => {
+        fetchCourses();
+    }, []);
+
+    const fetchCourses = async () => {
+        try {
+            const res = await fetch(`${API_URL}/api/courses`);
+            if (res.ok) {
+                const data = await res.json();
+                setCourses(data.courses || []);
+            }
+        } catch (err) {
+            console.error('Failed to fetch courses:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Filter courses by search query
+    const filteredCourses = courses.filter(course =>
+        course.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        course.description.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
     return (
         <div className="bg-warm-mesh min-h-screen flex flex-col" dir="rtl">
             <Header />
@@ -40,6 +80,8 @@ export default function CoursesPage() {
                             <input
                                 type="text"
                                 placeholder="ابحث عن موضوع، شعور، أو اسم جلسة..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
                                 className="w-full bg-transparent border-none rounded-xl py-4 pr-12 pl-6 text-foreground placeholder:text-muted-foreground/70 focus:bg-secondary/50 transition-all text-lg outline-none"
                             />
                         </div>
@@ -50,11 +92,27 @@ export default function CoursesPage() {
                     </div>
 
                     {/* 📦 Grid */}
-                    {courses.length > 0 ? (
+                    {loading ? (
+                        <div className="flex justify-center py-20">
+                            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                        </div>
+                    ) : filteredCourses.length > 0 ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200">
-                            {courses.map((course) => (
+                            {filteredCourses.map((course) => (
                                 <div key={course.id} className="group">
-                                    <CourseCard {...course} />
+                                    <CourseCard
+                                        id={course.id}
+                                        title={course.title}
+                                        description={course.description}
+                                        sessionsCount={course.total_sessions}
+                                        seatsRemaining={10}
+                                        price={course.price}
+                                        specialist={{
+                                            nickname: course.specialist?.nickname || 'أخصائي',
+                                            title: 'أخصائي نفسي'
+                                        }}
+                                        color="#8B5CF6"
+                                    />
                                 </div>
                             ))}
                         </div>

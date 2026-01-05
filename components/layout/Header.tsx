@@ -2,20 +2,21 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { Menu, X } from "lucide-react"
+import { Shield, Crown, User, MessageCircle, BookOpen, Home, Settings, LogOut, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export default function Header() {
     const [isScrolled, setIsScrolled] = useState(false)
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
     const [user, setUser] = useState<any>(null);
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+    const [unreadCount, setUnreadCount] = useState(0);
+
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
     useEffect(() => {
         const handleScroll = () => setIsScrolled(window.scrollY > 20)
         window.addEventListener("scroll", handleScroll)
 
-        // Check local storage for user
         const checkUser = () => {
             const stored = localStorage.getItem('user');
             if (stored) {
@@ -33,7 +34,24 @@ export default function Header() {
         window.addEventListener('storage', checkUser);
         window.addEventListener('user-login', checkUser);
 
-        // Close menu when clicking outside
+        // Fetch unread count
+        const fetchUnread = async () => {
+            const token = localStorage.getItem('token');
+            if (token) {
+                try {
+                    const res = await fetch(`${API_URL}/api/messages/unread-count`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (res.ok) {
+                        const data = await res.json();
+                        setUnreadCount(data.unreadCount || 0);
+                    }
+                } catch (e) { /* ignore */ }
+            }
+        };
+        fetchUnread();
+        const unreadInterval = setInterval(fetchUnread, 30000);
+
         const handleClickOutside = (event: MouseEvent) => {
             const target = event.target as HTMLElement;
             if (!target.closest('.user-menu-container')) {
@@ -47,163 +65,233 @@ export default function Header() {
             window.removeEventListener('storage', checkUser);
             window.removeEventListener('user-login', checkUser);
             document.removeEventListener('mousedown', handleClickOutside);
+            clearInterval(unreadInterval);
         }
     }, [])
 
     const handleLogout = () => {
         localStorage.removeItem('user');
+        localStorage.removeItem('token');
         setUser(null);
+        setIsUserMenuOpen(false);
         window.location.href = '/';
     };
 
-    const navItems = [
-        { name: "الرئيسية", href: "/" },
-        { name: "الجلسات", href: "/courses" },
-        { name: "قصتنا", href: "/#about" },
+    const getRoleInfo = (role: string) => {
+        switch (role) {
+            case 'owner':
+                return { label: 'مالك', color: 'bg-yellow-500 text-yellow-900', icon: Crown, link: '/admin' };
+            case 'specialist':
+                return { label: 'أخصائي', color: 'bg-primary text-primary-foreground', icon: Shield, link: '/specialist' };
+            default:
+                return { label: 'مستخدم', color: 'bg-muted text-muted-foreground', icon: User, link: '/dashboard' };
+        }
+    };
+
+    const roleInfo = user?.role ? getRoleInfo(user.role) : null;
+
+    // Dynamic nav items based on login state
+    const navItems = user ? [
+        // Admin/Specialist links first (appear on right in RTL)
+        ...(user.role === 'owner' ? [
+            { name: "الإدارة", href: "/admin", icon: Crown },
+        ] : []),
+        ...(user.role === 'specialist' || user.role === 'owner' ? [
+            { name: "الأخصائي", href: "/specialist", icon: Shield }
+        ] : []),
+        // Regular nav items
+        { name: "جلساتي", href: "/dashboard", badge: 0, icon: Home },
+        { name: "الرسائل", href: "/messages", badge: unreadCount, icon: MessageCircle },
+        { name: "الكورسات", href: "/courses", icon: BookOpen },
+    ] : [
+        { name: "الرئيسية", href: "/home", icon: Home },
+        { name: "الكورسات", href: "/courses", icon: BookOpen },
+        { name: "من نحن", href: "/#about" },
         { name: "تواصل معنا", href: "/#contact" },
-    ]
+    ];
 
     return (
-        <header
-            dir="rtl"
-            className={cn(
-                "fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-6 py-4",
-                isScrolled ? "bg-background/80 backdrop-blur-md border-b border-border py-3" : "bg-transparent",
-            )}
-        >
-            <div className="container mx-auto flex items-center justify-between">
-                {/* Logo */}
-                <Link href="/" className="flex items-center gap-3 group">
-                    <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center text-white font-serif font-bold text-2xl group-hover:rotate-12 transition-transform shadow-lg shadow-primary/20">
-                        س
-                    </div>
-                    <span className="text-3xl font-serif font-bold tracking-tight text-foreground">سكينة</span>
-                </Link>
-
-                {/* Desktop Nav */}
-                <nav className="hidden md:flex items-center gap-12">
-                    {navItems.map((item) => (
-                        <Link
-                            key={item.name}
-                            href={item.href}
-                            className="text-base font-bold text-foreground/60 hover:text-primary transition-colors relative group/item"
-                        >
-                            {item.name}
-                            <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary/30 transition-all group-hover/item:w-full" />
-                        </Link>
-                    ))}
-                </nav>
-
-                {/* Actions */}
-                <div className="hidden md:flex items-center gap-6">
-                    {user ? (
-                        <div className="relative user-menu-container">
-                            <button
-                                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                                className="flex items-center gap-4 pl-3 pr-6 py-2 rounded-full bg-background/50 hover:bg-secondary transition-all border border-transparent hover:border-primary/20 shadow-sm hover:shadow-md group min-w-[200px] justify-end"
-                            >
-                                <div className="text-right">
-                                    <p className="text-sm font-bold text-foreground group-hover:text-primary transition-colors max-w-[140px] truncate leading-tight">
-                                        {user.nickname || "المستخدم"}
-                                    </p>
-                                    <p className="text-[10px] text-muted-foreground font-medium leading-tight opacity-70">
-                                        متصل الآن
-                                    </p>
-                                </div>
-                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border-2 border-primary/20 group-hover:border-primary transition-colors shrink-0 shadow-sm">
-                                    {user.avatar ? (
-                                        <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
-                                    ) : (
-                                        <span className="text-primary font-bold text-lg">
-                                            {(user.nickname || "U").charAt(0).toUpperCase()}
-                                        </span>
-                                    )}
-                                </div>
-                            </button>
-
-                            {/* Dropdown Menu */}
-                            {isUserMenuOpen && (
-                                <div className="absolute top-full text-right left-0 mt-3 w-64 bg-background/95 backdrop-blur-xl border border-border rounded-2xl shadow-xl p-2 animate-in fade-in slide-in-from-top-2 z-50">
-                                    <div className="px-4 py-3 border-b border-border/50 mb-2">
-                                        <p className="text-xs text-muted-foreground mb-1">مسجل باسم</p>
-                                        <p className="text-sm font-bold text-foreground truncate" dir="ltr">{user.email}</p>
-                                    </div>
-
-                                    <Link
-                                        href="/settings"
-                                        className="flex items-center w-full gap-3 px-4 py-2.5 text-sm font-bold text-foreground hover:bg-primary/5 hover:text-primary rounded-xl transition-colors mb-1"
-                                        onClick={() => setIsUserMenuOpen(false)}
-                                    >
-                                        <span>⚙️</span> إعدادات الحساب
-                                    </Link>
-                                    <Link
-                                        href="/dashboard"
-                                        className="flex items-center w-full gap-3 px-4 py-2.5 text-sm font-bold text-foreground hover:bg-primary/5 hover:text-primary rounded-xl transition-colors mb-1"
-                                        onClick={() => setIsUserMenuOpen(false)}
-                                    >
-                                        <span>📊</span> لوحة التحكم
-                                    </Link>
-
-                                    <div className="h-px bg-border/50 my-1" />
-
-                                    <button
-                                        onClick={handleLogout}
-                                        className="flex items-center w-full gap-3 px-4 py-2.5 text-sm font-bold text-red-500 hover:bg-red-50 hover:text-red-600 rounded-xl transition-colors"
-                                    >
-                                        <span>🚪</span> تسجيل خروج
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        <>
-                            <Link href="/login" className="text-base font-bold text-foreground/70 hover:text-primary transition-colors">
-                                دخول
-                            </Link>
-                            <Link href="/register" className="btn-primary py-2.5 px-8 text-base shadow-md hover:shadow-lg">
-                                انضم إلينا
-                            </Link>
-                        </>
-                    )}
-                </div>
-
-                {/* Mobile Toggle */}
-                <button className="md:hidden text-foreground" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
-                    {isMobileMenuOpen ? <X /> : <Menu />}
-                </button>
-            </div>
-
-            {/* Mobile Menu */}
-            {isMobileMenuOpen && (
-                <div className="md:hidden absolute top-full left-0 right-0 bg-background border-b border-border p-6 space-y-4 animate-in fade-in slide-in-from-top-4">
-                    {navItems.map((item) => (
-                        <Link key={item.name} href={item.href} className="block text-lg font-bold text-foreground">
-                            {item.name}
-                        </Link>
-                    ))}
-                    <div className="flex flex-col gap-3 pt-4 border-t border-border">
+        <>
+            <header
+                dir="rtl"
+                className={cn(
+                    "fixed top-0 left-0 right-0 z-50 transition-all duration-300 px-5 md:px-6 py-4 md:py-4",
+                    isScrolled ? "bg-background/90 backdrop-blur-xl border-b border-border/50 py-3 md:py-3 shadow-sm" : "bg-transparent",
+                )}
+            >
+                <div className="container mx-auto flex items-center justify-between">
+                    {/* User Profile - Right side in RTL (appears first in DOM) */}
+                    <div className="flex items-center gap-2 md:gap-3 user-menu-container relative">
                         {user ? (
+                            /* User Profile Button */
                             <>
-                                <Link href="/settings" className="block text-center text-lg font-bold text-foreground hover:text-primary">
-                                    ⚙️ إعدادات الحساب
-                                </Link>
-                                <button onClick={handleLogout} className="block w-full text-center text-lg font-bold text-red-500 hover:bg-red-50 rounded-xl py-2">
-                                    تسجيل خروج
+                                <button
+                                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                                    className="flex items-center gap-1.5 md:gap-2 p-1.5 md:p-2 rounded-full bg-white/70 hover:bg-white transition-all border border-border/40 hover:border-primary/30 shadow-md hover:shadow-lg group backdrop-blur-sm"
+                                >
+                                    {/* Dropdown Arrow */}
+                                    <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
+
+                                    {/* Avatar with Crown for Owner/Specialist */}
+                                    <div className="relative">
+                                        {/* Crown/Shield Badge for special roles */}
+                                        {roleInfo && (user.role === 'owner' || user.role === 'specialist') && (
+                                            <div className={`absolute -top-1 -right-1 w-4 h-4 md:w-5 md:h-5 rounded-full flex items-center justify-center z-10 shadow-md ${user.role === 'owner'
+                                                ? 'bg-gradient-to-br from-yellow-400 to-amber-500'
+                                                : 'bg-gradient-to-br from-primary to-indigo-600'
+                                                }`}>
+                                                <roleInfo.icon className="w-2.5 h-2.5 md:w-3 md:h-3 text-white" />
+                                            </div>
+                                        )}
+                                        <div className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center overflow-hidden border-2 border-primary/30 group-hover:border-primary transition-all duration-300 shrink-0 shadow-sm group-hover:scale-105">
+                                            {user.avatar ? (
+                                                <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <span className="text-primary font-bold text-base md:text-lg">
+                                                    {(user.nickname || "U").charAt(0).toUpperCase()}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
                                 </button>
+
+                                {/* Dropdown Menu */}
+                                {isUserMenuOpen && (
+                                    <div className="absolute top-full right-0 mt-2 md:mt-3 w-72 md:w-80 bg-background/95 backdrop-blur-xl border border-border rounded-2xl shadow-2xl p-2 animate-in fade-in slide-in-from-top-2 z-50" dir="rtl">
+                                        {/* User Info Header */}
+                                        <div className="px-4 py-3 border-b border-border/50 mb-2">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center overflow-hidden border-2 border-primary/20 shrink-0">
+                                                    {user.avatar ? (
+                                                        <img src={user.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <span className="text-primary font-bold text-lg">
+                                                            {(user.nickname || "U").charAt(0).toUpperCase()}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-bold text-base text-foreground truncate">{user.nickname || "المستخدم"}</p>
+                                                    <p className="text-xs text-muted-foreground truncate" dir="ltr">{user.email}</p>
+                                                    {roleInfo && (
+                                                        <span className={`inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${roleInfo.color}`}>
+                                                            <roleInfo.icon className="w-2.5 h-2.5" />
+                                                            {roleInfo.label}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Navigation Links */}
+                                        <div className="py-1 border-b border-border/50 mb-1">
+                                            {navItems.map((item) => (
+                                                <Link
+                                                    key={item.name}
+                                                    href={item.href}
+                                                    className="flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-foreground hover:bg-primary/5 hover:text-primary rounded-xl transition-colors relative"
+                                                    onClick={() => setIsUserMenuOpen(false)}
+                                                >
+                                                    {'icon' in item && item.icon && <item.icon className="w-4 h-4 text-muted-foreground" />}
+                                                    <span>{item.name}</span>
+                                                    {'badge' in item && item.badge > 0 && (
+                                                        <span className="mr-auto min-w-[20px] h-5 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                                                            {item.badge > 9 ? '9+' : item.badge}
+                                                        </span>
+                                                    )}
+                                                </Link>
+                                            ))}
+                                        </div>
+
+                                        {/* Settings */}
+                                        <Link
+                                            href="/settings"
+                                            className="flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-foreground hover:bg-primary/5 hover:text-primary rounded-xl transition-colors"
+                                            onClick={() => setIsUserMenuOpen(false)}
+                                        >
+                                            <Settings className="w-4 h-4" />
+                                            إعدادات الحساب
+                                        </Link>
+
+                                        <div className="h-px bg-border/50 my-1" />
+
+                                        {/* Logout */}
+                                        <button
+                                            onClick={handleLogout}
+                                            className="flex items-center w-full gap-3 px-4 py-2.5 text-sm font-bold text-red-500 hover:bg-red-50 hover:text-red-600 rounded-xl transition-colors"
+                                        >
+                                            <LogOut className="w-4 h-4" />
+                                            تسجيل خروج
+                                        </button>
+                                    </div>
+                                )}
                             </>
                         ) : (
-                            <>
-                                <Link href="/login" className="block text-center text-lg font-bold text-foreground/80 hover:text-primary">
+                            /* Guest - Login/Register buttons */
+                            <div className="flex items-center gap-2 md:gap-3">
+                                <Link href="/login" className="text-sm md:text-base font-bold text-foreground/70 hover:text-primary transition-colors px-2 md:px-3 py-2">
                                     دخول
                                 </Link>
-                                <Link href="/register" className="block bg-primary text-white text-center py-3 rounded-full font-bold shadow-md">
+                                <Link href="/register" className="btn-primary py-2 md:py-2.5 px-4 md:px-6 text-xs md:text-sm shadow-md hover:shadow-lg">
                                     انضم إلينا
                                 </Link>
-                            </>
+                            </div>
                         )}
                     </div>
+
+                    {/* Logo - Left side in RTL (appears last in DOM) */}
+                    <Link href="/" className="group shrink-0">
+                        <img
+                            src="/logo.png"
+                            alt="إيواء"
+                            className="w-11 h-11 md:w-12 md:h-12 rounded-xl md:rounded-2xl transition-all duration-500 group-hover:rotate-12 group-hover:scale-110 shadow-lg shadow-primary/30 group-hover:shadow-xl group-hover:shadow-primary/40"
+                        />
+                    </Link>
+
+                    {/* Desktop Nav - Floating Capsule Style (hidden on mobile) */}
+                    <nav className="hidden md:flex items-center gap-1 p-1.5 bg-background/60 backdrop-blur-xl border border-border/40 rounded-full shadow-lg shadow-black/5 absolute left-1/2 transform -translate-x-1/2">
+                        {navItems.map((item) => (
+                            <Link
+                                key={item.name}
+                                href={item.href}
+                                className="px-5 py-2 rounded-full text-sm font-medium text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-300 relative group"
+                            >
+                                <span className="relative z-10">{item.name}</span>
+                                {'badge' in item && item.badge > 0 && (
+                                    <span className="absolute top-0 right-0 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse z-20">
+                                        {item.badge > 9 ? '9+' : item.badge}
+                                    </span>
+                                )}
+                                <span className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/5 to-primary/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-sm" />
+                            </Link>
+                        ))}
+
+                        {/* Admin/Specialist buttons inside nav bar */}
+                        {user && roleInfo && (user.role === 'owner' || user.role === 'specialist') && (
+                            <Link
+                                href={roleInfo.link}
+                                className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${user.role === 'owner'
+                                    ? 'bg-gradient-to-r from-yellow-500 to-amber-600 text-white shadow-sm'
+                                    : 'bg-gradient-to-r from-primary to-indigo-600 text-white shadow-sm'
+                                    }`}
+                            >
+                                <span className="flex items-center gap-1.5">
+                                    <roleInfo.icon className="w-3.5 h-3.5" />
+                                    {user.role === 'owner' ? 'لوحة الإدارة' : 'مكتب الأخصائي'}
+                                </span>
+                            </Link>
+                        )}
+                    </nav>
                 </div>
+            </header>
+
+            {/* Overlay for dropdown (clicks outside close it) */}
+            {isUserMenuOpen && (
+                <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setIsUserMenuOpen(false)}
+                />
             )}
-        </header>
+        </>
     )
 }

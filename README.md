@@ -1,36 +1,159 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# إيواء - منصة الدعم والتطوير الذاتي
 
-## Getting Started
+<div align="center">
 
-First, run the development server:
+![إيواء Logo](public/logo.png)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+**منصة عربية متكاملة للتدريب والإرشاد النفسي عن بُعد**
+
+[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=next.js)](https://nextjs.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-Express-green?style=flat-square&logo=node.js)](https://nodejs.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-Database-3ECF8E?style=flat-square&logo=supabase)](https://supabase.com/)
+[![Agora](https://img.shields.io/badge/Agora-VoIP-099DFD?style=flat-square)](https://agora.io/)
+
+</div>
+
+---
+
+## 🌟 نظرة عامة
+
+**إيواء** هي منصة عربية متكاملة تربط بين الأخصائيين والمستفيدين، توفر:
+
+- 🎓 **كورسات تفاعلية** مع جلسات صوتية جماعية
+- 💬 **شات جماعي** لكل كورس (Group Chats)
+- 📅 **جدولة ذكية** للجلسات من داخل المحادثات
+- 📞 **مكالمات صوتية** عالية الجودة (Agora RTC)
+- 👥 **إدارة كاملة** للمستخدمين والأخصائيين
+
+---
+
+## 🛠 التقنيات المستخدمة
+
+| Frontend | Backend | Database | Real-time |
+|----------|---------|----------|-----------|
+| Next.js 15 | Node.js / Express | Supabase (PostgreSQL) | Socket.IO |
+| React 19 | JWT Auth | Row Level Security | Agora RTC |
+| TailwindCSS | RESTful API | UUID Primary Keys | WebSockets |
+
+---
+
+## 📁 هيكل المشروع
+
+```
+midterm/
+├── app/                    # Next.js App Router
+│   ├── admin/              # لوحة الأدمن
+│   ├── specialist/         # لوحة الأخصائي
+│   ├── dashboard/          # لوحة المستخدم
+│   ├── messages/           # نظام المحادثات
+│   └── session/[id]/       # غرفة الجلسة الصوتية
+├── backend/
+│   ├── routes/             # API Endpoints
+│   │   ├── auth.js         # تسجيل الدخول
+│   │   ├── courses.js      # الكورسات
+│   │   ├── messages.js     # الرسائل والشات
+│   │   └── admin.js        # إدارة النظام
+│   └── server.js           # Express Server
+├── components/
+│   ├── voice/              # مكونات المكالمة الصوتية
+│   └── layout/             # Header, Footer
+├── database/
+│   └── schema.sql          # Database Schema
+└── public/                 # Static Assets
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🚀 التشغيل المحلي
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 1. تثبيت المتطلبات
 
-## Learn More
+```bash
+# Frontend
+cd midterm
+npm install
 
-To learn more about Next.js, take a look at the following resources:
+# Backend
+cd backend
+npm install
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 2. إعداد المتغيرات البيئية
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+**Frontend** (`app/.env.local`):
+```env
+NEXT_PUBLIC_API_URL=http://localhost:5000
+```
 
-## Deploy on Vercel
+**Backend** (`backend/.env`):
+```env
+PORT=5000
+SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_KEY=your_service_key
+JWT_SECRET=your_jwt_secret
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 3. إعداد قاعدة البيانات
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+شغّل محتويات `database/schema.sql` في Supabase SQL Editor.
+
+### 4. التشغيل
+
+```bash
+# Terminal 1 - Backend
+cd backend && npm run dev
+
+# Terminal 2 - Frontend
+cd midterm && npm run dev
+```
+
+---
+
+## 👤 الأدوار والصلاحيات
+
+| الدور | الصلاحيات |
+|-------|----------|
+| **Owner** | إدارة كاملة، إنشاء كورسات، تعيين أخصائيين |
+| **Specialist** | إدارة جلساته، شات مع المشتركين، جدولة |
+| **User** | التسجيل في الكورسات، حضور الجلسات، الشات |
+
+---
+
+## 📡 API Endpoints
+
+### Auth
+- `POST /api/auth/register` - تسجيل جديد
+- `POST /api/auth/login` - تسجيل دخول
+
+### Courses
+- `GET /api/courses` - جلب الكورسات
+- `POST /api/courses/:id/payment` - الدفع والتسجيل
+
+### Messages
+- `GET /api/messages/conversations` - المحادثات
+- `GET /api/messages/:id?type=group` - رسائل المحادثة
+- `POST /api/messages/:id/schedule` - جدولة جلسة
+
+---
+
+## 🎨 الثيم والألوان
+
+المنصة تستخدم ثيم "Warm & Nostalgic" بألوان دافئة:
+
+- **Primary**: Terracotta `oklch(0.62 0.18 30)`
+- **Background**: Cream `oklch(0.97 0.008 70)`
+- **Accent**: Sunset Orange `oklch(0.75 0.12 40)`
+
+---
+
+## 📄 الرخصة
+
+هذا المشروع للاستخدام التعليمي والتطويري.
+
+---
+
+<div align="center">
+
+**صُنع بـ ❤️ لمجتمعنا العربي**
+
+</div>

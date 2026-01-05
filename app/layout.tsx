@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Cairo } from "next/font/google"; // Using Cairo for better Arabic support
 import "./globals.css";
+import GlobalChat from "@/components/chat/GlobalChat";
+import MobileBottomNav from "@/components/layout/MobileBottomNav";
 
 const cairo = Cairo({
   variable: "--font-sans", // Mapping Cairo to --font-sans to match the new globals.css
@@ -10,8 +12,15 @@ const cairo = Cairo({
 });
 
 export const metadata: Metadata = {
-  title: "سكينة | منصة الدعم النفسي",
-  description: "مساحة آمنة للدعم النفسي الجماعي",
+  title: "إيواء | منصة الدعم والإرشاد",
+  description: "مساحة آمنة للدعم النفسي والتطوير الذاتي مع أخصائيين متميزين",
+  icons: {
+    icon: [
+      { url: "/logo.png", type: "image/png" },
+    ],
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({
@@ -20,11 +29,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ar" dir="rtl">
-      <body className={`${cairo.variable} font-sans antialiased bg-background text-foreground`}>
+    <html lang="ar" dir="rtl" suppressHydrationWarning>
+      <body className={`${cairo.variable} font-sans antialiased bg-background text-foreground`} suppressHydrationWarning>
         {children}
+        <MobileBottomNav />
+        <GlobalChat />
       </body>
     </html>
   );
 }
-

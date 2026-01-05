@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
-import { getCourseById } from "@/lib/data";
+import SessionList from "@/components/courses/SessionList";
+import CourseClientWrapper from "@/components/courses/CourseClientWrapper";
 import {
     Clock,
     Users,
@@ -11,24 +12,42 @@ import {
     CheckCircle,
     Mic,
     Shield,
-    User,
     Sparkles,
-    Heart
 } from "lucide-react";
 
 interface PageProps {
     params: Promise<{ id: string }>;
 }
 
+async function getCourse(id: string) {
+    try {
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+        const res = await fetch(`${API_URL}/api/courses/${id}`, {
+            cache: 'no-store'
+        });
+
+        if (!res.ok) return null;
+
+        const data = await res.json();
+        return data.course; // returns course object with sessions included
+    } catch (error) {
+        console.error("Failed to fetch course:", error);
+        return null;
+    }
+}
+
 export default async function CourseDetailsPage({ params }: PageProps) {
     const { id } = await params;
-    const course = getCourseById(id);
+    const course = await getCourse(id);
 
     if (!course) {
         notFound();
     }
 
-    const isAvailable = course.seatsRemaining > 0;
+    // Adapt DB structure to UI needs
+    // DB: course = { title, description, price, total_sessions, specialist: {...}, sessions: [...] }
+    const sessions = course.sessions || [];
+    const isAvailable = true; // For now assuming available, or check enrollment logic later
 
     return (
         <div className="bg-warm-mesh min-h-screen flex flex-col" dir="rtl">
@@ -61,7 +80,7 @@ export default async function CourseDetailsPage({ params }: PageProps) {
                                     {course.title}
                                 </h1>
                                 <p className="text-muted-foreground text-lg leading-relaxed max-w-2xl border-r-4 border-primary/20 pr-6">
-                                    {course.longDescription}
+                                    {course.description}
                                 </p>
 
                                 {/* Quick Stats */}
@@ -71,8 +90,8 @@ export default async function CourseDetailsPage({ params }: PageProps) {
                                             <Clock className="w-4 h-4" />
                                         </div>
                                         <div>
-                                            <p className="text-xs text-muted-foreground">المدة الحالية</p>
-                                            <p className="font-bold text-foreground text-sm">{course.sessionsCount} جلسات</p>
+                                            <p className="text-xs text-muted-foreground">المدة</p>
+                                            <p className="font-bold text-foreground text-sm">{course.total_sessions} جلسات</p>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -81,16 +100,7 @@ export default async function CourseDetailsPage({ params }: PageProps) {
                                         </div>
                                         <div>
                                             <p className="text-xs text-muted-foreground">المشاركين</p>
-                                            <p className="font-bold text-foreground text-sm">{course.seatsTotal} أفراد</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600">
-                                            <Calendar className="w-4 h-4" />
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-muted-foreground">الموعد</p>
-                                            <p className="font-bold text-foreground text-sm">{course.schedule}</p>
+                                            <p className="font-bold text-foreground text-sm">متاح</p>
                                         </div>
                                     </div>
                                 </div>
@@ -109,7 +119,7 @@ export default async function CourseDetailsPage({ params }: PageProps) {
                                         <div className={`p-3 rounded-xl border flex items-center gap-3 ${isAvailable ? 'bg-green-50/50 border-green-200' : 'bg-red-50/50 border-red-200'}`}>
                                             <div className={`w-2 h-2 rounded-full ${isAvailable ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
                                             <span className={`text-sm font-bold ${isAvailable ? 'text-green-700' : 'text-red-700'}`}>
-                                                {isAvailable ? `${course.seatsRemaining} مقاعد متبقية` : 'اكتمل العدد'}
+                                                {isAvailable ? `التسجيل متاح` : 'كتمل العدد'}
                                             </span>
                                         </div>
                                     </div>
@@ -133,27 +143,15 @@ export default async function CourseDetailsPage({ params }: PageProps) {
                             {/* Sessions */}
                             <div className="card-love p-8">
                                 <h2 className="text-xl font-bold text-foreground mb-6 flex items-center gap-2">
-                                    <Heart className="w-5 h-5 text-primary" />
-                                    رحلة التعافي (جدول الجلسات)
+                                    <Users className="w-5 h-5 text-primary" />
+                                    جدول الجلسات
                                 </h2>
-                                <div className="space-y-4">
-                                    {course.sessions.map((session) => (
-                                        <div
-                                            key={session.number}
-                                            className="group flex items-center gap-4 p-4 rounded-xl border border-transparent hover:border-primary/20 hover:bg-secondary/50 transition-all cursor-default"
-                                        >
-                                            <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold group-hover:scale-110 transition-transform">
-                                                {session.number}
-                                            </div>
-                                            <div className="flex-1">
-                                                <p className="text-foreground font-bold text-lg mb-1">{session.theme}</p>
-                                                <p className="text-sm text-muted-foreground font-mono">
-                                                    {session.date} • {session.time}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+
+                                <SessionList
+                                    sessions={sessions}
+                                    courseId={course.id}
+                                    specialistId={course.specialist_id}
+                                />
                             </div>
 
                             {/* Features */}
@@ -180,26 +178,35 @@ export default async function CourseDetailsPage({ params }: PageProps) {
 
                         {/* Specialist Sidebar */}
                         <div className="space-y-8">
-                            <div className="card-love p-8 text-center relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-full h-24 bg-gradient-to-b from-primary/10 to-transparent" />
-                                <div className="relative z-10">
-                                    <div className="w-24 h-24 rounded-full bg-white p-1 mx-auto mb-4 shadow-lg">
-                                        <div className="w-full h-full rounded-full bg-secondary flex items-center justify-center text-4xl">
-                                            👩‍⚕️
+                            {course.specialist && (
+                                <div className="card-love p-8 text-center relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 w-full h-24 bg-gradient-to-b from-primary/10 to-transparent" />
+                                    <div className="relative z-10">
+                                        <div className="w-24 h-24 rounded-full bg-white p-1 mx-auto mb-4 shadow-lg">
+                                            {course.specialist.avatar ? (
+                                                <img src={course.specialist.avatar} alt={course.specialist.nickname} className="w-full h-full rounded-full object-cover" />
+                                            ) : (
+                                                <div className="w-full h-full rounded-full bg-secondary flex items-center justify-center text-4xl">
+                                                    👩‍⚕️
+                                                </div>
+                                            )}
+                                        </div>
+                                        <h2 className="text-xl font-bold text-foreground mb-1">د. {course.specialist.nickname}</h2>
+                                        <p className="text-primary font-medium text-sm mb-6">أخصائي نفسي</p>
+
+                                        <div className="bg-background rounded-xl p-4 border border-border text-right text-sm text-muted-foreground leading-relaxed">
+                                            "أتطلع لمشاركتكم هذه الرحلة نحو التعافي."
                                         </div>
                                     </div>
-                                    <h2 className="text-xl font-bold text-foreground mb-1">د. {course.specialist.nickname}</h2>
-                                    <p className="text-primary font-medium text-sm mb-6">{course.specialist.title}</p>
-
-                                    <div className="bg-background rounded-xl p-4 border border-border text-right text-sm text-muted-foreground leading-relaxed">
-                                        "هدفي في هذه الرحلة أن أكون المرشد الأمين لكم. سنمشي معاً خطوة بخطوة نحو التعافي والسكينة."
-                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
                     </div>
                 </div>
             </main>
+
+            {/* Floating Chat for Enrolled Users */}
+            <CourseClientWrapper courseId={course.id} courseTitle={course.title} />
 
             <Footer />
         </div>
