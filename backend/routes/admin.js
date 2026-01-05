@@ -279,5 +279,312 @@ router.get('/specialists', requireAdmin, async (req, res) => {
     }
 });
 
+// =============================================
+// COURSES MANAGEMENT (Owner+)
+// =============================================
+
+/**
+ * GET /api/admin/courses
+ * Get all courses with details (Admin+)
+ */
+router.get('/courses', requireAdmin, async (req, res) => {
+    try {
+        const { data: courses, error } = await supabase
+            .from('courses')
+            .select(`
+                *,
+                specialist:users!specialist_id(id, nickname, email, avatar)
+            `)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Courses fetch error:', error);
+            return res.status(500).json({ error: 'حدث خطأ في جلب الكورسات' });
+        }
+
+        // Get enrollment counts
+        const coursesWithStats = await Promise.all(
+            (courses || []).map(async (course) => {
+                const { count } = await supabase
+                    .from('enrollments')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('course_id', course.id);
+
+                return {
+                    ...course,
+                    enrollments_count: count || 0
+                };
+            })
+        );
+
+        res.json({ courses: coursesWithStats });
+    } catch (error) {
+        console.error('Courses error:', error);
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+/**
+ * DELETE /api/admin/courses/:id
+ * Delete a course (Owner only)
+ */
+router.delete('/courses/:id', requireOwner, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Delete related enrollments first
+        await supabase
+            .from('enrollments')
+            .delete()
+            .eq('course_id', id);
+
+        // Delete related sessions
+        await supabase
+            .from('sessions')
+            .delete()
+            .eq('course_id', id);
+
+        // Delete the course
+        const { error } = await supabase
+            .from('courses')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('Course delete error:', error);
+            return res.status(500).json({ error: 'حدث خطأ أثناء حذف الكورس' });
+        }
+
+        res.json({ message: 'تم حذف الكورس بنجاح' });
+    } catch (error) {
+        console.error('Course delete error:', error);
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+/**
+ * PATCH /api/admin/courses/:id
+ * Update a course (Admin+)
+ */
+router.patch('/courses/:id', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title, description, price, duration, total_sessions, is_active, specialist_id } = req.body;
+
+        const updateData = {};
+        if (title !== undefined) updateData.title = title;
+        if (description !== undefined) updateData.description = description;
+        if (price !== undefined) updateData.price = price;
+        if (duration !== undefined) updateData.duration = duration;
+        if (total_sessions !== undefined) updateData.total_sessions = total_sessions;
+        if (is_active !== undefined) updateData.is_active = is_active;
+        if (specialist_id !== undefined) updateData.specialist_id = specialist_id;
+
+        const { data: updatedCourse, error } = await supabase
+            .from('courses')
+            .update(updateData)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Course update error:', error);
+            return res.status(500).json({ error: 'حدث خطأ أثناء تحديث الكورس' });
+        }
+
+        res.json({ message: 'تم تحديث الكورس بنجاح', course: updatedCourse });
+    } catch (error) {
+        console.error('Course update error:', error);
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+// =============================================
+// PAYMENTS MANAGEMENT (Owner+)
+// =============================================
+
+/**
+ * GET /api/admin/payments
+ * Get all payments (Admin+)
+ */
+router.get('/payments', requireAdmin, async (req, res) => {
+    try {
+        const { status } = req.query;
+
+        let query = supabase
+            .from('payments')
+            .select(`
+                *,
+                user:users!user_id(id, nickname, email, avatar),
+                course:courses!course_id(id, title, price)
+            `)
+            .order('created_at', { ascending: false });
+
+        if (status && status !== 'all') {
+            query = query.eq('status', status);
+        }
+
+        const { data: payments, error } = await query;
+
+        if (error) {
+            console.error('Payments fetch error:', error);
+            return res.status(500).json({ error: 'حدث خطأ في جلب المدفوعات' });
+        }
+
+        res.json({ payments: payments || [] });
+    } catch (error) {
+        console.error('Payments error:', error);
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+/**
+ * PATCH /api/admin/payments/:id
+ * Update payment status (Owner only - confirm/reject)
+ */
+router.patch('/payments/:id', requireOwner, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        const validStatuses = ['pending', 'confirmed', 'rejected', 'completed'];
+        if (!validStatuses.includes(status)) {
+            return res.status(400).json({ error: 'حالة غير صالحة' });
+        }
+
+        const { data: payment, error: fetchError } = await supabase
+            .from('payments')
+            .select('user_id, course_id')
+            .eq('id', id)
+            .single();
+
+        if (fetchError || !payment) {
+            return res.status(404).json({ error: 'الدفعة غير موجودة' });
+        }
+
+        // Update payment status
+        const { error } = await supabase
+            .from('payments')
+            .update({ status, updated_at: new Date().toISOString() })
+            .eq('id', id);
+
+        if (error) {
+            console.error('Payment update error:', error);
+            return res.status(500).json({ error: 'حدث خطأ أثناء تحديث الدفعة' });
+        }
+
+        // If confirmed, add user to course enrollments
+        if (status === 'confirmed' || status === 'completed') {
+            await supabase
+                .from('enrollments')
+                .upsert({
+                    user_id: payment.user_id,
+                    course_id: payment.course_id,
+                    enrolled_at: new Date().toISOString()
+                }, { onConflict: 'user_id,course_id' });
+        }
+
+        res.json({ message: 'تم تحديث حالة الدفعة بنجاح' });
+    } catch (error) {
+        console.error('Payment update error:', error);
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+// =============================================
+// SESSIONS MANAGEMENT (Owner+)
+// =============================================
+
+/**
+ * DELETE /api/admin/sessions/:id
+ * Delete a session (Owner only)
+ */
+router.delete('/sessions/:id', requireOwner, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const { error } = await supabase
+            .from('sessions')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('Session delete error:', error);
+            return res.status(500).json({ error: 'حدث خطأ أثناء حذف الجلسة' });
+        }
+
+        res.json({ message: 'تم حذف الجلسة بنجاح' });
+    } catch (error) {
+        console.error('Session delete error:', error);
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+// =============================================
+// MESSAGES MANAGEMENT (Owner+)
+// =============================================
+
+/**
+ * GET /api/admin/messages
+ * Get all messages (Admin+ with filters)
+ */
+router.get('/messages', requireAdmin, async (req, res) => {
+    try {
+        const { limit = 100, type } = req.query;
+
+        let query = supabase
+            .from('messages')
+            .select(`
+                *,
+                sender:users!messages_sender_id_fkey(id, nickname, avatar)
+            `)
+            .order('created_at', { ascending: false })
+            .limit(parseInt(limit));
+
+        if (type === 'group') {
+            query = query.not('course_id', 'is', null);
+        } else if (type === 'direct') {
+            query = query.is('course_id', null);
+        }
+
+        const { data: messages, error } = await query;
+
+        if (error) {
+            console.error('Messages fetch error:', error);
+            return res.status(500).json({ error: 'حدث خطأ في جلب الرسائل' });
+        }
+
+        res.json({ messages: messages || [] });
+    } catch (error) {
+        console.error('Messages error:', error);
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+/**
+ * DELETE /api/admin/messages/:id
+ * Delete a message (Owner only)
+ */
+router.delete('/messages/:id', requireOwner, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const { error } = await supabase
+            .from('messages')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('Message delete error:', error);
+            return res.status(500).json({ error: 'حدث خطأ أثناء حذف الرسالة' });
+        }
+
+        res.json({ message: 'تم حذف الرسالة بنجاح' });
+    } catch (error) {
+        console.error('Message delete error:', error);
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
 module.exports = router;
 
