@@ -244,7 +244,7 @@ export default function Header() {
                         <img
                             src="/logo.png"
                             alt="إيواء"
-                            className="w-11 h-11 md:w-12 md:h-12 rounded-xl md:rounded-2xl transition-all duration-500 group-hover:rotate-12 group-hover:scale-110 shadow-lg shadow-primary/30 group-hover:shadow-xl group-hover:shadow-primary/40"
+                            className="w-14 h-14 md:w-16 md:h-16 rounded-xl md:rounded-2xl transition-all duration-500 group-hover:rotate-12 group-hover:scale-110 shadow-lg shadow-primary/30 group-hover:shadow-xl group-hover:shadow-primary/40"
                         />
                     </Link>
 

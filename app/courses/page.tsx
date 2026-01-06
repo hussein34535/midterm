@@ -71,24 +71,20 @@ export default function CoursesPage() {
                 </div>
 
                 <div className="container mx-auto px-6">
-                    {/* 🔍 Search Bar */}
-                    <div className="card-love p-2 mb-16 flex flex-col md:flex-row gap-2 max-w-4xl mx-auto -mt-8 relative z-20 shadow-xl shadow-primary/5 animate-in fade-in slide-in-from-bottom-6 duration-1000 delay-100">
-                        <div className="flex-grow relative group">
-                            <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
-                                <Search className="w-5 h-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                            </div>
+                    {/* 🔍 Search Bar - Simple & Clean */}
+                    <div className="max-w-xl mx-auto mb-12 -mt-8 relative z-20">
+                        <div className="relative">
                             <input
                                 type="text"
-                                placeholder="ابحث عن موضوع، شعور، أو اسم جلسة..."
+                                placeholder="ابحث عن كورس..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full bg-transparent border-none rounded-xl py-4 pr-12 pl-6 text-foreground placeholder:text-muted-foreground/70 focus:bg-secondary/50 transition-all text-lg outline-none"
+                                className="w-full bg-white border border-gray-200 rounded-xl py-2.5 pr-4 pl-12 text-sm text-foreground placeholder:text-gray-400 focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all outline-none shadow-sm"
                             />
+                            <div className="absolute inset-y-0 left-0 flex items-center pl-4">
+                                <Search className="w-4 h-4 text-primary" />
+                            </div>
                         </div>
-                        <button className="btn-primary px-8 py-4 whitespace-nowrap rounded-xl flex items-center gap-2 shadow-none">
-                            <Filter className="w-5 h-5" />
-                            <span>تصفية</span>
-                        </button>
                     </div>
 
                     {/* 📦 Grid */}

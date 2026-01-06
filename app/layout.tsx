@@ -3,6 +3,8 @@ import { Cairo } from "next/font/google"; // Using Cairo for better Arabic suppo
 import "./globals.css";
 import GlobalChat from "@/components/chat/GlobalChat";
 import MobileBottomNav from "@/components/layout/MobileBottomNav";
+import { Toaster } from "@/components/ui/sonner";
+import SessionChecker from "@/components/auth/SessionChecker";
 
 const cairo = Cairo({
   variable: "--font-sans", // Mapping Cairo to --font-sans to match the new globals.css
@@ -34,6 +36,8 @@ export default function RootLayout({
         {children}
         <MobileBottomNav />
         <GlobalChat />
+        <SessionChecker />
+        <Toaster />
       </body>
     </html>
   );

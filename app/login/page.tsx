@@ -67,6 +67,12 @@ export default function LoginPage() {
                 router.push('/dashboard');
             }
         } catch (error: any) {
+            // Handle unverified account
+            if (error.notVerified || error.message?.includes('تأكيد بريدك')) {
+                toast.error("يرجى تفعيل الحساب أولاً");
+                router.push(`/verify-code?email=${encodeURIComponent(formData.email)}`);
+                return;
+            }
             toast.error(error.message || "حدث خطأ أثناء تسجيل الدخول");
         } finally {
             setIsLoading(false);

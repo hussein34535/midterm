@@ -23,6 +23,7 @@ interface Payment {
     amount: number;
     status: 'pending' | 'confirmed' | 'rejected' | 'completed';
     payment_method: string;
+    screenshot?: string;
     created_at: string;
     user: {
         id: string;
@@ -151,7 +152,12 @@ export default function PaymentsManagement() {
                             </div>
                         </div>
                     </div>
-                    <div className="bg-white rounded-xl p-4 shadow-sm">
+                    <div className="bg-white rounded-xl p-4 shadow-sm relative">
+                        {stats.pending > 0 && (
+                            <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold animate-pulse">
+                                {stats.pending}
+                            </div>
+                        )}
                         <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-yellow-100 flex items-center justify-center">
                                 <Clock className="w-5 h-5 text-yellow-600" />
@@ -252,6 +258,28 @@ export default function PaymentsManagement() {
                                         </span>
                                     </div>
                                 </div>
+
+                                {/* Screenshot */}
+                                {payment.screenshot && (
+                                    <div className="mt-4">
+                                        <p className="text-xs text-gray-600 mb-2 font-medium">📸 إثبات الدفع:</p>
+                                        <a
+                                            href={payment.screenshot}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="block rounded-lg overflow-hidden border-2 border-gray-200 hover:border-primary transition-colors cursor-pointer group"
+                                        >
+                                            <img
+                                                src={payment.screenshot}
+                                                alt="Payment Screenshot"
+                                                className="w-full h-auto max-h-96 object-contain bg-gray-50 group-hover:opacity-90 transition-opacity"
+                                            />
+                                            <div className="bg-gray-100 px-3 py-2 text-xs text-center text-gray-600 group-hover:bg-primary group-hover:text-white transition-colors">
+                                                اضغط للفتح في تاب جديد وتنزيل الصورة
+                                            </div>
+                                        </a>
+                                    </div>
+                                )}
 
                                 {payment.status === 'pending' && (
                                     <div className="flex gap-2 mt-4">

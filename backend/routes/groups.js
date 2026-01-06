@@ -132,4 +132,57 @@ router.post('/:id/add-user', async (req, res) => {
     }
 });
 
+/**
+ * GET /:id/members
+ * Get all members of a specific group (for regular users to see their group members)
+ */
+router.get('/:id/members', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Get group info
+        const { data: group, error: groupError } = await supabase
+            .from('course_groups')
+            .select('id, name, course_id, member_count, capacity')
+            .eq('id', id)
+            .single();
+
+        if (groupError || !group) {
+            return res.status(404).json({ success: false, error: 'المجموعة غير موجودة' });
+        }
+
+        // Get members from enrollments table (members are stored here with group_id)
+        const { data: members, error: membersError } = await supabase
+            .from('enrollments')
+            .select(`
+                user_id,
+                user:users(id, nickname, avatar)
+            `)
+            .eq('group_id', id);
+
+        if (membersError) throw membersError;
+
+        // Format response
+        const formattedMembers = (members || []).map(m => ({
+            id: m.user?.id,
+            nickname: m.user?.nickname,
+            avatar: m.user?.avatar
+        })).filter(m => m.id);
+
+        res.json({
+            success: true,
+            group: {
+                id: group.id,
+                name: group.name,
+                member_count: group.member_count || formattedMembers.length,
+                capacity: group.capacity
+            },
+            members: formattedMembers
+        });
+    } catch (error) {
+        console.error('Get members error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 module.exports = router;

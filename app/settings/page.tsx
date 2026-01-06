@@ -132,6 +132,49 @@ export default function SettingsPage() {
                             </div>
                         </div>
 
+                        {/* Password Section */}
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-bold text-foreground border-b border-border pb-2">تغيير كلمة المرور</h3>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-foreground">كلمة المرور الحالية</label>
+                                <div className="relative">
+                                    <Shield className="absolute right-3 top-3 w-5 h-5 text-muted-foreground" />
+                                    <input
+                                        type="password"
+                                        placeholder="اتركها فارغة إذا كنت لا تريد التغيير"
+                                        className="w-full pl-4 pr-10 py-3 rounded-xl border border-input bg-background/50 focus:bg-background focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-foreground">كلمة المرور الجديدة</label>
+                                <div className="relative">
+                                    <Shield className="absolute right-3 top-3 w-5 h-5 text-muted-foreground" />
+                                    <input
+                                        type="password"
+                                        placeholder="6 أحرف على الأقل"
+                                        className="w-full pl-4 pr-10 py-3 rounded-xl border border-input bg-background/50 focus:bg-background focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-foreground">تأكيد كلمة المرور</label>
+                                <div className="relative">
+                                    <Shield className="absolute right-3 top-3 w-5 h-5 text-muted-foreground" />
+                                    <input
+                                        type="password"
+                                        placeholder="أعد كتابة كلمة المرور الجديدة"
+                                        className="w-full pl-4 pr-10 py-3 rounded-xl border border-input bg-background/50 focus:bg-background focus:ring-2 focus:ring-primary/20 transition-all outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            <p className="text-xs text-muted-foreground">💡 اترك هذه الحقول فارغة إذا كنت لا تريد تغيير كلمة المرور</p>
+                        </div>
+
                         {/* Save Button */}
                         <div className="pt-4 border-t border-border flex justify-end">
                             <button

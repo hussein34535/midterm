@@ -72,6 +72,11 @@ export default function MessagesPage() {
     const [scheduleData, setScheduleData] = useState({ date: '', time: '', title: '' });
     const [scheduling, setScheduling] = useState(false);
 
+    // Group Members Modal
+    const [showGroupMembers, setShowGroupMembers] = useState(false);
+    const [groupMembers, setGroupMembers] = useState<{ id: string, nickname: string, avatar?: string }[]>([]);
+    const [loadingMembers, setLoadingMembers] = useState(false);
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const previousMessagesCount = useRef(0);
@@ -501,17 +506,10 @@ export default function MessagesPage() {
                             <div className="p-4 border-b border-gray-100 bg-white sticky top-0 z-10">
                                 <div className="flex items-center justify-between mb-4">
                                     <h1 className="text-2xl font-bold text-gray-900">الرسائل</h1>
-                                    <button
-                                        onClick={handleContactSupport}
-                                        className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-colors"
-                                        title="الدعم الفني"
-                                    >
-                                        <Users className="w-5 h-5" />
-                                    </button>
                                     {(currentUser?.role === 'owner' || currentUser?.role === 'specialist') && (
                                         <button
                                             onClick={() => setShowUserSearch(true)}
-                                            className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white hover:bg-primary/90 transition-colors shadow-md mr-2"
+                                            className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white hover:bg-primary/90 transition-colors shadow-md"
                                             title="رسالة جديدة"
                                         >
                                             <Plus className="w-5 h-5" />
@@ -596,7 +594,9 @@ export default function MessagesPage() {
 
                                         {/* Name */}
                                         <div className="flex-1 min-w-0">
-                                            <p className="font-semibold text-gray-900">{selectedConversation.user.nickname}</p>
+                                            <p className="font-semibold text-gray-900">
+                                                {selectedConversation.user.role === 'owner' ? 'دعم إيواء' : selectedConversation.user.nickname}
+                                            </p>
                                             {(currentUser?.role === 'owner' || currentUser?.role === 'specialist') && (
                                                 <p className="text-[10px] text-gray-400 font-mono select-all cursor-pointer hover:text-primary" onClick={() => { navigator.clipboard.writeText(selectedConversation.user.id); toast.success('تم نسخ ID'); }}>
                                                     ID: {selectedConversation.user.id}
@@ -606,6 +606,33 @@ export default function MessagesPage() {
 
                                         {/* Actions */}
                                         <div className="flex items-center gap-1">
+                                            {/* View Group Members - Available for ALL users in group chats */}
+                                            {selectedConversation.type === 'group' && (
+                                                <button
+                                                    onClick={async () => {
+                                                        setShowGroupMembers(true);
+                                                        setLoadingMembers(true);
+                                                        try {
+                                                            const token = localStorage.getItem('token');
+                                                            const res = await fetch(`${API_URL}/api/groups/${selectedConversation.id}/members`, {
+                                                                headers: { 'Authorization': `Bearer ${token}` }
+                                                            });
+                                                            const data = await res.json();
+                                                            if (data.success) {
+                                                                setGroupMembers(data.members || []);
+                                                            }
+                                                        } catch (e) {
+                                                            console.error(e);
+                                                        } finally {
+                                                            setLoadingMembers(false);
+                                                        }
+                                                    }}
+                                                    className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors"
+                                                    title="عرض الأعضاء"
+                                                >
+                                                    <Users className="w-5 h-5 text-gray-600" />
+                                                </button>
+                                            )}
                                             {selectedConversation.type === 'group' && (currentUser.role === 'specialist' || currentUser.role === 'owner') && (
                                                 <button
                                                     onClick={() => setShowSchedule(!showSchedule)}
@@ -868,6 +895,43 @@ export default function MessagesPage() {
                     </div>
                 )
             }
+
+            {/* Group Members Modal */}
+            {showGroupMembers && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowGroupMembers(false)}>
+                    <div className="bg-white rounded-2xl w-full max-w-md p-6 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-bold text-lg">أعضاء المجموعة</h3>
+                            <button onClick={() => setShowGroupMembers(false)} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center">
+                                <X className="w-5 h-5 text-gray-500" />
+                            </button>
+                        </div>
+
+                        {loadingMembers ? (
+                            <div className="flex justify-center py-8">
+                                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                            </div>
+                        ) : groupMembers.length > 0 ? (
+                            <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                                {groupMembers.map(member => (
+                                    <div key={member.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                                        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
+                                            {member.avatar ? (
+                                                <img src={member.avatar} alt="" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <span className="text-primary font-bold">{member.nickname?.charAt(0)}</span>
+                                            )}
+                                        </div>
+                                        <p className="font-medium text-gray-800">{member.nickname}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-center text-gray-400 py-8">لا يوجد أعضاء</p>
+                        )}
+                    </div>
+                </div>
+            )}
         </div >
     );
 }
@@ -896,7 +960,9 @@ function ChatItem({ conv, selected, onSelect }: { conv: Conversation, selected: 
             {/* Content */}
             <div className="flex-1 min-w-0 text-right">
                 <div className="flex items-center justify-between mb-0.5">
-                    <p className="font-semibold text-gray-900 text-sm truncate">{conv.user.nickname}</p>
+                    <p className="font-semibold text-gray-900 text-sm truncate">
+                        {conv.user.role === 'owner' ? 'دعم إيواء' : conv.user.nickname}
+                    </p>
                     <span className="text-xs text-gray-400">{timeAgo}</span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -983,7 +1049,7 @@ function ChatBubble({ msg, isMe, isGroup, onReply }: { msg: Message, isMe: boole
 
     return (
         <div
-            className={`flex flex-col ${isMe ? 'items-start' : 'items-end'} group relative mx-2`}
+            className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} group relative mx-2`}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
@@ -1006,9 +1072,6 @@ function ChatBubble({ msg, isMe, isGroup, onReply }: { msg: Message, isMe: boole
             {/* Avatar + Name row for group (others only) */}
             {isGroup && !isMe && (
                 <div className="flex items-center gap-2 mb-1 mr-1">
-                    <span className={`text-sm font-bold ${getNameColor(msg.senderId)}`}>
-                        {msg.senderName || 'مستخدم'}
-                    </span>
                     <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center overflow-hidden">
                         {msg.senderAvatar ? (
                             <img src={msg.senderAvatar} alt="" className="w-full h-full object-cover" />
@@ -1018,6 +1081,9 @@ function ChatBubble({ msg, isMe, isGroup, onReply }: { msg: Message, isMe: boole
                             </span>
                         )}
                     </div>
+                    <span className={`text-sm font-bold ${getNameColor(msg.senderId)}`}>
+                        {msg.senderName || 'مستخدم'}
+                    </span>
                 </div>
             )}
 

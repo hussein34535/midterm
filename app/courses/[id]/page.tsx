@@ -4,6 +4,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import SessionList from "@/components/courses/SessionList";
 import CourseClientWrapper from "@/components/courses/CourseClientWrapper";
+import EnrollmentButton from "@/components/courses/EnrollmentButton";
 import {
     Clock,
     Users,
@@ -47,7 +48,6 @@ export default async function CourseDetailsPage({ params }: PageProps) {
     // Adapt DB structure to UI needs
     // DB: course = { title, description, price, total_sessions, specialist: {...}, sessions: [...] }
     const sessions = course.sessions || [];
-    const isAvailable = true; // For now assuming available, or check enrollment logic later
 
     return (
         <div className="bg-warm-mesh min-h-screen flex flex-col" dir="rtl">
@@ -115,23 +115,7 @@ export default async function CourseDetailsPage({ params }: PageProps) {
                                     </div>
                                     <p className="text-xs text-muted-foreground mb-6">شامل جميع الجلسات والمتابعة</p>
 
-                                    <div className="space-y-4 mb-6">
-                                        <div className={`p-3 rounded-xl border flex items-center gap-3 ${isAvailable ? 'bg-green-50/50 border-green-200' : 'bg-red-50/50 border-red-200'}`}>
-                                            <div className={`w-2 h-2 rounded-full ${isAvailable ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                                            <span className={`text-sm font-bold ${isAvailable ? 'text-green-700' : 'text-red-700'}`}>
-                                                {isAvailable ? `التسجيل متاح` : 'كتمل العدد'}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <Link
-                                        href={isAvailable ? `/payment/${course.id}` : '#'}
-                                        aria-disabled={!isAvailable}
-                                        className={`btn-primary w-full text-lg py-4 justify-center shadow-lg shadow-primary/20 ${!isAvailable ? 'opacity-50 cursor-not-allowed pointer-events-none grayscale' : 'hover:scale-105'}`}
-                                    >
-                                        {isAvailable ? 'سجل مكانك' : 'قائمة الانتظار'}
-                                        {isAvailable && <ArrowLeft className="w-5 h-5 mr-2" />}
-                                    </Link>
+                                    <EnrollmentButton courseId={course.id} coursePrice={course.price} />
                                 </div>
                             </div>
                         </div>

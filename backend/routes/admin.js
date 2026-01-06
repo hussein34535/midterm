@@ -6,6 +6,7 @@
 const express = require('express');
 const supabase = require('../lib/supabase');
 const { authMiddleware, requireAdmin, requireOwner } = require('../middleware/auth');
+const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 
 // All admin routes require authentication
@@ -196,6 +197,33 @@ router.delete('/users/:id', requireAdmin, async (req, res) => {
             return res.status(400).json({ error: 'لا يمكنك حذف حسابك من هنا' });
         }
 
+        // CASCADE DELETE: Delete related data first to avoid foreign key constraints
+
+        // 1. Delete user's messages (as sender)
+        await supabase
+            .from('messages')
+            .delete()
+            .eq('sender_id', id);
+
+        // 2. Delete user's enrollments
+        await supabase
+            .from('enrollments')
+            .delete()
+            .eq('user_id', id);
+
+        // 3. Delete user's sessions (as participant or specialist)
+        await supabase
+            .from('sessions')
+            .delete()
+            .eq('specialist_id', id);
+
+        // 4. Delete user's payments
+        await supabase
+            .from('payments')
+            .delete()
+            .eq('user_id', id);
+
+        // 5. Finally, delete the user
         const { error } = await supabase
             .from('users')
             .delete()
@@ -212,6 +240,7 @@ router.delete('/users/:id', requireAdmin, async (req, res) => {
         res.status(500).json({ error: 'حدث خطأ' });
     }
 });
+
 
 /**
  * GET /api/admin/sessions
@@ -415,8 +444,8 @@ router.get('/payments', requireAdmin, async (req, res) => {
             .from('payments')
             .select(`
                 *,
-                user:users!user_id(id, nickname, email, avatar),
-                course:courses!course_id(id, title, price)
+                user:users!payments_user_id_fkey(id, nickname, email, avatar),
+                course:courses!payments_course_id_fkey(id, title, price)
             `)
             .order('created_at', { ascending: false });
 
@@ -473,21 +502,218 @@ router.patch('/payments/:id', requireOwner, async (req, res) => {
             return res.status(500).json({ error: 'حدث خطأ أثناء تحديث الدفعة' });
         }
 
-        // If confirmed, add user to course enrollments
+        // If confirmed, create full enrollment with group assignment
         if (status === 'confirmed' || status === 'completed') {
-            await supabase
+            // Check if enrollment already exists
+            const { data: existingEnroll } = await supabase
                 .from('enrollments')
-                .upsert({
-                    user_id: payment.user_id,
-                    course_id: payment.course_id,
-                    enrolled_at: new Date().toISOString()
-                }, { onConflict: 'user_id,course_id' });
+                .select('id')
+                .eq('user_id', payment.user_id)
+                .eq('course_id', payment.course_id)
+                .single();
+
+            if (!existingEnroll) {
+                // Create enrollment
+                await supabase
+                    .from('enrollments')
+                    .insert({
+                        id: uuidv4(),
+                        user_id: payment.user_id,
+                        course_id: payment.course_id,
+                        payment_id: id,
+                        enrolled_at: new Date().toISOString()
+                    });
+
+                // Get course info for group assignment
+                const { data: course } = await supabase
+                    .from('courses')
+                    .select('title, specialist_id')
+                    .eq('id', payment.course_id)
+                    .single();
+
+                // AUTO-ASSIGN TO GROUP (max 4 per group)
+                const { data: groups } = await supabase
+                    .from('course_groups')
+                    .select('id, name, member_count')
+                    .eq('course_id', payment.course_id)
+                    .lt('member_count', 4)
+                    .order('created_at', { ascending: true })
+                    .limit(1);
+
+                let targetGroupId;
+                let groupName;
+
+                if (groups && groups.length > 0) {
+                    // Join existing group
+                    targetGroupId = groups[0].id;
+                    groupName = groups[0].name;
+
+                    // Update enrollment with group_id
+                    await supabase
+                        .from('enrollments')
+                        .update({ group_id: targetGroupId })
+                        .eq('user_id', payment.user_id)
+                        .eq('course_id', payment.course_id);
+
+                    await supabase
+                        .from('course_groups')
+                        .update({ member_count: (groups[0].member_count || 0) + 1 })
+                        .eq('id', targetGroupId);
+                } else {
+                    // Create new group
+                    const groupNumber = Math.floor(Math.random() * 1000);
+                    groupName = `${course?.title || 'كورس'} - مجموعة ${groupNumber}`;
+
+                    const { data: newGroup } = await supabase
+                        .from('course_groups')
+                        .insert({
+                            id: uuidv4(),
+                            name: groupName,
+                            course_id: payment.course_id,
+                            specialist_id: course?.specialist_id,
+                            member_count: 1
+                        })
+                        .select()
+                        .single();
+
+                    if (newGroup) {
+                        targetGroupId = newGroup.id;
+                        // Update enrollment with group_id
+                        await supabase
+                            .from('enrollments')
+                            .update({ group_id: targetGroupId })
+                            .eq('user_id', payment.user_id)
+                            .eq('course_id', payment.course_id);
+                    }
+                }
+
+                // Send welcome message
+                if (targetGroupId && course) {
+                    const { data: user } = await supabase
+                        .from('users')
+                        .select('nickname')
+                        .eq('id', payment.user_id)
+                        .single();
+
+                    const welcomeMsg = `مرحباً ${user?.nickname || 'بك'} في ${groupName}! نتمنى لك رحلة موفقة نحو التعافي 🌸`;
+
+                    await supabase
+                        .from('messages')
+                        .insert({
+                            id: uuidv4(),
+                            content: welcomeMsg,
+                            sender_id: course.specialist_id,
+                            course_id: payment.course_id,
+                            type: 'group',
+                            created_at: new Date().toISOString()
+                        });
+                }
+            }
         }
 
         res.json({ message: 'تم تحديث حالة الدفعة بنجاح' });
     } catch (error) {
         console.error('Payment update error:', error);
         res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+/**
+ * GET /api/admin/conversations
+ * Get all conversations (Groups + Directs)
+ */
+router.get('/conversations', requireAdmin, async (req, res) => {
+    try {
+        // 1. Get all Groups
+        const { data: groups, error: groupsError } = await supabase
+            .from('course_groups')
+            .select(`
+                id,
+                name,
+                member_count,
+                created_at,
+                course:courses(title)
+            `)
+            .order('created_at', { ascending: false });
+
+        if (groupsError) throw groupsError;
+
+        // 2. Get Direct Conversations (Users who have messaged)
+        // Since we don't have a conversations table, we aggregate messages
+        // DISTINCT sender_id for direct messages
+        const { data: directMsgs, error: dmError } = await supabase
+            .from('messages')
+            .select('sender_id, receiver_id, created_at, content')
+            .is('course_id', null)
+            .order('created_at', { ascending: false });
+
+        if (dmError) throw dmError;
+
+        // Group DMs by user (unique interaction partners)
+        // We assume "Support" is User <-> Owner/Specialist
+        // We'll list users who have DMs
+        const dmUsers = new Set();
+        const directs = [];
+
+        for (const msg of directMsgs) {
+            // Identifier is the Other Person (not the admin/owner if possible, but let's just grab the sender if it's not me, or receiver if it is me)
+            // For simplicity, we just look for distinct users who initiated conversations
+            // But if current user is Admin, they might receive messages.
+            // Let's just group by "sender_id" if sender is not an admin/specialist (implies User asking for support)
+            // Actually, we'll just show the latest message for each unique user interaction
+
+            // Simplified: Unique Sender ID for inbound messages
+            if (!dmUsers.has(msg.sender_id)) {
+                dmUsers.add(msg.sender_id);
+                directs.push({
+                    id: msg.sender_id, // Use User ID as "Conversation ID" for DMs
+                    type: 'direct',
+                    last_message: msg.content,
+                    last_active: msg.created_at,
+                    user_id: msg.sender_id
+                });
+            }
+        }
+
+        // Fetch user details for DMs
+        const { data: users } = await supabase
+            .from('users')
+            .select('id, nickname, avatar, email')
+            .in('id', Array.from(dmUsers));
+
+        const enrichedDirects = directs.map(d => {
+            const u = users.find(user => user.id === d.user_id);
+            return {
+                id: d.id,
+                name: u?.nickname || 'مستخدم',
+                subtitle: u?.email,
+                avatar: u?.avatar,
+                type: 'direct',
+                last_message: d.last_message,
+                created_at: d.last_active, // sort by last active
+                member_count: 2
+            };
+        });
+
+        // Format Groups
+        const formattedGroups = groups.map(g => ({
+            id: g.id,
+            name: g.name,
+            subtitle: g.course?.title,
+            type: 'group',
+            created_at: g.created_at,
+            member_count: g.members?.[0]?.count || 0
+        }));
+
+        // Combine and Sort
+        const allConversations = [...formattedGroups, ...enrichedDirects].sort((a, b) =>
+            new Date(b.created_at) - new Date(a.created_at)
+        );
+
+        res.json({ conversations: allConversations });
+    } catch (error) {
+        console.error('Conversations error:', error);
+        res.status(500).json({ error: 'حدث خطأ في جلب المحادثات' });
     }
 });
 
@@ -530,7 +756,7 @@ router.delete('/sessions/:id', requireOwner, async (req, res) => {
  */
 router.get('/messages', requireAdmin, async (req, res) => {
     try {
-        const { limit = 100, type } = req.query;
+        const { limit = 100, type, courseId, userId } = req.query;
 
         let query = supabase
             .from('messages')
@@ -541,7 +767,13 @@ router.get('/messages', requireAdmin, async (req, res) => {
             .order('created_at', { ascending: false })
             .limit(parseInt(limit));
 
-        if (type === 'group') {
+        if (courseId) {
+            query = query.eq('course_id', courseId);
+        } else if (userId) {
+            // For DM, we want messages between this user and ANYONE (usually admin/support)
+            // But usually DMs are User <-> System.
+            query = query.or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
+        } else if (type === 'group') {
             query = query.not('course_id', 'is', null);
         } else if (type === 'direct') {
             query = query.is('course_id', null);
@@ -586,6 +818,45 @@ router.delete('/messages/:id', requireOwner, async (req, res) => {
     }
 });
 
+/**
+ * DELETE /api/admin/conversations/:id
+ * Delete a conversation (Group or DM)
+ */
+router.delete('/conversations/:id', requireOwner, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { type } = req.query; // 'group' or 'direct'
+
+        if (type === 'group') {
+            // Delete Group (Cascade will verify later, but let's be explicit)
+            // 1. Clear group_id from enrollments
+            await supabase.from('enrollments').update({ group_id: null }).eq('group_id', id);
+            // 2. Delete Messages
+            await supabase.from('messages').delete().eq('course_id', id);
+            // 3. Delete Group
+            const { error } = await supabase.from('course_groups').delete().eq('id', id);
+
+            if (error) throw error;
+        } else if (type === 'direct') {
+            // Delete DMs with this user
+            // ID here is the User ID of the other person
+            const userId = id;
+            const { error } = await supabase
+                .from('messages')
+                .delete()
+                .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+                .is('course_id', null);
+
+            if (error) throw error;
+        }
+
+        res.json({ message: 'تم حذف المحادثة بنجاح' });
+    } catch (error) {
+        console.error('Conversation delete error:', error);
+        res.status(500).json({ error: 'حدث خطأ أثناء حذف المحادثة' });
+    }
+});
+
 module.exports = router;
 
 /**
@@ -594,12 +865,18 @@ module.exports = router;
  */
 router.get('/reports', requireAdmin, async (req, res) => {
     try {
+        const { period = '30' } = req.query;
+        const daysToFetch = parseInt(period) || 30;
+
         // Run queries in parallel for performance
         const [usersRes, coursesRes, sessionsRes, paymentsRes] = await Promise.all([
-            supabase.from('users').select('id, created_at', { count: 'exact' }),
-            supabase.from('courses').select('id', { count: 'exact' }),
+            supabase.from('users').select('id, nickname, created_at', { count: 'exact' }),
+            supabase.from('courses').select('id, title', { count: 'exact' }),
             supabase.from('sessions').select('id', { count: 'exact' }),
-            supabase.from('payments').select('amount, created_at').eq('status', 'confirmed')
+            supabase.from('payments')
+                .select('id, amount, created_at, user_id, course_id')
+                .eq('status', 'confirmed')
+                .order('created_at', { ascending: false })
         ]);
 
         if (usersRes.error) throw usersRes.error;
@@ -607,28 +884,57 @@ router.get('/reports', requireAdmin, async (req, res) => {
         if (sessionsRes.error) throw sessionsRes.error;
         if (paymentsRes.error) throw paymentsRes.error;
 
-        const payments = paymentsRes.data || [];
+        // Filter payments by period if needed for Total, but usually Total Revenue is ALL TIME.
+        // The user asked for "Specify period in statistics".
+        // The charts use "daysToFetch".
+        // Let's decide: Should "Total Revenue" card show ALL TIME or PERIOD?
+        // Usually "Total Revenue" means ALL TIME. "Period Revenue" is separate.
+        // But if filtering, maybe we want to see stats for that period.
+        // Let's keep Total Revenue as ALL TIME (or explicit) and add "Period Revenue".
+        // But for charts we filter.
+        // For the *Transaction Table*, we should return detailed list.
+
+        const allPayments = paymentsRes.data || [];
         const users = usersRes.data || [];
+        const courses = coursesRes.data || [];
 
-        // Calculate Total Revenue
-        const totalRevenue = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+        // Create Lookup Maps for faster access
+        const userMap = new Map(users.map(u => [u.id, u]));
+        const courseMap = new Map(courses.map(c => [c.id, c]));
 
-        // Prepare Chart Data (Last 30 days revenue)
-        const last30Days = [...Array(30)].map((_, i) => {
+        // Filter for specific period calculations
+        const periodPayments = allPayments.filter(p => {
+            const date = new Date(p.created_at);
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - daysToFetch);
+            return date >= cutoff;
+        });
+
+        const paymentsToUse = periodPayments; // Use filtered payments for charts/tables?
+
+        // Calculate Total Revenue (All Time)
+        const totalRevenue = allPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+        // Calculate Period Revenue
+        const periodRevenue = periodPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+        // Prepare Chart Data (Dynamic period)
+        const lastNDays = [...Array(daysToFetch)].map((_, i) => {
             const d = new Date();
             d.setDate(d.getDate() - i);
             return d.toISOString().split('T')[0];
         }).reverse();
 
-        const revenueChart = last30Days.map(date => {
-            const dayRevenue = payments
+        const revenueChart = lastNDays.map(date => {
+            const dayRevenue = periodPayments
                 .filter(p => p.created_at.startsWith(date))
                 .reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
             return { date, revenue: dayRevenue };
         });
 
-        // User Growth (Last 30 days)
-        const userGrowthChart = last30Days.map(date => {
+        // User Growth
+        // use users variable we fetched earlier
+        const userGrowthChart = lastNDays.map(date => {
             const dayUsers = users.filter(u => u.created_at.startsWith(date)).length;
             return { date, users: dayUsers };
         });
@@ -638,9 +944,17 @@ router.get('/reports', requireAdmin, async (req, res) => {
                 totalUsers: usersRes.count,
                 totalCourses: coursesRes.count,
                 totalSessions: sessionsRes.count,
-                totalRevenue,
+                totalRevenue, // Keep showing All Time
+                periodRevenue, // New: Revenue for selected period
                 recentRevenue: revenueChart,
-                recentUsers: userGrowthChart
+                recentUsers: userGrowthChart,
+                transactions: periodPayments.map(p => ({
+                    id: p.id,
+                    amount: p.amount,
+                    date: p.created_at,
+                    user: userMap.get(p.user_id)?.nickname || 'مستخدم',
+                    course: courseMap.get(p.course_id)?.title || 'كورس'
+                }))
             }
         });
 

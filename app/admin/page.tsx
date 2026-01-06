@@ -8,12 +8,22 @@ import Header from "@/components/layout/Header";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 export default function AdminDashboard() {
-    const [stats, setStats] = useState({ users: 0, specialists: 0, totalSessions: 0, activeSessions: 0 });
+    const [stats, setStats] = useState({
+        users: 0,
+        specialists: 0,
+        totalSessions: 0,
+        activeSessions: 0,
+        totalRevenue: 0,
+        monthlyRevenue: 0,
+        pendingRevenue: 0
+    });
+    const [pendingPayments, setPendingPayments] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
     useEffect(() => {
         fetchStats();
+        fetchPendingPayments();
     }, []);
 
     const fetchStats = async () => {
@@ -42,6 +52,21 @@ export default function AdminDashboard() {
             setError(err.message);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchPendingPayments = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/api/admin/payments?status=pending`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setPendingPayments(data.payments?.length || 0);
+            }
+        } catch (err) {
+            console.error('Failed to fetch pending payments');
         }
     };
 
@@ -111,21 +136,21 @@ export default function AdminDashboard() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="bg-primary/5 p-4 rounded-lg border border-primary/10">
                                 <p className="text-sm text-muted-foreground">إجمالي الدخل</p>
-                                <p className="text-2xl font-bold text-foreground">$12,450</p>
+                                <p className="text-2xl font-bold text-foreground">{stats.totalRevenue?.toLocaleString()} ر.س</p>
                             </div>
                             <div className="bg-primary/5 p-4 rounded-lg border border-primary/10">
                                 <p className="text-sm text-muted-foreground">دخل هذا الشهر</p>
-                                <p className="text-2xl font-bold text-foreground">$3,200</p>
+                                <p className="text-2xl font-bold text-foreground">{stats.monthlyRevenue?.toLocaleString()} ر.س</p>
                             </div>
                             <div className="bg-primary/5 p-4 rounded-lg border border-primary/10">
-                                <p className="text-sm text-muted-foreground">أرباح المعالجين</p>
-                                <p className="text-2xl font-bold text-foreground">$8,500</p>
+                                <p className="text-sm text-muted-foreground">دفعات معلقة</p>
+                                <p className="text-2xl font-bold text-foreground text-amber-600">{stats.pendingRevenue?.toLocaleString()} ر.س</p>
                             </div>
                         </div>
                     </div>
 
                     {/* Navigation Links */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 p-2">
                         <Link href="/admin/users" className="card-love p-6 flex items-center gap-4 group hover:border-primary/50 transition-all">
                             <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary/20 transition-colors">
                                 <Users className="w-7 h-7" />
@@ -153,15 +178,25 @@ export default function AdminDashboard() {
                                 <p className="text-muted-foreground text-sm">توزيع المجموعات والأخصائيين</p>
                             </div>
                         </Link>
-                        <Link href="/admin/payments" className="card-love p-6 flex items-center gap-4 group hover:border-primary/50 transition-all">
-                            <div className="w-14 h-14 rounded-2xl bg-green-500/10 flex items-center justify-center text-green-500 group-hover:bg-green-500/20 transition-colors">
-                                <DollarSign className="w-7 h-7" />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-foreground group-hover:text-green-500 transition-colors">إدارة المدفوعات</h3>
-                                <p className="text-muted-foreground text-sm">تأكيد ورفض الدفعات</p>
-                            </div>
-                        </Link>
+                        <div className="relative">
+                            {pendingPayments > 0 && (
+                                <div className="absolute -top-2 -right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold animate-pulse shadow-lg z-20">
+                                    {pendingPayments}
+                                </div>
+                            )}
+                            <Link href="/admin/payments" className="card-love p-6 flex items-center gap-4 group hover:border-primary/50 transition-all block">
+                                <div className="w-14 h-14 rounded-2xl bg-green-500/10 flex items-center justify-center text-green-500 group-hover:bg-green-500/20 transition-colors">
+                                    <DollarSign className="w-7 h-7" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-foreground group-hover:text-green-500 transition-colors">إدارة المدفوعات</h3>
+                                    <p className="text-muted-foreground text-sm">تأكيد ورفض الدفعات</p>
+                                    {pendingPayments > 0 && (
+                                        <p className="text-xs text-red-500 font-bold mt-1">🔔 {pendingPayments} دفعة جديدة</p>
+                                    )}
+                                </div>
+                            </Link>
+                        </div>
                         <Link href="/admin/specialists" className="card-love p-6 flex items-center gap-4 group hover:border-primary/50 transition-all">
                             <div className="w-14 h-14 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 group-hover:bg-amber-500/20 transition-colors">
                                 <ShieldAlert className="w-7 h-7" />

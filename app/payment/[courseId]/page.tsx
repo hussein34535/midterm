@@ -43,6 +43,8 @@ export default function PaymentPage({ params }: PageProps) {
         `EWA-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
     );
     const [submitting, setSubmitting] = useState(false);
+    const [screenshot, setScreenshot] = useState<File | null>(null);
+    const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
 
     // Auth Gate + Fetch Course + Settings
     useEffect(() => {
@@ -102,6 +104,28 @@ export default function PaymentPage({ params }: PageProps) {
         setTimeout(() => setCopied(false), 2000);
     };
 
+    const handleScreenshotChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            alert('يرجى اختيار صورة فقط');
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            alert('حجم الصورة كبير جداً (أقصى حد 5 ميجا)');
+            return;
+        }
+
+        setScreenshot(file);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setScreenshotPreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+    };
+
     const handleConfirmPayment = async () => {
         if (!selectedMethod) return;
 
@@ -117,7 +141,8 @@ export default function PaymentPage({ params }: PageProps) {
                 body: JSON.stringify({
                     payment_method: selectedMethod,
                     payment_code: paymentCode,
-                    amount: course.price
+                    amount: course.price,
+                    payment_screenshot: screenshotPreview // Send as base64
                 })
             });
 
@@ -265,6 +290,56 @@ export default function PaymentPage({ params }: PageProps) {
                                     <span className="text-foreground leading-relaxed pt-1">اضغط "أكدت الدفع" بالأسفل بعد إتمام التحويل</span>
                                 </li>
                             </ol>
+                        </div>
+                    )}
+
+                    {/* Screenshot Upload */}
+                    {selectedMethod && (
+                        <div className="card-love p-8 mb-8 animate-in fade-in slide-in-from-bottom-2">
+                            <h2 className="text-lg font-bold text-foreground mb-4">
+                                📸 إثبات الدفع (اختياري)
+                            </h2>
+                            <p className="text-sm text-muted-foreground mb-4">
+                                ارفع لقطة شاشة (سكرين شوت) لإيصال الدفع لتسريع عملية التفعيل
+                            </p>
+
+                            <input
+                                type="file"
+                                id="screenshot"
+                                accept="image/*"
+                                onChange={handleScreenshotChange}
+                                className="hidden"
+                            />
+
+                            {screenshotPreview ? (
+                                <div className="space-y-4">
+                                    <div className="relative w-full max-w-md mx-auto rounded-xl overflow-hidden border-2 border-primary/20">
+                                        <img src={screenshotPreview} alt="Screenshot" className="w-full h-auto" />
+                                        <button
+                                            onClick={() => {
+                                                setScreenshot(null);
+                                                setScreenshotPreview(null);
+                                            }}
+                                            className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors shadow-md"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                    <label htmlFor="screenshot" className="btn-outline w-full py-3 justify-center cursor-pointer">
+                                        تغيير الصورة
+                                    </label>
+                                </div>
+                            ) : (
+                                <label htmlFor="screenshot" className="border-2 border-dashed border-border rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all">
+                                    <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                                        <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="width" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                        </svg>
+                                    </div>
+                                    <p className="font-medium text-foreground mb-1">اضغط لاختيار الصورة</p>
+                                    <p className="text-xs text-muted-foreground">PNG, JPG حتى 5MB</p>
+                                </label>
+                            )}
                         </div>
                     )}
 

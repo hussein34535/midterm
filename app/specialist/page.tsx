@@ -24,6 +24,8 @@ interface Stats {
 
 export default function SpecialistDashboard() {
     const [courses, setCourses] = useState<Course[]>([]);
+    const [groups, setGroups] = useState<any[]>([]); // New: Groups state
+    const [upcomingSessions, setUpcomingSessions] = useState<any[]>([]); // New: Schedule state
     const [stats, setStats] = useState<Stats>({ courses: 0, totalSessions: 0, completedSessions: 0, activeSessions: 0 });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -41,25 +43,47 @@ export default function SpecialistDashboard() {
                 return;
             }
 
-            // Fetch courses
-            const coursesRes = await fetch(`${API_URL}/api/specialist/courses`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const headers = { 'Authorization': `Bearer ${token}` };
+
+            // Run queries in parallel
+            const [coursesRes, statsRes, groupsRes, scheduleRes] = await Promise.all([
+                fetch(`${API_URL}/api/specialist/courses`, { headers }),
+                fetch(`${API_URL}/api/specialist/stats`, { headers }),
+                fetch(`${API_URL}/api/specialist/groups`, { headers }),
+                fetch(`${API_URL}/api/specialist/schedule`, { headers })
+            ]);
+
+
+
+            // Check for authorization errors specifically
+            if ([coursesRes, statsRes, groupsRes, scheduleRes].some(r => r.status === 401 || r.status === 403)) {
+                setError('جلسة غير صالحة أو ليس لديك صلاحية أخصائي. يرجى تسجيل الدخول مجدداً.');
+                localStorage.removeItem('token'); // Force logout on auth error
+                localStorage.removeItem('user');
+                setTimeout(() => window.location.href = '/login', 3000);
+                return;
+            }
 
             if (coursesRes.ok) {
                 const data = await coursesRes.json();
                 setCourses(data.courses || []);
             }
 
-            // Fetch stats
-            const statsRes = await fetch(`${API_URL}/api/specialist/stats`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
             if (statsRes.ok) {
                 const data = await statsRes.json();
                 setStats(data.stats);
             }
+
+            if (groupsRes.ok) {
+                const data = await groupsRes.json();
+                setGroups(data.groups || []);
+            }
+
+            if (scheduleRes.ok) {
+                const data = await scheduleRes.json();
+                setUpcomingSessions(data.upcoming || []);
+            }
+
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -123,9 +147,9 @@ export default function SpecialistDashboard() {
                             <span>مكتب الأخصائي</span>
                         </div>
                         <h1 className="text-4xl md:text-5xl font-serif font-bold text-foreground mb-3">
-                            كورساتك
+                            أهلاً بك، دكتور
                         </h1>
-                        <p className="text-muted-foreground text-lg">اختر كورس وابدأ الجلسة 🩺</p>
+                        <p className="text-muted-foreground text-lg">لديك {stats.activeSessions} جلسات نشطة و {groups.length} مجموعات تفاعلية اليوم.</p>
                     </div>
 
                     {error && (
@@ -158,84 +182,137 @@ export default function SpecialistDashboard() {
                         </div>
                     </div>
 
-                    {/* Quick Actions */}
-                    <div className="mb-8">
-                        <Link
-                            href="/messages"
-                            className="card-love p-5 flex items-center gap-4 hover:border-primary/30 transition-all group"
-                        >
-                            <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
-                                <Mic className="w-6 h-6 text-blue-500" />
-                            </div>
-                            <div className="flex-1">
-                                <h3 className="font-bold text-foreground group-hover:text-primary transition-colors">الرسائل</h3>
-                                <p className="text-sm text-muted-foreground">تواصل مع المشتركين في كورساتك</p>
-                            </div>
-                            <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors rotate-180" />
-                        </Link>
-                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+                        {/* Right Column: Schedule & Groups */}
+                        <div className="md:col-span-1 space-y-8">
+                            {/* Create Session CTA */}
+                            <Link
+                                href="/specialist/schedule"
+                                className="block w-full btn-primary py-4 text-center text-lg shadow-lg hover:shadow-xl transition-all"
+                            >
+                                + جدولة جلسة جديدة
+                            </Link>
 
-                    {/* Courses List */}
-                    <div className="space-y-6">
-                        {courses.map((course) => (
-                            <div key={course.id} className="card-love p-6">
-                                <div className="flex items-start justify-between mb-4">
-                                    <div>
-                                        <h2 className="text-xl font-bold text-foreground">{course.title}</h2>
-                                        <p className="text-sm text-muted-foreground">{course.description}</p>
-                                    </div>
-                                    <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-bold">
-                                        {course.total_sessions} جلسات
-                                    </span>
-                                </div>
-
-                                {/* Sessions Grid */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                    {Array.from({ length: course.total_sessions }, (_, i) => {
-                                        const sessionNum = i + 1;
-                                        const existingSession = course.sessions?.find(s => s.session_number === sessionNum);
-                                        const isCompleted = existingSession?.status === 'ended';
-                                        const isActive = existingSession?.status === 'active';
-
-                                        return (
-                                            <button
-                                                key={sessionNum}
-                                                onClick={() => {
-                                                    if (isActive && existingSession) {
-                                                        window.location.href = `/session/${existingSession.id}`;
-                                                    } else if (!isCompleted) {
-                                                        handleStartSession(course.id, sessionNum);
-                                                    }
-                                                }}
-                                                disabled={isCompleted}
-                                                className={`p-4 rounded-xl border text-center transition-all ${isActive
-                                                    ? 'bg-green-50 border-green-300 text-green-700 animate-pulse'
-                                                    : isCompleted
-                                                        ? 'bg-muted border-border text-muted-foreground cursor-not-allowed'
-                                                        : 'bg-primary/5 border-primary/20 hover:bg-primary/10 hover:border-primary/40 text-foreground'
-                                                    }`}
-                                            >
-                                                <div className="text-2xl font-bold mb-1">{sessionNum}</div>
-                                                <div className="text-xs">
-                                                    {isActive ? '🟢 نشطة' : isCompleted ? '✅ مكتملة' : 'جلسة'}
+                            {/* Upcoming Schedule */}
+                            <div className="card-love p-5">
+                                <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                                    <Calendar className="w-5 h-5 text-primary" />
+                                    الجلسات القادمة
+                                </h3>
+                                {upcomingSessions.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {upcomingSessions.slice(0, 5).map((session) => (
+                                            <div key={session.id} className="p-3 rounded-xl bg-muted/50 border border-border flex items-center justify-between">
+                                                <div>
+                                                    <p className="font-bold text-sm text-foreground">{session.title}</p>
+                                                    <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                                                        <Clock className="w-3 h-3" />
+                                                        {new Date(session.scheduled_at || session.created_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                                                    </p>
                                                 </div>
-                                                {!isCompleted && !isActive && (
-                                                    <Play className="w-4 h-4 mx-auto mt-2 text-primary" />
-                                                )}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
+                                                <Link
+                                                    href={`/session/${session.id}`}
+                                                    className="px-3 py-1.5 bg-primary text-primary-foreground text-xs font-bold rounded-lg hover:bg-primary/90 transition-colors"
+                                                >
+                                                    بدء
+                                                </Link>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-center text-muted-foreground py-4 text-sm">لا توجد جلسات قادمة</p>
+                                )}
                             </div>
-                        ))}
 
-                        {courses.length === 0 && (
-                            <div className="card-love p-12 text-center">
-                                <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                                <p className="text-muted-foreground">لا توجد كورسات مسندة لك بعد</p>
-                                <p className="text-sm text-muted-foreground mt-2">تواصل مع المالك لإسناد كورس لك</p>
+                            {/* Groups */}
+                            <div className="card-love p-5">
+                                <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                                    <Users className="w-5 h-5 text-blue-500" />
+                                    المجموعات التفاعلية
+                                </h3>
+                                {groups.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {groups.map((group) => (
+                                            <div key={group.id} className="flex items-center gap-3 p-3 hover:bg-muted/50 rounded-xl transition-colors cursor-pointer" onClick={() => window.location.href = `/messages?id=${group.id}`}>
+                                                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
+                                                    {group.course?.title?.[0] || 'G'}
+                                                </div>
+                                                <div className="flex-1 overflow-hidden">
+                                                    <p className="font-bold text-sm text-foreground truncate">{group.course?.title || 'مجموعة'}</p>
+                                                    <p className="text-xs text-muted-foreground truncate">اضغط للدخول للمحادثة</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-center text-muted-foreground py-4 text-sm">لا توجد مجموعات نشطة حالياً</p>
+                                )}
                             </div>
-                        )}
+                        </div>
+
+                        {/* Left Column: Courses Grid */}
+                        <div className="md:col-span-2 space-y-6">
+                            <h2 className="text-2xl font-bold text-foreground mb-4">كورساتك النشطة</h2>
+                            {courses.map((course) => (
+                                <div key={course.id} className="card-love p-6">
+                                    <div className="flex items-start justify-between mb-4">
+                                        <div>
+                                            <h2 className="text-xl font-bold text-foreground">{course.title}</h2>
+                                            <p className="text-sm text-muted-foreground">{course.description}</p>
+                                        </div>
+                                        <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-bold">
+                                            {course.total_sessions} جلسات
+                                        </span>
+                                    </div>
+
+                                    {/* Sessions Grid */}
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                        {Array.from({ length: course.total_sessions }, (_, i) => {
+                                            const sessionNum = i + 1;
+                                            const existingSession = course.sessions?.find(s => s.session_number === sessionNum);
+                                            const isCompleted = existingSession?.status === 'ended';
+                                            const isActive = existingSession?.status === 'active';
+
+                                            return (
+                                                <button
+                                                    key={sessionNum}
+                                                    onClick={() => {
+                                                        if (isActive && existingSession) {
+                                                            window.location.href = `/session/${existingSession.id}`;
+                                                        } else if (!isCompleted) {
+                                                            handleStartSession(course.id, sessionNum);
+                                                        }
+                                                    }}
+                                                    disabled={isCompleted}
+                                                    className={`p-4 rounded-xl border text-center transition-all ${isActive
+                                                        ? 'bg-green-50 border-green-300 text-green-700 animate-pulse'
+                                                        : isCompleted
+                                                            ? 'bg-muted border-border text-muted-foreground cursor-not-allowed'
+                                                            : 'bg-primary/5 border-primary/20 hover:bg-primary/10 hover:border-primary/40 text-foreground'
+                                                        }`}
+                                                >
+                                                    <div className="text-2xl font-bold mb-1">{sessionNum}</div>
+                                                    <div className="text-xs">
+                                                        {isActive ? '🟢 نشطة' : isCompleted ? '✅ مكتملة' : 'جلسة'}
+                                                    </div>
+                                                    {!isCompleted && !isActive && (
+                                                        <Play className="w-4 h-4 mx-auto mt-2 text-primary" />
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+
+                            {courses.length === 0 && (
+                                <div className="card-love p-12 text-center">
+                                    <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                                    <p className="text-muted-foreground">لا توجد كورسات مسندة لك بعد</p>
+                                    <p className="text-sm text-muted-foreground mt-2">تواصل مع المالك لإسناد كورس لك</p>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Back Link */}

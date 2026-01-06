@@ -10,14 +10,11 @@ interface AvatarSelectorProps {
 }
 
 const PRESET_AVATARS = [
-    // Using placeholder services or SVG data URIs for demo if no assets
-    // For now, I'll use simple colorful placeholders or just dependable online avatars
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Willow",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Garfield",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Midnight",
-    "https://api.dicebear.com/7.x/avataaars/svg?seed=Bella",
+    // Custom 3D Pixar-style avatars
+    "/avatars/avatar1.png",
+    "/avatars/avatar2.png",
+    "/avatars/avatar3.png",
+    "/avatars/avatar4.png"
 ];
 
 export default function AvatarSelector({ onSelect, selectedAvatar }: AvatarSelectorProps) {
@@ -55,7 +52,7 @@ export default function AvatarSelector({ onSelect, selectedAvatar }: AvatarSelec
 
             {/* Preview Section */}
             <div className="flex items-center gap-6">
-                <div className="relative w-20 h-20 rounded-full border-2 border-primary/20 p-1 flex items-center justify-center bg-secondary/30 shrink-0">
+                <div className="relative w-30 h-30 rounded-full border-2 border-primary/20 p-1 flex items-center justify-center bg-secondary/30 shrink-0">
                     {preview ? (
                         <img src={preview} alt="Avatar Preview" className="w-full h-full rounded-full object-cover" />
                     ) : (
@@ -78,13 +75,13 @@ export default function AvatarSelector({ onSelect, selectedAvatar }: AvatarSelec
                     </p>
 
                     {/* Presets */}
-                    <div className="flex gap-2 overflow-x-auto pb-2 mb-3 scrollbar-hide">
+                    <div className="flex gap-4 overflow-x-auto pb-2 mb-3 scrollbar-hide px-1 py-2">
                         {PRESET_AVATARS.map((avatar, idx) => (
                             <button
                                 key={idx}
                                 type="button"
                                 onClick={() => handlePresetSelect(avatar)}
-                                className={`w-10 h-10 rounded-full border-2 shrink-0 transition-all ${preview === avatar ? "border-primary scale-110 shadow-sm" : "border-transparent hover:border-primary/50"
+                                className={`w-16 h-16 rounded-full border-2 shrink-0 transition-all ${preview === avatar ? "border-primary scale-110 shadow-sm" : "border-transparent hover:border-primary/50"
                                     }`}
                             >
                                 <img src={avatar} alt={`Avatar ${idx}`} className="w-full h-full rounded-full" />

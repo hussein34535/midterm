@@ -99,8 +99,31 @@ router.post('/', authMiddleware, requireOwner, async (req, res) => {
 });
 
 /**
+ * GET /api/courses/:id/enrollment-status
+ * Check if user is enrolled in this course
+ */
+router.get('/:id/enrollment-status', authMiddleware, async (req, res) => {
+    try {
+        const courseId = req.params.id;
+        const userId = req.userId;
+
+        const { data: enrollment } = await supabase
+            .from('enrollments')
+            .select('id, enrolled_at')
+            .eq('user_id', userId)
+            .eq('course_id', courseId)
+            .single();
+
+        res.json({ isEnrolled: !!enrollment, enrollment });
+    } catch (error) {
+        console.error('Enrollment check error:', error);
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+/**
  * POST /api/courses/:id/enroll
- * Enroll user in course
+ * Enroll user in course + Auto-assign to group
  */
 router.post('/:id/enroll', authMiddleware, async (req, res) => {
     try {
@@ -119,8 +142,19 @@ router.post('/:id/enroll', authMiddleware, async (req, res) => {
             return res.status(400).json({ error: 'أنت مشترك بالفعل' });
         }
 
+        // Get course info
+        const { data: course } = await supabase
+            .from('courses')
+            .select('title, specialist_id')
+            .eq('id', courseId)
+            .single();
+
+        if (!course) {
+            return res.status(404).json({ error: 'الكورس غير موجود' });
+        }
+
         // Create enrollment
-        const { data: enrollment, error } = await supabase
+        const { data: enrollment, error: enrollError } = await supabase
             .from('enrollments')
             .insert({
                 id: uuidv4(),
@@ -130,13 +164,99 @@ router.post('/:id/enroll', authMiddleware, async (req, res) => {
             .select()
             .single();
 
-        if (error) {
-            console.error('Enrollment error:', error);
+        if (enrollError) {
+            console.error('Enrollment error:', enrollError);
             return res.status(500).json({ error: 'حدث خطأ' });
         }
 
-        res.status(201).json({ message: 'تم الاشتراك بنجاح', enrollment });
+        // 🎯 AUTO-ASSIGN TO GROUP (max 4 per group)
+        // Find an existing group for this course with < 4 members
+        const { data: groups } = await supabase
+            .from('course_groups')
+            .select('id, name, member_count')
+            .eq('course_id', courseId)
+            .lt('member_count', 4)
+            .order('created_at', { ascending: true })
+            .limit(1);
+
+        let targetGroupId;
+        let groupName;
+
+        if (groups && groups.length > 0) {
+            // Join existing group
+            targetGroupId = groups[0].id;
+            groupName = groups[0].name;
+
+            // Update enrollment with group_id
+            await supabase
+                .from('enrollments')
+                .update({ group_id: targetGroupId })
+                .eq('user_id', userId)
+                .eq('course_id', courseId);
+
+            // Update member count
+            await supabase
+                .from('course_groups')
+                .update({ member_count: (groups[0].member_count || 0) + 1 })
+                .eq('id', targetGroupId);
+        } else {
+            // Create new group
+            const groupNumber = Math.floor(Math.random() * 1000);
+            groupName = `${course.title} - مجموعة ${groupNumber}`;
+
+            const { data: newGroup } = await supabase
+                .from('course_groups')
+                .insert({
+                    id: uuidv4(),
+                    name: groupName,
+                    course_id: courseId,
+                    specialist_id: course.specialist_id,
+                    member_count: 1
+                })
+                .select()
+                .single();
+
+            if (newGroup) {
+                targetGroupId = newGroup.id;
+
+                // Update enrollment with group_id
+                await supabase
+                    .from('enrollments')
+                    .update({ group_id: targetGroupId })
+                    .eq('user_id', userId)
+                    .eq('course_id', courseId);
+            }
+        }
+
+        // Send welcome message to the group
+        if (targetGroupId) {
+            const { data: user } = await supabase
+                .from('users')
+                .select('nickname')
+                .eq('id', userId)
+                .single();
+
+            const welcomeMsg = `مرحباً ${user?.nickname || 'بك'} في ${groupName}! نتمنى لك رحلة موفقة نحو التعافي 🌸`;
+
+            await supabase
+                .from('messages')
+                .insert({
+                    id: uuidv4(),
+                    content: welcomeMsg,
+                    sender_id: course.specialist_id, // From specialist
+                    course_id: courseId,
+                    type: 'group',
+                    created_at: new Date().toISOString()
+                });
+        }
+
+        res.status(201).json({
+            message: 'تم الاشتراك بنجاح وإضافتك للمجموعة',
+            enrollment,
+            group_name: groupName
+        });
     } catch (error) {
+        console.error('Enrollment error:', error);
         res.status(500).json({ error: 'حدث خطأ' });
     }
 });
@@ -286,6 +406,8 @@ router.post('/:id/payment', authMiddleware, async (req, res) => {
         }
 
         // Record payment
+        const { payment_screenshot } = req.body; // Screenshot as base64
+
         const { data: payment, error: payError } = await supabase
             .from('payments')
             .insert({
@@ -295,6 +417,7 @@ router.post('/:id/payment', authMiddleware, async (req, res) => {
                 amount: amount || course.price,
                 payment_method: payment_method || 'unknown',
                 payment_code: payment_code,
+                screenshot: payment_screenshot || null,
                 status: 'pending',
                 created_at: new Date().toISOString()
             })
@@ -303,46 +426,14 @@ router.post('/:id/payment', authMiddleware, async (req, res) => {
 
         if (payError) {
             console.error('Payment record error:', payError);
-            // Continue anyway - enrollment is more important
+            return res.status(500).json({ error: 'حدث خطأ في تسجيل الدفع' });
         }
 
-        // Create enrollment
-        const { data: enrollment, error: enrollError } = await supabase
-            .from('enrollments')
-            .insert({
-                id: uuidv4(),
-                user_id: userId,
-                course_id: courseId,
-                payment_id: payment?.id,
-                enrolled_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-
-        if (enrollError) {
-            console.error('Enrollment error:', enrollError);
-            return res.status(500).json({ error: 'حدث خطأ في التسجيل' });
-        }
-
-        // Send Welcome Message to Group Chat
-        try {
-            await supabase
-                .from('messages')
-                .insert({
-                    course_id: courseId,
-                    content: `مرحباً بك في الكورس! 🎉 يسعدنا انضمامك إلينا.`,
-                    type: 'alert',
-                    is_system: true,
-                    sender_id: userId, // The user announced their arrival (or use Admin ID if preferred)
-                    created_at: new Date().toISOString()
-                });
-        } catch (msgError) {
-            console.error('Welcome message error:', msgError);
-        }
+        // NOTE: Enrollment will be created ONLY when admin confirms payment
+        // See admin/payments endpoint for confirmation logic
 
         res.status(201).json({
-            message: 'تم التسجيل بنجاح! سيتم تفعيل اشتراكك بعد التحقق من الدفع',
-            enrollment,
+            message: 'تم إرسال طلب الدفع بنجاح! سيتم تفعيل اشتراكك خلال ساعات بعد التحقق من الدفع',
             payment
         });
     } catch (error) {

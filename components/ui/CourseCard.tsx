@@ -27,11 +27,6 @@ export default function CourseCard({ id, title, instructor, duration, rating, re
                     <Clock className="w-3 h-3" />
                     <span>{duration}</span>
                 </div>
-                <div className="flex items-center gap-1 text-amber-500">
-                    <Star className="w-4 h-4 fill-current" />
-                    <span className="text-sm font-bold text-foreground">{rating}</span>
-                    <span className="text-xs text-muted-foreground">({reviews})</span>
-                </div>
             </div>
 
             {/* Content */}
@@ -48,7 +43,7 @@ export default function CourseCard({ id, title, instructor, duration, rating, re
                     <p className="text-lg font-black text-foreground">{price} <span className="text-xs font-normal text-muted-foreground">ج.م</span></p>
                 </div>
 
-                <Link href={`/payment/${id}`} className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary hover:bg-primary hover:text-primary-foreground transition-all group/btn shadow-sm">
+                <Link href={`/courses/${id}`} className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary hover:bg-primary hover:text-primary-foreground transition-all group/btn shadow-sm">
                     <ArrowRight className="w-5 h-5 group-hover/btn:-translate-x-0.5 transition-transform" />
                 </Link>
             </div>

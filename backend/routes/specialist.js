@@ -22,58 +22,110 @@ router.get('/courses', async (req, res) => {
         const { data: courses, error } = await supabase
             .from('courses')
             .select(`
-                *,
-                sessions(id, title, session_number, status)
+                id, title, description, total_sessions,
+                sessions:sessions(id, title, session_number, status)
             `)
             .eq('specialist_id', req.userId)
-            .eq('is_active', true)
             .order('created_at', { ascending: false });
 
-        if (error) {
-            console.error('Courses fetch error:', error);
-            return res.status(500).json({ error: 'حدث خطأ' });
-        }
+        if (error) throw error;
 
         res.json({ courses: courses || [] });
     } catch (error) {
+        console.error('Courses error:', error);
         res.status(500).json({ error: 'حدث خطأ' });
     }
 });
 
 /**
- * GET /api/specialist/courses/:courseId/sessions
- * Get sessions for a specific course
+ * GET /api/specialist/groups
+ * Get course groups assigned to this specialist
  */
-router.get('/courses/:courseId/sessions', async (req, res) => {
+router.get('/groups', async (req, res) => {
     try {
-        // Verify course belongs to specialist
-        const { data: course } = await supabase
+        // First get courses ids for this specialist
+        const { data: courses, error: coursesError } = await supabase
             .from('courses')
-            .select('id, title, total_sessions')
-            .eq('id', req.params.courseId)
-            .eq('specialist_id', req.userId)
-            .single();
+            .select('id, title')
+            .eq('specialist_id', req.userId);
 
-        if (!course) {
-            return res.status(404).json({ error: 'الكورس غير موجود أو ليس لك' });
+        if (coursesError) throw coursesError;
+
+        const courseIds = courses.map(c => c.id);
+
+        if (courseIds.length === 0) {
+            return res.json({ groups: [] });
+        }
+
+        // Get groups for these courses
+        const { data: groups, error: groupsError } = await supabase
+            .from('course_groups')
+            .select(`
+                *,
+                course:courses(title)
+            `)
+            .in('course_id', courseIds)
+            .order('updated_at', { ascending: false });
+
+        if (groupsError) throw groupsError;
+
+        res.json({ groups: groups || [] });
+    } catch (error) {
+        console.error('Groups error:', error);
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+/**
+ * GET /api/specialist/schedule
+ * Get all sessions (upcoming and past)
+ */
+router.get('/schedule', async (req, res) => {
+    try {
+        // Get sessions linked to specialist's courses
+        // First get courses
+        const { data: courses } = await supabase
+            .from('courses')
+            .select('id')
+            .eq('specialist_id', req.userId);
+
+        const courseIds = courses?.map(c => c.id) || [];
+
+        if (courseIds.length === 0) {
+            return res.json({ upcoming: [], past: [] });
         }
 
         const { data: sessions, error } = await supabase
             .from('sessions')
-            .select('*')
-            .eq('course_id', req.params.courseId)
-            .order('session_number', { ascending: true });
+            .select(`
+                *,
+                course:courses(title)
+            `)
+            .in('course_id', courseIds)
+            .order('scheduled_at', { ascending: true }); // Order by schedule date
 
-        if (error) {
-            return res.status(500).json({ error: 'حدث خطأ' });
-        }
+        if (error) throw error;
 
-        res.json({
-            course,
-            sessions: sessions || [],
-            totalSessions: course.total_sessions
+        const now = new Date();
+        const upcoming = [];
+        const past = [];
+
+        (sessions || []).forEach(session => {
+            // Use scheduled_at if available, otherwise created_at
+            const sessionDate = new Date(session.scheduled_at || session.created_at);
+            if (sessionDate >= now && session.status !== 'ended') {
+                upcoming.push(session);
+            } else {
+                past.push(session);
+            }
         });
+
+        // Sort past sessions desc
+        past.sort((a, b) => new Date(b.scheduled_at || b.created_at) - new Date(a.scheduled_at || a.created_at));
+
+        res.json({ upcoming, past });
     } catch (error) {
+        console.error('Schedule error:', error);
         res.status(500).json({ error: 'حدث خطأ' });
     }
 });
@@ -84,7 +136,7 @@ router.get('/courses/:courseId/sessions', async (req, res) => {
  */
 router.post('/courses/:courseId/sessions', async (req, res) => {
     try {
-        const { title, session_number } = req.body;
+        const { title, session_number, type, scheduled_at } = req.body;
         const courseId = req.params.courseId;
 
         // Verify course belongs to specialist
@@ -103,13 +155,14 @@ router.post('/courses/:courseId/sessions', async (req, res) => {
             id: uuidv4(),
             channel_name: `sakina-${uuidv4().substring(0, 8)}`,
             title: title || `${course.title} - الجلسة ${session_number || 1}`,
-            type: 'group',
+            type: type || 'group',
             course_id: courseId,
             session_number: session_number || 1,
             host_id: req.userId,
             participants: [],
-            status: 'waiting',
-            created_at: new Date().toISOString()
+            status: 'waiting', // or 'scheduled'
+            created_at: new Date().toISOString(),
+            scheduled_at: scheduled_at || new Date().toISOString() // New field
         };
 
         const { data: session, error } = await supabase
