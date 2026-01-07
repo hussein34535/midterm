@@ -66,6 +66,18 @@ export default function UsersManagement() {
             });
 
             if (res.ok) {
+                const data = await res.json();
+
+                if (data.needRelogin) {
+                    toast.success(data.message);
+                    setTimeout(() => {
+                        localStorage.removeItem('token');
+                        localStorage.removeItem('user');
+                        window.location.href = '/login';
+                    }, 2000);
+                    return;
+                }
+
                 toast.success('تم تغيير الرتبة بنجاح');
                 setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
             } else {
