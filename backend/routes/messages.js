@@ -55,9 +55,15 @@ router.get('/conversations', authMiddleware, async (req, res) => {
         const conversationsMap = new Map();
 
         // Process Direct Messages
+        console.log(`Conversations for User ${req.userId}: found ${messages?.length} messages`);
         (messages || []).forEach(msg => {
             const partnerId = msg.sender_id === req.userId ? msg.receiver_id : msg.sender_id;
             let partner = msg.sender_id === req.userId ? msg.receiver : msg.sender;
+
+            // Debug log for missing partner
+            if (!partner) {
+                console.log('Missing partner for msg:', msg.id, 'PartnerID:', partnerId);
+            }
 
             // BRANDING: If partner is Owner, mask as Support
             if (partner && partner.role === 'owner') {
@@ -219,13 +225,26 @@ router.get('/:id', authMiddleware, async (req, res) => {
         const { id } = req.params;
         const { type } = req.query; // 'direct' or 'group'
 
+        // Check current user's role for hidden message filtering
+        const { data: currentUser } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', req.userId)
+            .single();
+        const canSeeHidden = ['owner', 'specialist', 'admin'].includes(currentUser?.role);
+
         let query = supabase
             .from('messages')
             .select(`
-                id, content, sender_id, receiver_id, course_id, created_at, read, type, metadata, reply_to_id,
+                id, content, sender_id, receiver_id, course_id, created_at, read, type, metadata, reply_to_id, hidden,
                 sender:users!messages_sender_id_fkey(id, nickname, avatar, role)
             `)
             .order('created_at', { ascending: true });
+
+        // Filter hidden messages for regular users
+        if (!canSeeHidden) {
+            query = query.or('hidden.is.null,hidden.eq.false');
+        }
 
         if (type === 'group') {
             // Check if ID is a Course ID or Group ID
@@ -346,7 +365,8 @@ router.get('/:id', authMiddleware, async (req, res) => {
                 read: m.read,
                 type: m.type,
                 metadata: m.metadata || {},
-                replyTo
+                replyTo,
+                hidden: m.hidden || false
             };
         });
 
@@ -683,6 +703,45 @@ router.delete('/conversations/:id', authMiddleware, async (req, res) => {
         res.json({ message: 'تم حذف المحادثة بنجاح' });
     } catch (error) {
         console.error('Delete conversation error:', error);
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+/**
+ * PUT /api/messages/:id/hide
+ * Hide a message (soft delete) - only for owners and specialists
+ * Message will be hidden from regular users but still visible to admins
+ */
+router.put('/:id/hide', authMiddleware, async (req, res) => {
+    try {
+        // 1. Check if user is owner or specialist
+        const { data: currentUser } = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', req.userId)
+            .single();
+
+        if (!currentUser || !['owner', 'specialist'].includes(currentUser.role)) {
+            return res.status(403).json({ error: 'غير مصرح لك بهذا الإجراء' });
+        }
+
+        const { id } = req.params;
+        const { hidden = true } = req.body; // Default to hiding
+
+        // 2. Update message hidden status
+        const { error } = await supabase
+            .from('messages')
+            .update({ hidden })
+            .eq('id', id);
+
+        if (error) {
+            console.error('Hide message error:', error);
+            return res.status(500).json({ error: 'فشل في إخفاء الرسالة' });
+        }
+
+        res.json({ message: hidden ? 'تم إخفاء الرسالة' : 'تم إظهار الرسالة' });
+    } catch (error) {
+        console.error('Hide message error:', error);
         res.status(500).json({ error: 'حدث خطأ' });
     }
 });

@@ -73,12 +73,16 @@ export default function RegisterPage() {
         }
 
         try {
+            // Get guest token if exists
+            const guestToken = localStorage.getItem('iwaa_guest_token');
+
             // Call real API
             await authAPI.register({
                 nickname: formData.nickname,
                 email: formData.email,
                 password: formData.password,
                 avatar: formData.avatar,
+                guestToken: guestToken || undefined
             });
 
             // Backend handles verification automatically now

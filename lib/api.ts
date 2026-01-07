@@ -55,6 +55,7 @@ export const authAPI = {
         email: string;
         password: string;
         avatar?: string;
+        guestToken?: string;
     }) => {
         const data = await authFetch('/auth/register', {
             method: 'POST',

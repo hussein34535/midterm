@@ -93,51 +93,79 @@ router.post('/register', async (req, res) => {
         await sendEmail(email, 'رمز تفعيل حسابك في إيواء', emailHtml);
         */
 
-        // 🎯 AUTO-CREATE SUPPORT CHAT: Send Welcome Message from System/Platform
-        try {
-            const SYSTEM_EMAIL = 'system@sakina.com';
+        // 🎯 GUEST CLEANUP: If user was a guest, DELETE their messages and account
+        const { guestToken } = req.body;
+        if (guestToken) {
+            try {
+                const decoded = jwt.verify(guestToken, process.env.JWT_SECRET);
+                const guestUserId = decoded.userId;
 
-            // Check for System User
-            let { data: systemUser } = await supabase
-                .from('users')
-                .select('id')
-                .eq('email', SYSTEM_EMAIL)
-                .single();
-
-            // If not exists, CREATE System User
-            if (!systemUser) {
-                const systemHash = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
-                const { data: newSystem } = await supabase
-                    .from('users')
-                    .insert({
-                        id: uuidv4(),
-                        nickname: 'إدارة منصة إيواء',
-                        email: SYSTEM_EMAIL,
-                        password: systemHash,
-                        avatar: '/logo.png', // Use platform logo
-                        role: 'admin',
-                        is_verified: true,
-                        created_at: new Date().toISOString()
-                    })
-                    .select('id')
-                    .single();
-                systemUser = newSystem;
-            }
-
-            if (systemUser) {
-                const welcomeContent = `مرحباً ${nickname} في منصة إيواء 🌸\nنحن هنا لدعمك في رحلتك. إذا كان لديك أي استفسار، لا تتردد في مراسلتنا هنا.`;
+                // 1. Delete messages where guest was sender or receiver
                 await supabase
                     .from('messages')
-                    .insert({
-                        id: uuidv4(),
-                        sender_id: systemUser.id,
-                        receiver_id: newUser.id,
-                        content: welcomeContent,
-                        type: 'text',
-                        created_at: new Date().toISOString(),
-                        read: false
-                    });
+                    .delete()
+                    .or(`sender_id.eq.${guestUserId},receiver_id.eq.${guestUserId}`);
+
+                // 2. Delete guest user
+                await supabase
+                    .from('users')
+                    .delete()
+                    .eq('id', guestUserId);
+
+                console.log(`Deleted guest data for ${guestUserId}`);
+            } catch (error) {
+                console.error('Guest cleanup error:', error);
+                // Continue registration even if cleanup fails
             }
+        }
+
+        // 🎯 AUTO-CREATE SUPPORT CHAT: Send Welcome Message from OWNER
+        try {
+            // Find an Owner to send the welcome message
+            const { data: owners } = await supabase
+                .from('users')
+                .select('id')
+                .eq('role', 'owner')
+                .limit(1);
+
+            let welcomeSenderId = null;
+            if (owners && owners.length > 0) {
+                // Use the first owner
+                welcomeSenderId = owners[0].id;
+            } else {
+                // Fallback: Check/Create System User only if no owner found
+                const SYSTEM_EMAIL = 'system@sakina.com';
+                let { data: systemUser } = await supabase
+                    .from('users')
+                    .select('id')
+                    .eq('email', SYSTEM_EMAIL)
+                    .single();
+
+                if (!systemUser) {
+                    const systemHash = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
+                    const { data: newSystem } = await supabase.from('users').insert({
+                        id: uuidv4(), nickname: 'إدارة منصة إيواء', email: SYSTEM_EMAIL, password: systemHash,
+                        avatar: '/logo.png', role: 'admin', is_verified: true, created_at: new Date().toISOString()
+                    }).select('id').single();
+                    systemUser = newSystem;
+                }
+                welcomeSenderId = systemUser?.id;
+            }
+
+            if (welcomeSenderId) {
+                const welcomeContent = `مرحباً ${nickname} في منصة إيواء 🌸\nنحن هنا لدعمك في رحلتك. إذا كان لديك أي استفسار، لا تتردد في مراسلتنا هنا.`;
+
+                await supabase.from('messages').insert({
+                    id: uuidv4(),
+                    sender_id: welcomeSenderId,
+                    receiver_id: newUser.id,
+                    content: welcomeContent,
+                    type: 'text',
+                    created_at: new Date().toISOString(),
+                    read: false
+                });
+            }
+
         } catch (msgError) {
             console.error('Welcome message error:', msgError); // Non-blocking
         }
@@ -621,45 +649,74 @@ router.post('/guest', async (req, res) => {
 
 /**
  * POST /api/auth/guest-message
- * Send a message from a shared guest account to Owner (no individual account creation)
+ * Create unique guest account (if new) and send message to all owners
+ * Each guest has their own conversation, visible to all owners
  */
 router.post('/guest-message', async (req, res) => {
     try {
-        const { name, message } = req.body;
+        const { name, message, guestToken } = req.body;
 
         if (!name || !message) {
             return res.status(400).json({ error: 'الاسم والرسالة مطلوبين' });
         }
 
-        const GUEST_EMAIL = 'guest@sakina.guest';
+        let guestUser = null;
+        let token = guestToken;
 
-        // 1. Find or Create shared Guest account
-        let { data: guestUser } = await supabase
-            .from('users')
-            .select('id')
-            .eq('email', GUEST_EMAIL)
-            .single();
+        // Check if guest already has a token (continuing session)
+        if (guestToken) {
+            try {
+                const decoded = jwt.verify(guestToken, process.env.JWT_SECRET);
+                const { data: existing } = await supabase
+                    .from('users')
+                    .select('id, nickname')
+                    .eq('id', decoded.userId)
+                    .single();
+                if (existing) {
+                    guestUser = existing;
+                }
+            } catch (e) {
+                // Token invalid, will create new guest
+            }
+        }
 
+        // Create new guest account if none exists
         if (!guestUser) {
+            const uniqueId = crypto.randomBytes(4).toString('hex');
+            const guestEmail = `guest_${uniqueId}@sakina.guest`;
             const guestHash = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
-            const { data: newGuest } = await supabase
+
+            const { data: newGuest, error: createError } = await supabase
                 .from('users')
                 .insert({
                     id: uuidv4(),
-                    nickname: 'صندوق الزوار',
-                    email: GUEST_EMAIL,
+                    nickname: `زائر: ${name}`,
+                    email: guestEmail,
                     password: guestHash,
-                    avatar: '/logo.png',
+                    avatar: null,
                     role: 'user',
                     is_verified: true,
                     created_at: new Date().toISOString()
                 })
-                .select('id')
+                .select('id, nickname')
                 .single();
+
+            if (createError) {
+                console.error('Guest creation error:', createError);
+                return res.status(500).json({ error: 'فشل إنشاء حساب الزائر' });
+            }
+
             guestUser = newGuest;
+
+            // Generate token for this guest
+            token = jwt.sign(
+                { userId: guestUser.id, role: 'user' },
+                process.env.JWT_SECRET,
+                { expiresIn: '30d' }
+            );
         }
 
-        // 2. Find ALL Owners
+        // Find ALL Owners
         const { data: owners } = await supabase
             .from('users')
             .select('id')
@@ -669,14 +726,12 @@ router.post('/guest-message', async (req, res) => {
             return res.status(500).json({ error: 'لا يوجد مالك للنظام' });
         }
 
-        // 3. Send message to ALL owners
-        const fullMessage = `[${name}]: ${message}`;
-
+        // Send message to ALL owners (one message per owner)
         const messagesToInsert = owners.map(owner => ({
             id: uuidv4(),
             sender_id: guestUser.id,
             receiver_id: owner.id,
-            content: fullMessage,
+            content: message,
             type: 'text',
             created_at: new Date().toISOString(),
             read: false
@@ -691,17 +746,22 @@ router.post('/guest-message', async (req, res) => {
             return res.status(500).json({ error: 'فشل إرسال الرسالة' });
         }
 
-        // 4. Emit socket notification to owner
+        // Emit socket notification to owners
         const io = req.app.get('io');
         if (io) {
             io.emit('new-guest-message', {
-                from: name,
+                from: guestUser.nickname,
                 preview: message.substring(0, 50),
+                guestId: guestUser.id,
                 timestamp: new Date().toISOString()
             });
         }
 
-        res.json({ message: 'تم إرسال رسالتك بنجاح! سنرد عليك قريباً.' });
+        res.json({
+            message: 'تم إرسال رسالتك بنجاح!',
+            token,
+            guest: { id: guestUser.id, nickname: guestUser.nickname }
+        });
 
     } catch (error) {
         console.error('Guest message error:', error);
@@ -711,45 +771,51 @@ router.post('/guest-message', async (req, res) => {
 
 /**
  * GET /api/auth/guest-messages
- * Fetch ALL messages to/from guest account (shared inbox - visible to all owners)
+ * Fetch messages for a specific guest using their token
  */
 router.get('/guest-messages', async (req, res) => {
     try {
-        const GUEST_EMAIL = 'guest@sakina.guest';
-
-        // 1. Find Guest account
-        const { data: guestUser } = await supabase
-            .from('users')
-            .select('id')
-            .eq('email', GUEST_EMAIL)
-            .single();
-
-        if (!guestUser) {
+        const authHeader = req.headers.authorization;
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
             return res.json({ messages: [] });
         }
 
-        // 2. Fetch ALL messages where guest is sender or receiver (shared inbox)
+        const token = authHeader.split(' ')[1];
+        let guestId;
+
+        try {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            guestId = decoded.userId;
+        } catch (e) {
+            return res.json({ messages: [] });
+        }
+
+        // Fetch messages where guest is sender or receiver
+        console.log(`Fetching messages for guest: ${guestId}`);
         const { data: messages, error } = await supabase
             .from('messages')
             .select('id, content, sender_id, receiver_id, created_at')
-            .or(`sender_id.eq.${guestUser.id},receiver_id.eq.${guestUser.id}`)
+            .or(`sender_id.eq.${guestId},receiver_id.eq.${guestId}`)
             .order('created_at', { ascending: true })
             .limit(100);
+
+        if (error) console.error('Supabase fetch error:', error);
+        console.log(`Found ${messages?.length || 0} messages for guest ${guestId}`);
 
         if (error) {
             console.error('Fetch guest messages error:', error);
             return res.json({ messages: [] });
         }
 
-        // 3. Map to isMe format (guest perspective)
+        // Map to isMe format (guest perspective)
         const formatted = messages.map(m => ({
             id: m.id,
             content: m.content,
-            isMe: m.sender_id === guestUser.id,
+            isMe: m.sender_id === guestId,
             createdAt: m.created_at
         }));
 
-        res.json({ messages: formatted, guestId: guestUser.id });
+        res.json({ messages: formatted });
 
     } catch (error) {
         console.error('Guest messages error:', error);

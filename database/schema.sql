@@ -92,6 +92,7 @@ ALTER TABLE messages ADD COLUMN IF NOT EXISTS is_system BOOLEAN DEFAULT FALSE;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS type TEXT DEFAULT 'text' CHECK (type IN ('text', 'schedule', 'alert'));
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS metadata JSONB;
 ALTER TABLE messages ALTER COLUMN receiver_id DROP NOT NULL; -- Make receiver nullable for group chats
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS hidden BOOLEAN DEFAULT FALSE; -- Soft delete for owners/specialists
 
 -- ============================================
 -- INDEXES for Performance

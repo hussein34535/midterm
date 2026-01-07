@@ -39,6 +39,7 @@ interface Message {
     metadata?: any;
     createdAt: string;
     read: boolean;
+    hidden?: boolean;
     replyTo?: {
         id: string;
         content: string;
@@ -472,6 +473,33 @@ export default function MessagesPage() {
         }
     };
 
+    const handleHideMessage = async (messageId: string) => {
+        if (!confirm('هل أنت متأكد من إخفاء هذه الرسالة؟ لن تظهر للمستخدمين الآخرين.')) return;
+
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/api/messages/${messageId}/hide`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ hidden: true })
+            });
+
+            if (res.ok) {
+                toast.success('تم إخفاء الرسالة');
+                // Update local state to show hidden indicator
+                setMessages(messages.map(m =>
+                    m.id === messageId ? { ...m, hidden: true } : m
+                ));
+            } else {
+                toast.error('فشل إخفاء الرسالة');
+            }
+        } catch (err) {
+            toast.error('حدث خطأ');
+        }
+    };
 
 
     const handleSearchUsers = async (query: string, pageNum: number = 1) => {
@@ -789,6 +817,8 @@ export default function MessagesPage() {
                                                     isMe={msg.senderId === currentUser.id}
                                                     isGroup={selectedConversation.type === 'group'}
                                                     onReply={() => setReplyingTo(msg)}
+                                                    onHide={() => handleHideMessage(msg.id)}
+                                                    canHide={['owner', 'specialist'].includes(currentUser?.role)}
                                                 />
                                             ))
                                         )}
@@ -1080,7 +1110,7 @@ function ChatItem({ conv, selected, onSelect }: { conv: Conversation, selected: 
     );
 }
 
-function ChatBubble({ msg, isMe, isGroup, onReply }: { msg: Message, isMe: boolean, isGroup: boolean, onReply?: () => void }) {
+function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Message, isMe: boolean, isGroup: boolean, onReply?: () => void, onHide?: () => void, canHide?: boolean }) {
     // Swipe state for mobile
     const [swipeX, setSwipeX] = useState(0);
     const [isSwiping, setIsSwiping] = useState(false);
@@ -1276,6 +1306,17 @@ function ChatBubble({ msg, isMe, isGroup, onReply }: { msg: Message, isMe: boole
                             className="opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-full hover:bg-gray-200 flex items-center justify-center hidden md:flex"
                         >
                             <Reply className="w-4 h-4 text-gray-500" />
+                        </button>
+                    )}
+
+                    {/* Delete button for owners/specialists */}
+                    {canHide && onHide && (
+                        <button
+                            onClick={onHide}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-full hover:bg-red-100 flex items-center justify-center hidden md:flex"
+                            title="إخفاء الرسالة"
+                        >
+                            <Trash2 className="w-4 h-4 text-red-500" />
                         </button>
                     )}
                 </div>

@@ -6,12 +6,14 @@ import { toast } from "sonner";
 
 const GUEST_SESSION_KEY = 'iwaa_guest_chat';
 const GUEST_LAST_SEEN_KEY = 'iwaa_guest_last_seen';
+const GUEST_TOKEN_KEY = 'iwaa_guest_token';
 
 export default function SupportWidget() {
     const [isOpen, setIsOpen] = useState(false);
     const [step, setStep] = useState<'chat' | 'name-input' | 'live-chat'>('chat');
     const [messageInput, setMessageInput] = useState("");
     const [guestName, setGuestName] = useState("");
+    const [guestToken, setGuestToken] = useState("");
     const [messages, setMessages] = useState<{ id: string, content: string, isMe: boolean, createdAt: string }[]>([]);
     const [loading, setLoading] = useState(false);
     const [pendingMessage, setPendingMessage] = useState("");
@@ -21,23 +23,47 @@ export default function SupportWidget() {
 
     // Check for existing user or guest session on mount
     useEffect(() => {
-        const user = localStorage.getItem('user');
-        if (user) {
-            setIsLoggedIn(true);
-            return;
-        }
+        const checkUser = () => {
+            const user = localStorage.getItem('user');
+            if (user) {
+                setIsLoggedIn(true);
+                // Clear guest session when user logs in
+                localStorage.removeItem(GUEST_SESSION_KEY);
+                localStorage.removeItem(GUEST_LAST_SEEN_KEY);
+                localStorage.removeItem(GUEST_TOKEN_KEY);
+
+                // Clear state
+                setGuestToken("");
+                setGuestName("");
+                setMessages([]);
+                setStep('chat');
+            }
+        };
+
+        checkUser();
+
+        // Listen for login events
+        window.addEventListener('user-login', checkUser);
+        window.addEventListener('storage', checkUser);
 
         // Check for existing guest session
         const savedSession = localStorage.getItem(GUEST_SESSION_KEY);
-        if (savedSession) {
+        const savedToken = localStorage.getItem(GUEST_TOKEN_KEY);
+        if (savedSession && savedToken) {
             try {
                 const session = JSON.parse(savedSession);
                 if (session.name) {
                     setGuestName(session.name);
+                    setGuestToken(savedToken);
                     setStep('live-chat');
                 }
             } catch { }
         }
+
+        return () => {
+            window.removeEventListener('user-login', checkUser);
+            window.removeEventListener('storage', checkUser);
+        };
     }, []);
 
     // Polling for messages when in live-chat OR when widget is closed (to check for new messages)
@@ -45,9 +71,14 @@ export default function SupportWidget() {
         let interval: NodeJS.Timeout;
 
         const fetchMessages = async () => {
+            const token = guestToken || localStorage.getItem(GUEST_TOKEN_KEY);
+            if (!token) return;
+
             try {
                 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-                const res = await fetch(`${API_URL}/api/auth/guest-messages`);
+                const res = await fetch(`${API_URL}/api/auth/guest-messages`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 if (res.ok) {
                     const data = await res.json();
                     setMessages(data.messages);
@@ -65,15 +96,15 @@ export default function SupportWidget() {
             }
         };
 
-        // Only poll if guest session exists
-        const savedSession = localStorage.getItem(GUEST_SESSION_KEY);
-        if (savedSession || step === 'live-chat') {
+        // Only poll if guest has token
+        const savedToken = guestToken || localStorage.getItem(GUEST_TOKEN_KEY);
+        if (savedToken || step === 'live-chat') {
             fetchMessages();
             interval = setInterval(fetchMessages, 3000);
         }
 
         return () => clearInterval(interval);
-    }, [step, isOpen]);
+    }, [step, isOpen, guestToken]);
 
     // When widget opens, mark messages as seen
     useEffect(() => {
@@ -109,13 +140,24 @@ export default function SupportWidget() {
         setLoading(true);
         try {
             const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+            const existingToken = guestToken || localStorage.getItem(GUEST_TOKEN_KEY);
             const res = await fetch(`${API_URL}/api/auth/guest-message`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: guestName, message: pendingMessage })
+                body: JSON.stringify({
+                    name: guestName,
+                    message: pendingMessage,
+                    guestToken: existingToken || undefined
+                })
             });
 
             if (res.ok) {
+                const data = await res.json();
+                // Save token for future messages
+                if (data.token) {
+                    localStorage.setItem(GUEST_TOKEN_KEY, data.token);
+                    setGuestToken(data.token);
+                }
                 localStorage.setItem(GUEST_SESSION_KEY, JSON.stringify({ name: guestName }));
                 setPendingMessage("");
                 setStep('live-chat');
@@ -133,17 +175,22 @@ export default function SupportWidget() {
 
     const handleLiveSend = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!messageInput.trim() || !guestName) return;
+        if (!messageInput.trim()) return;
 
         const content = messageInput;
         setMessageInput("");
 
         try {
             const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+            const token = guestToken || localStorage.getItem(GUEST_TOKEN_KEY);
             await fetch(`${API_URL}/api/auth/guest-message`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: guestName, message: content })
+                body: JSON.stringify({
+                    name: guestName,
+                    message: content,
+                    guestToken: token
+                })
             });
         } catch (error) {
             console.error('Send error', error);
