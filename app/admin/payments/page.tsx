@@ -25,6 +25,7 @@ interface Payment {
     status: 'pending' | 'confirmed' | 'rejected' | 'completed';
     payment_method: string;
     screenshot?: string;
+    sender_number?: string;
     created_at: string;
     user: {
         id: string;
@@ -258,6 +259,12 @@ export default function PaymentsManagement() {
                                             })}
                                         </span>
                                     </div>
+                                    {payment.sender_number && (
+                                        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-200">
+                                            <span className="text-xs text-gray-500">رقم المحفظة:</span>
+                                            <span className="text-sm font-mono font-bold text-gray-800">{payment.sender_number}</span>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Screenshot */}

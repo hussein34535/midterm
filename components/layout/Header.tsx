@@ -58,13 +58,21 @@ export default function Header() {
                 setIsUserMenuOpen(false);
             }
         };
+
+        const handleUnreadUpdate = (event: Event) => {
+            const customEvent = event as CustomEvent;
+            setUnreadCount(customEvent.detail.count);
+        };
+
         document.addEventListener('mousedown', handleClickOutside);
+        window.addEventListener('unreadCountUpdated', handleUnreadUpdate);
 
         return () => {
             window.removeEventListener("scroll", handleScroll);
             window.removeEventListener('storage', checkUser);
             window.removeEventListener('user-login', checkUser);
             document.removeEventListener('mousedown', handleClickOutside);
+            window.removeEventListener('unreadCountUpdated', handleUnreadUpdate);
             clearInterval(unreadInterval);
         }
     }, [])
