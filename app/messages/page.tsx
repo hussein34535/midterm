@@ -6,6 +6,7 @@ import { MessageCircle, Send, Loader2, User, Users, Calendar, Clock, ArrowRight,
 import Header from "@/components/layout/Header";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
+import { useNSFW } from "@/hooks/useNSFW";
 
 const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
 
@@ -71,6 +72,7 @@ export default function MessagesPage() {
     const [selectedImage, setSelectedImage] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [uploadingImage, setUploadingImage] = useState(false);
+    const { checkImage, loading: nsfwLoading } = useNSFW();
     const [showChatOptions, setShowChatOptions] = useState(false); // For Delete Menu
 
     // User Search (Owner/Specialist)
@@ -288,13 +290,25 @@ export default function MessagesPage() {
     };
 
     // Handle image selection
-    const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             if (file.size > 5 * 1024 * 1024) { // 5MB limit
                 toast.error('حجم الصورة كبير جداً (الحد الأقصى 5MB)');
                 return;
             }
+
+            // NSFW Check
+            const toastId = toast.loading('جاري فحص الصورة...');
+            const { isSafe, reason } = await checkImage(file);
+            toast.dismiss(toastId);
+
+            if (!isSafe) {
+                toast.error(reason || 'عذراً، هذه الصورة تحتوي على محتوى غير لائق وتم حظرها.');
+                e.target.value = ''; // Clear input
+                return;
+            }
+
             setSelectedImage(file);
             const reader = new FileReader();
             reader.onloadend = () => {

@@ -116,7 +116,7 @@ export default function AdminDashboard() {
                                     <stat.icon className="w-5 h-5 md:w-6 md:h-6 stroke-[2]" />
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-[8px] md:text-[10px] font-black text-muted-foreground/60 uppercase tracking-widest leading-none mb-1 md:mb-1.5">{stat.label}</p>
+                                    <p className="text-xs font-bold text-muted-foreground/70 mb-1">{stat.label}</p>
                                     <h3 className="text-xl md:text-2xl font-black text-foreground leading-none tabular-nums tracking-tighter">{stat.value}</h3>
                                 </div>
                             </div>
@@ -126,20 +126,20 @@ export default function AdminDashboard() {
                     <div className="mb-14">
                         <div className="flex items-center gap-2 mb-6 px-4">
                             <TrendingUp className="w-4 h-4 text-primary" />
-                            <h2 className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-[0.3em]">التقرير المالي الموحد</h2>
+                            <h2 className="text-xs font-bold text-muted-foreground/60">التقرير المالي الموحد</h2>
                         </div>
-                        <div className="card-love p-1 flex flex-row items-center divide-x divide-x-reverse divide-primary/5 overflow-hidden">
-                            <div className="flex-1 p-4 md:p-8 text-center group">
-                                <span className="block text-[8px] md:text-[10px] font-black text-muted-foreground/40 mb-2 md:mb-3 uppercase tracking-widest leading-none">الإجمالي</span>
-                                <span className="text-lg md:text-4xl font-black text-foreground tabular-nums tracking-tighter">{stats.totalRevenue?.toLocaleString()} <small className="text-[8px] md:text-xs font-bold opacity-30">ج.م</small></span>
+                        <div className="card-love p-2 flex flex-row items-center divide-x divide-x-reverse divide-primary/10 overflow-hidden bg-white/50 backdrop-blur-sm">
+                            <div className="flex-1 p-6 text-center group hover:bg-white/40 transition-colors rounded-r-2xl">
+                                <span className="block text-xs md:text-sm font-bold text-muted-foreground/70 mb-2">الإجمالي</span>
+                                <span className="text-2xl md:text-4xl font-black text-foreground tabular-nums tracking-tight">{stats.totalRevenue?.toLocaleString()} <small className="text-xs font-bold opacity-40">ج.م</small></span>
                             </div>
-                            <div className="flex-1 p-4 md:p-8 text-center bg-primary/[0.02] relative overflow-hidden">
-                                <span className="block text-[8px] md:text-[10px] font-black text-primary/60 mb-2 md:mb-3 uppercase tracking-widest leading-none">الشهر</span>
-                                <span className="text-xl md:text-4xl font-black text-primary tabular-nums tracking-tighter">{stats.monthlyRevenue?.toLocaleString()} <small className="text-[8px] md:text-xs font-bold opacity-30">ج.م</small></span>
+                            <div className="flex-1 p-6 text-center bg-primary/[0.03] relative overflow-hidden group hover:bg-primary/[0.06] transition-colors">
+                                <span className="block text-xs md:text-sm font-bold text-primary/80 mb-2">هذا الشهر</span>
+                                <span className="text-3xl md:text-5xl font-black text-primary tabular-nums tracking-tight">{stats.monthlyRevenue?.toLocaleString()} <small className="text-xs font-bold opacity-40">ج.م</small></span>
                             </div>
-                            <div className="flex-1 p-4 md:p-8 text-center group">
-                                <span className="block text-[8px] md:text-[10px] font-black text-muted-foreground/40 mb-2 md:mb-3 uppercase tracking-widest leading-none">معلق</span>
-                                <span className="text-lg md:text-4xl font-black text-foreground tabular-nums tracking-tighter opacity-80">{stats.pendingRevenue?.toLocaleString()} <small className="text-[8px] md:text-xs font-bold opacity-30">ج.م</small></span>
+                            <div className="flex-1 p-6 text-center group hover:bg-white/40 transition-colors rounded-l-2xl">
+                                <span className="block text-xs md:text-sm font-bold text-muted-foreground/70 mb-2">معلق</span>
+                                <span className="text-2xl md:text-4xl font-black text-foreground/80 tabular-nums tracking-tight">{stats.pendingRevenue?.toLocaleString()} <small className="text-xs font-bold opacity-40">ج.م</small></span>
                             </div>
                         </div>
                     </div>
