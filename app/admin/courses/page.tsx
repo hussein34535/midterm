@@ -14,6 +14,7 @@ interface Course {
     description: string;
     price: number;
     total_sessions: number;
+    group_capacity?: number;
     specialist?: { id: string; nickname: string };
     specialist_id?: string;
     created_at: string;
@@ -34,11 +35,13 @@ export default function AdminCoursesPage() {
         description: string;
         price: number | string;
         total_sessions: number | string;
+        group_capacity: number | string;
     }>({
         title: '',
         description: '',
         price: 0,
-        total_sessions: 4
+        total_sessions: 4,
+        group_capacity: 4
     });
     const [saving, setSaving] = useState(false);
 
@@ -93,7 +96,8 @@ export default function AdminCoursesPage() {
             title: course.title,
             description: course.description || '',
             price: course.price,
-            total_sessions: course.total_sessions
+            total_sessions: course.total_sessions,
+            group_capacity: course.group_capacity || 4
         });
         setShowForm(true);
     };
@@ -104,7 +108,8 @@ export default function AdminCoursesPage() {
             title: '',
             description: '',
             price: 0,
-            total_sessions: 4
+            total_sessions: 4,
+            group_capacity: 4
         });
         setShowForm(true);
     };
@@ -126,7 +131,8 @@ export default function AdminCoursesPage() {
             const payload = {
                 ...formData,
                 price: Number(formData.price),
-                total_sessions: Number(formData.total_sessions)
+                total_sessions: Number(formData.total_sessions),
+                group_capacity: Number(formData.group_capacity)
             };
 
             const res = await fetch(url, {
@@ -218,7 +224,7 @@ export default function AdminCoursesPage() {
                                         />
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-3 gap-4">
                                         <div>
                                             <label className="block text-sm font-bold text-foreground mb-2">السعر (ج.م)</label>
                                             <input
@@ -237,6 +243,17 @@ export default function AdminCoursesPage() {
                                                 onChange={(e) => setFormData({ ...formData, total_sessions: e.target.value === '' ? '' : Number(e.target.value) })}
                                                 className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:border-primary outline-none"
                                                 min="1"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold text-foreground mb-2">سعة المجموعة</label>
+                                            <input
+                                                type="number"
+                                                value={formData.group_capacity}
+                                                onChange={(e) => setFormData({ ...formData, group_capacity: e.target.value === '' ? '' : Number(e.target.value) })}
+                                                className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:border-primary outline-none"
+                                                min="1"
+                                                placeholder="الافتراضي 4"
                                             />
                                         </div>
                                     </div>
@@ -294,8 +311,13 @@ export default function AdminCoursesPage() {
                                         </h3>
                                         <p className="text-sm text-muted-foreground line-clamp-1">{course.description}</p>
                                         <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                                            <span className="flex items-center gap-1">
+                                                <Users className="w-3 h-3" />
+                                                {course.group_capacity || 4} طلاب/مجموعة
+                                            </span>
+                                            <span>•</span>
                                             <span>{course.total_sessions} جلسات</span>
-                                            <span className="font-bold text-primary">
+                                            <span className="font-bold text-primary mr-auto">
                                                 {course.price === 0 ? 'مجاني' : `${course.price} ج.م`}
                                             </span>
                                         </div>

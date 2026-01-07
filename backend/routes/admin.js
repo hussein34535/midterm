@@ -142,8 +142,9 @@ router.patch('/users/:id/role', requireAdmin, async (req, res) => {
         }
 
         // Special Logic: Transfer Ownership
+        // Special Logic: Add Co-Owner (Multiple Owners Supported)
         if (role === 'owner') {
-            // 1. Promote new user to Owner
+            // Promote new user to Owner
             const { error: promoteError } = await supabase
                 .from('users')
                 .update({ role: 'owner', updated_at: new Date().toISOString() })
@@ -151,17 +152,9 @@ router.patch('/users/:id/role', requireAdmin, async (req, res) => {
 
             if (promoteError) throw promoteError;
 
-            // 2. Demote current owner (Self) to Admin
-            const { error: demoteError } = await supabase
-                .from('users')
-                .update({ role: 'admin', updated_at: new Date().toISOString() })
-                .eq('id', req.userId);
-
-            if (demoteError) throw demoteError;
-
             return res.json({
-                message: 'تم نقل الملكية بنجاح! أنت الآن "مدير".',
-                needRelogin: true
+                message: 'تم إضافة مالك جديد بنجاح! كلاهما يملك صلاحيات كاملة.',
+                needRelogin: false
             });
         }
 
@@ -602,11 +595,11 @@ router.patch('/payments/:id', requireOwner, async (req, res) => {
                 // Get course info for group assignment
                 const { data: course } = await supabase
                     .from('courses')
-                    .select('title, specialist_id')
+                    .select('title, specialist_id, group_capacity')
                     .eq('id', payment.course_id)
                     .single();
 
-                // 🎯 AUTO-ASSIGN TO GROUP (max 4 per group)
+                // 🎯 AUTO-ASSIGN TO GROUP
                 // Get all groups for this course with their actual member counts
                 const { data: allGroups } = await supabase
                     .from('course_groups')
@@ -616,6 +609,9 @@ router.patch('/payments/:id', requireOwner, async (req, res) => {
 
                 let targetGroupId = null;
                 let groupName = '';
+
+                // Determine capacity
+                const COURSE_CAPACITY = course.group_capacity || 4;
 
                 // Check each group for available capacity
                 if (allGroups && allGroups.length > 0) {
@@ -628,7 +624,7 @@ router.patch('/payments/:id', requireOwner, async (req, res) => {
                             .neq('user.role', 'owner');
 
                         const memberCount = count || 0;
-                        const capacity = group.capacity || 4;
+                        const capacity = group.capacity || COURSE_CAPACITY;
 
                         if (memberCount < capacity) {
                             targetGroupId = group.id;
@@ -655,7 +651,7 @@ router.patch('/payments/:id', requireOwner, async (req, res) => {
                                 name: groupName,
                                 course_id: payment.course_id,
                                 specialist_id: course?.specialist_id,
-                                capacity: 4
+                                capacity: COURSE_CAPACITY
                             })
                             .select()
                             .single();

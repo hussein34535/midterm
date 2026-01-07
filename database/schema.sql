@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS courses (
     description TEXT,
     price DECIMAL DEFAULT 0,
     total_sessions INTEGER DEFAULT 1,
+    group_capacity INTEGER DEFAULT 4,
     specialist_id UUID REFERENCES users(id),
     created_at TIMESTAMP DEFAULT NOW()
 );

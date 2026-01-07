@@ -140,7 +140,7 @@ router.get('/:id/my-sessions', authMiddleware, async (req, res) => {
  */
 router.post('/', authMiddleware, requireOwner, async (req, res) => {
     try {
-        const { title, description, specialist_id, total_sessions, price, image_url } = req.body;
+        const { title, description, specialist_id, total_sessions, group_capacity, price, image_url } = req.body;
 
         const courseData = {
             id: uuidv4(),
@@ -148,6 +148,7 @@ router.post('/', authMiddleware, requireOwner, async (req, res) => {
             description,
             specialist_id,
             total_sessions: total_sessions || 4,
+            group_capacity: group_capacity || 4,
             price: price || 0,
             image_url,
             is_active: true,
@@ -218,7 +219,7 @@ router.post('/:id/enroll', authMiddleware, async (req, res) => {
         // Get course info
         const { data: course } = await supabase
             .from('courses')
-            .select('title, specialist_id')
+            .select('title, specialist_id, group_capacity')
             .eq('id', courseId)
             .single();
 
@@ -242,7 +243,7 @@ router.post('/:id/enroll', authMiddleware, async (req, res) => {
             return res.status(500).json({ error: 'حدث خطأ' });
         }
 
-        // 🎯 AUTO-ASSIGN TO GROUP (max 4 per group)
+        // 🎯 AUTO-ASSIGN TO GROUP
         // Get all groups for this course with their actual member counts
         const { data: allGroups } = await supabase
             .from('course_groups')
@@ -256,6 +257,9 @@ router.post('/:id/enroll', authMiddleware, async (req, res) => {
         console.log(`Auto-assigning user ${userId} to course ${courseId}`);
         console.log(`Found ${allGroups?.length || 0} existing groups.`);
 
+        // Determine capacity (Group Override > Course Default > Hardcoded 4)
+        const COURSE_CAPACITY = course.group_capacity || 4;
+
         // Check each group for available capacity
         if (allGroups && allGroups.length > 0) {
             for (const group of allGroups) {
@@ -267,7 +271,7 @@ router.post('/:id/enroll', authMiddleware, async (req, res) => {
                     .neq('user.role', 'owner');
 
                 const memberCount = count || 0;
-                const capacity = group.capacity || 4;
+                const capacity = group.capacity || COURSE_CAPACITY;
 
                 console.log(`Group ${group.name} (${group.id}): ${memberCount}/${capacity}`);
 
@@ -300,7 +304,7 @@ router.post('/:id/enroll', authMiddleware, async (req, res) => {
                         name: groupName,
                         course_id: courseId,
                         specialist_id: course.specialist_id,
-                        capacity: 4
+                        capacity: COURSE_CAPACITY
                     })
                     .select()
                     .single();
@@ -420,13 +424,14 @@ router.patch('/:id/assign', authMiddleware, requireOwner, async (req, res) => {
  */
 router.put('/:id', authMiddleware, requireOwner, async (req, res) => {
     try {
-        const { title, description, price, total_sessions, specialist_id, is_active } = req.body;
+        const { title, description, price, total_sessions, group_capacity, specialist_id, is_active } = req.body;
 
         const updateData = {};
         if (title !== undefined) updateData.title = title;
         if (description !== undefined) updateData.description = description;
         if (price !== undefined) updateData.price = Number(price);
         if (total_sessions !== undefined) updateData.total_sessions = Number(total_sessions);
+        if (group_capacity !== undefined) updateData.group_capacity = Number(group_capacity);
         // Handle empty string as null for specialist_id
         if (specialist_id !== undefined) {
             updateData.specialist_id = specialist_id === '' ? null : specialist_id;
