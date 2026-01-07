@@ -54,18 +54,25 @@ export default function Header() {
         fetchUnread();
         const unreadInterval = setInterval(fetchUnread, 30000);
 
-        // Socket.io for real-time guest message notifications
+        // Socket.io for real-time guest message notifications (owners only)
         const socket = io(API_URL);
         socket.on('new-guest-message', (data: { from: string, preview: string }) => {
-            toast.info(`📩 رسالة جديدة من زائر: ${data.from}`, {
-                description: data.preview,
-                duration: 5000,
-                action: {
-                    label: 'عرض',
-                    onClick: () => window.location.href = '/messages'
+            // Only show notification for owners
+            const storedUser = localStorage.getItem('user');
+            if (storedUser) {
+                const parsedUser = JSON.parse(storedUser);
+                if (parsedUser.role === 'owner') {
+                    toast.info(`📩 رسالة جديدة من زائر: ${data.from}`, {
+                        description: data.preview,
+                        duration: 5000,
+                        action: {
+                            label: 'عرض',
+                            onClick: () => window.location.href = '/messages'
+                        }
+                    });
+                    fetchUnread(); // Refresh unread count
                 }
-            });
-            fetchUnread(); // Refresh unread count
+            }
         });
 
         const handleClickOutside = (event: MouseEvent) => {
