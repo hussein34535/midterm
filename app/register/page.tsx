@@ -91,10 +91,10 @@ export default function RegisterPage() {
     };
 
     return (
-        <div className="bg-warm-mesh min-h-screen px-4 md:px-6 py-6 md:py-12 safe-area-top safe-area-bottom" dir="rtl">
+        <div className="bg-warm-mesh min-h-screen px-4 md:px-6 pt-12 pb-8 md:py-16 safe-area-top safe-area-bottom" dir="rtl">
             <div className="w-full max-w-md mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
                 {/* Logo */}
-                <Link href="/" className="flex items-center justify-center mb-6 group">
+                <Link href="/" className="flex items-center justify-center mb-8 mt-4 group">
                     <img
                         src="/logo.png"
                         alt="إيواء"
@@ -130,7 +130,7 @@ export default function RegisterPage() {
                                 <input
                                     type="text"
                                     placeholder="مثال: نجمة الصباح"
-                                    className="input-mobile pr-12"
+                                    className="input-mobile pr-14"
                                     value={formData.nickname}
                                     onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
                                     required
@@ -151,7 +151,7 @@ export default function RegisterPage() {
                                 <input
                                     type="email"
                                     placeholder="example@email.com"
-                                    className="input-mobile pr-12 text-left"
+                                    className="input-mobile pr-14 text-left"
                                     dir="ltr"
                                     value={formData.email}
                                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}

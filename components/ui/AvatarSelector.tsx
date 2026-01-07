@@ -51,31 +51,31 @@ export default function AvatarSelector({ onSelect, selectedAvatar }: AvatarSelec
             </label>
 
             {/* Preview Section */}
-            <div className="flex items-center gap-6">
-                <div className="relative w-30 h-30 rounded-full border-2 border-primary/20 p-1 flex items-center justify-center bg-secondary/30 shrink-0">
+            <div className="flex items-center gap-4 md:gap-6">
+                <div className="relative w-24 h-24 md:w-32 md:h-32 rounded-full border-2 border-primary/20 p-1 flex items-center justify-center bg-secondary/30 shrink-0">
                     {preview ? (
                         <img src={preview} alt="Avatar Preview" className="w-full h-full rounded-full object-cover" />
                     ) : (
-                        <span className="text-muted-foreground text-xs text-center">لا توجد صورة</span>
+                        <span className="text-muted-foreground text-xs text-center px-1">لا توجد صورة</span>
                     )}
                     {preview && (
                         <button
                             type="button"
                             onClick={() => { setPreview(null); onSelect(""); }}
-                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 shadow-sm hover:bg-red-600 transition-colors"
+                            className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 shadow-sm hover:bg-red-600 transition-colors"
                         >
-                            <X className="w-3 h-3" />
+                            <X className="w-3 h-3 md:w-4 md:h-4" />
                         </button>
                     )}
                 </div>
 
-                <div className="flex-1">
-                    <p className="text-xs text-muted-foreground mb-3">
+                <div className="flex-1 min-w-0">
+                    <p className="text-xs text-muted-foreground mb-2 md:mb-3">
                         اختر من القائمة أو ارفع صورتك الخاصة
                     </p>
 
                     {/* Presets */}
-                    <div className="flex gap-4 overflow-x-auto pb-2 mb-3 scrollbar-hide px-1 py-2">
+                    <div className="flex gap-3 md:gap-4 overflow-x-auto pb-2 mb-2 md:mb-3 scrollbar-hide px-1 py-1 w-full max-w-full touch-pan-x">
                         {PRESET_AVATARS.map((avatar, idx) => (
                             <button
                                 key={idx}

@@ -12,7 +12,7 @@ export default function LandingPage() {
 
             <main>
                 {/* 🌿 Warm Hero Section - Premium Mobile */}
-                <section className="relative pt-24 md:pt-28 pb-12 md:pb-20 px-6 md:px-8">
+                <section className="relative pt-32 md:pt-28 pb-12 md:pb-20 px-6 md:px-8">
                     <div className="container mx-auto max-w-4xl">
                         <div className="grid md:grid-cols-2 gap-10 md:gap-12 items-center">
                             {/* Text Side */}
@@ -32,23 +32,23 @@ export default function LandingPage() {
                                     نحن هنا لنسمعك ونحتويك. تحدث بقلب مطمئن في جلسات دافئة مع أخصائيين يفهمونك.
                                 </p>
 
-                                <div className="pt-4 md:pt-6 animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300">
-                                    <Link href="/courses" className="inline-flex items-center justify-center gap-3 w-full md:w-auto px-8 py-4 md:py-5 bg-gradient-to-r from-primary to-primary/90 text-white font-bold text-lg rounded-2xl shadow-xl shadow-primary/30 hover:shadow-2xl hover:shadow-primary/40 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]">
-                                        <Heart className="w-5 h-5 fill-current" />
+                                <div className="pt-4 md:pt-6 animate-in fade-in slide-in-from-bottom-10 duration-1000 delay-300 flex justify-center md:justify-start">
+                                    <Link href="/courses" className="inline-flex items-center justify-center gap-2 px-5 py-2.5 md:px-8 md:py-5 bg-gradient-to-r from-primary to-primary/90 text-white font-bold text-sm md:text-lg rounded-2xl shadow-lg md:shadow-xl shadow-primary/20 md:shadow-primary/30 hover:shadow-2xl hover:shadow-primary/40 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]">
+                                        <Heart className="w-4 h-4 md:w-5 md:h-5 fill-current" />
                                         <span>ابدأ رحلتك الآن</span>
-                                        <ArrowRight className="w-5 h-5 rtl:rotate-180" />
+                                        <ArrowRight className="w-4 h-4 md:w-5 md:h-5 rtl:rotate-180" />
                                     </Link>
                                 </div>
 
-                                <div className="pt-4 animate-in fade-in duration-1000 delay-500">
+                                <div className="pt-8 animate-in fade-in duration-1000 delay-500">
                                     <p className="text-base text-foreground/60 font-medium">
                                         <span className="text-primary font-bold text-lg">+١٠,٠٠٠</span> قلب وجد إيواءه معنا
                                     </p>
                                 </div>
                             </div>
 
-                            {/* Image Side - Desktop Only */}
-                            <div className="hidden md:block animate-in fade-in slide-in-from-left-10 duration-1000 delay-300">
+                            {/* Image Side - Visible on Mobile now */}
+                            <div className="block animate-in fade-in slide-in-from-left-10 duration-1000 delay-300 mt-8 md:mt-0 w-[85%] mx-auto md:w-full">
                                 <img
                                     src="/hero.png"
                                     alt="إيواء - مجتمع دافئ"
