@@ -22,15 +22,56 @@ interface SessionListProps {
 
 export default function SessionList({ sessions, courseId, specialistId }: SessionListProps) {
     const router = useRouter();
+    const [mySessions, setMySessions] = useState<Session[]>([]);
     const [user, setUser] = useState<any>(null);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [isEnrolled, setIsEnrolled] = useState(false);
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
     useEffect(() => {
         const stored = localStorage.getItem('user');
-        if (stored) {
-            setUser(JSON.parse(stored));
+        const token = localStorage.getItem('token');
+
+        if (stored && token) {
+            const userData = JSON.parse(stored);
+            setUser(userData);
+
+            // Specialists/Owners always see syllabus
+            if (userData.role === 'specialist' || userData.role === 'owner') {
+                setIsEnrolled(true);
+                setMySessions(sessions);
+                setLoading(false);
+            } else {
+                // For students, fetch their group schedule
+                fetchMySessions(token);
+            }
+        } else {
+            // Not logged in
+            setLoading(false);
         }
-    }, []);
+    }, [sessions, courseId]);
+
+    const fetchMySessions = async (token: string) => {
+        try {
+            setLoading(true);
+            const res = await fetch(`${API_URL}/api/courses/${courseId}/my-sessions`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setMySessions(data.sessions);
+                setIsEnrolled(true);
+            } else {
+                // 403 = Not enrolled
+                setIsEnrolled(false);
+            }
+        } catch (err) {
+            console.error('Failed to fetch my sessions');
+            setIsEnrolled(false);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleSessionAction = async (session: Session) => {
         if (!user) {
@@ -38,48 +79,53 @@ export default function SessionList({ sessions, courseId, specialistId }: Sessio
             return;
         }
 
-        setLoading(true);
+        const isSpecialistOrOwner = user.role === 'specialist' || user.role === 'owner';
 
-        const isSpecialist = user.role === 'specialist' || user.role === 'owner';
-        const isHost = isSpecialist && user.id === specialistId;
-
-        // Implementation of join/start logic will go here
-        // For now, simple redirect
-        if (session.status === 'active' || isHost) {
-            // If active or user is host, go to session
-            // In real flow, we might need to hit /api/sessions/:id/join first 
-            // but VoiceCall component also handles joining. 
-            // Let's assume hitting the page is enough for now.
-            router.push(`/session/${session.id}`);
-        } else {
-            alert("الجلسة لم تبدأ بعد");
+        if (isSpecialistOrOwner) {
+            // Specialists manage sessions from dashboard
+            router.push('/specialist');
+            return;
         }
 
-        setLoading(false);
+        // For connected students
+        if (session.status === 'active') {
+            router.push(`/session/${session.id}`);
+        } else {
+            alert("الجلسة لم تبدأ بعد"); // Should be handled by UI state mostly
+        }
     };
 
     const isSpecialist = user?.role === 'specialist' || user?.role === 'owner';
-    const canControl = isSpecialist; // Simplified for now
 
     return (
         <div className="space-y-4">
-            {sessions.length === 0 ? (
+            {loading ? (
+                <div className="text-center p-8">
+                    <p className="text-muted-foreground">جاري التحميل...</p>
+                </div>
+            ) : !isEnrolled ? (
+                <div className="text-center p-8 border-2 border-dashed border-primary/30 rounded-xl bg-primary/5">
+                    <p className="text-foreground font-medium mb-2">🔒 جدول الجلسات</p>
+                    <p className="text-muted-foreground text-sm">اشترك في الكورس لمشاهدة جدول مجموعتك</p>
+                </div>
+            ) : mySessions.length === 0 ? (
                 <div className="text-center p-8 border-2 border-dashed border-gray-200 rounded-xl">
-                    <p className="text-muted-foreground">لا توجد جلسات مجدولة بعد لهذا الكورس.</p>
+                    <p className="text-muted-foreground">لا توجد جلسات مجدولة بعد لمجموعتك.</p>
                 </div>
             ) : (
-                sessions.map((session) => {
+                mySessions.map((session) => {
                     const isActive = session.status === 'active';
                     const isEnded = session.status === 'ended';
+                    const isGroupSession = (session as any).is_group_session;
 
                     return (
                         <div
                             key={session.id}
                             className={`group flex items-center gap-4 p-4 rounded-xl border transition-all ${isActive
-                                    ? 'bg-green-50/50 border-green-200 hover:shadow-md'
-                                    : isEnded
-                                        ? 'bg-gray-50 border-gray-100 opacity-75'
-                                        : 'bg-white border-transparent hover:border-primary/20 hover:bg-secondary/50'
+                                ? 'bg-green-50/50 border-green-200 hover:shadow-md'
+                                : isEnded
+                                    ? 'bg-gray-50 border-gray-100 opacity-75'
+                                    : 'bg-white border-transparent hover:border-primary/20 hover:bg-secondary/50'
                                 }`}
                         >
                             {/* Session Number / Status Icon */}
@@ -110,10 +156,13 @@ export default function SessionList({ sessions, courseId, specialistId }: Sessio
                                 <div className="flex items-center gap-3 text-sm text-muted-foreground">
                                     <span className="flex items-center gap-1">
                                         <Clock className="w-3.5 h-3.5" />
-                                        {new Date(session.created_at).toLocaleDateString('ar-EG')}
+                                        {(session as any).scheduled_at
+                                            ? new Date((session as any).scheduled_at).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                            : 'غير محدد'
+                                        }
                                     </span>
-                                    {session.status === 'waiting' && (
-                                        <span>• لم تبدأ بعد</span>
+                                    {!isGroupSession && !isSpecialist && (
+                                        <span className="text-amber-600 font-medium">• بانتظار الجدولة</span>
                                     )}
                                 </div>
                             </div>
@@ -132,13 +181,13 @@ export default function SessionList({ sessions, courseId, specialistId }: Sessio
                                     <Button variant="ghost" disabled className="text-muted-foreground">
                                         منتهية
                                     </Button>
-                                ) : canControl ? (
+                                ) : isSpecialist ? (
                                     <Button
-                                        onClick={() => handleSessionAction(session)}
-                                        className="bg-primary hover:bg-primary/90 text-white rounded-full px-6"
+                                        onClick={() => router.push('/specialist')}
+                                        variant="outline"
+                                        className="rounded-full px-4"
                                     >
-                                        ابدأ الجلسة
-                                        <Mic className="w-4 h-4 mr-2" />
+                                        إدارة
                                     </Button>
                                 ) : (
                                     <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-400" title="لم تبدأ بعد">

@@ -41,8 +41,8 @@ router.get('/conversations', authMiddleware, async (req, res) => {
                 created_at,
                 read,
                 type,
-                sender:users!messages_sender_id_fkey (id, nickname, avatar),
-                receiver:users!messages_receiver_id_fkey (id, nickname, avatar)
+                sender:users!messages_sender_id_fkey (id, nickname, avatar, role),
+                receiver:users!messages_receiver_id_fkey (id, nickname, avatar, role)
             `)
             .or(`sender_id.eq.${req.userId},receiver_id.eq.${req.userId}`)
             .is('course_id', null) // Only direct messages
@@ -57,7 +57,12 @@ router.get('/conversations', authMiddleware, async (req, res) => {
         // Process Direct Messages
         (messages || []).forEach(msg => {
             const partnerId = msg.sender_id === req.userId ? msg.receiver_id : msg.sender_id;
-            const partner = msg.sender_id === req.userId ? msg.receiver : msg.sender;
+            let partner = msg.sender_id === req.userId ? msg.receiver : msg.sender;
+
+            // BRANDING: If partner is Owner, mask as Support
+            if (partner && partner.role === 'owner') {
+                partner = { ...partner, nickname: 'دعم إيواء', avatar: '/logo.png' };
+            }
 
             if (!conversationsMap.has(partnerId)) {
                 conversationsMap.set(partnerId, {
@@ -80,7 +85,11 @@ router.get('/conversations', authMiddleware, async (req, res) => {
         // A. Enrolled Courses
         const { data: enrollments } = await supabase
             .from('enrollments')
-            .select('course:courses(id, title, specialist_id)')
+            .select(`
+                group_id,
+                course:courses(id, title, specialist_id),
+                group:course_groups(name)
+            `)
             .eq('user_id', req.userId);
 
         // B. Teaching Courses
@@ -89,10 +98,21 @@ router.get('/conversations', authMiddleware, async (req, res) => {
             .select('id, title, specialist_id')
             .eq('specialist_id', req.userId);
 
-        const myCourses = [
-            ...(enrollments || []).map(e => e.course),
-            ...(teaching || [])
-        ];
+        // Combine but preserve group info for students
+        const studentCourses = (enrollments || []).map(e => ({
+            ...e.course,
+            groupName: e.group?.name, // Use group name if assigned
+            groupId: e.group_id,      // Use group ID to ensure correct member fetching
+            isStudent: true
+        }));
+
+        const specialistCourses = (teaching || []).map(c => ({
+            ...c,
+            groupName: c.title, // Specialists see course title
+            isStudent: false
+        }));
+
+        const myCourses = [...studentCourses, ...specialistCourses];
 
         // Fetch last message for each course
         const groupConversations = await Promise.all(myCourses.map(async (course) => {
@@ -106,17 +126,16 @@ router.get('/conversations', authMiddleware, async (req, res) => {
                 .limit(1)
                 .single();
 
-            // Count unread (naive approach: count all unread since last read? 
-            // For now, handling unread in groups is complex without a read_receipts table.
-            // We'll skip unread count for groups for MVP or just show last message)
+            // Display Name: Group Name for students, Course Title for specialist
+            const displayName = course.groupName || course.title;
 
             return {
-                id: course.id,
+                id: course.groupId || course.id, // Use Group ID for students so they see their group members
                 type: 'group',
                 user: {
-                    id: course.id,
-                    nickname: course.title, // Use course title as name
-                    avatar: 'https://ui-avatars.com/api/?name=' + encodeURIComponent(course.title) + '&background=random',
+                    id: course.groupId || course.id, // Use Group ID for avatar link too
+                    nickname: displayName, // Use group name or course title
+                    avatar: 'https://ui-avatars.com/api/?name=' + encodeURIComponent(displayName) + '&background=random',
                     isCourse: true
                 },
                 lastMessage: lastMsg ? (lastMsg.type === 'schedule' ? '📅 موعد جديد' : lastMsg.content) : 'مرحبًا بك في شات الكورس',
@@ -204,13 +223,72 @@ router.get('/:id', authMiddleware, async (req, res) => {
             .from('messages')
             .select(`
                 id, content, sender_id, receiver_id, course_id, created_at, read, type, metadata, reply_to_id,
-                sender:users!messages_sender_id_fkey(id, nickname, avatar)
+                sender:users!messages_sender_id_fkey(id, nickname, avatar, role)
             `)
             .order('created_at', { ascending: true });
 
         if (type === 'group') {
+            // Check if ID is a Course ID or Group ID
+            // 1. Check if course exists with this ID
+            const { data: course } = await supabase
+                .from('courses')
+                .select('id')
+                .eq('id', id)
+                .single();
+
+            let targetCourseId = id;
+            let explicitGroupId = null;
+
+            if (!course) {
+                // Not a course ID, maybe a Group ID?
+                const { data: group } = await supabase
+                    .from('course_groups')
+                    .select('course_id, id')
+                    .eq('id', id)
+                    .single();
+
+                if (group) {
+                    targetCourseId = group.course_id;
+                    explicitGroupId = group.id;
+                }
+            }
+
             // Fetch course messages
-            query = query.eq('course_id', id);
+            // Check if user is enrolled to filter by group
+            const { data: enrollment } = await supabase
+                .from('enrollments')
+                .select('group_id')
+                .eq('course_id', targetCourseId)
+                .eq('user_id', req.userId)
+                .single();
+
+            if (enrollment) {
+                if (enrollment.group_id) {
+                    // If student in a group, show messages for that group OR global messages (null)
+                    // If explicitGroupId is provided (e.g. browsing a specific group), ensure it matches enrollment?
+                    // Ideally, user should only see THEIR group. 
+
+                    query = query
+                        .eq('course_id', targetCourseId)
+                        .or(`group_id.eq.${enrollment.group_id},group_id.is.null`);
+                } else {
+                    // Student enrolled but NO group (pending assignment)
+                    // Should see ONLY global messages (group_id is null)
+                    query = query
+                        .eq('course_id', targetCourseId)
+                        .is('group_id', null);
+                }
+            } else {
+                // Specialist or Owner (sees all) 
+                // If explicitGroupId provided, filter by it? 
+                // For now, show all for course (or we could implement specialist filtering later)
+                query = query.eq('course_id', targetCourseId);
+
+                if (explicitGroupId) {
+                    // Optionally filter if specialist specifically selected a group
+                    // But UI usually requests by Course ID for specialist
+                }
+            }
         } else {
             // Fetch direct messages
             query = query.or(`and(sender_id.eq.${req.userId},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${req.userId})`);
@@ -249,12 +327,21 @@ router.get('/:id', authMiddleware, async (req, res) => {
                 };
             }
 
+            let senderName = m.sender?.nickname;
+            let senderAvatar = m.sender?.avatar;
+
+            // BRANDING: If sender is Owner, mask as Support
+            if (m.sender?.role === 'owner') {
+                senderName = 'دعم إيواء';
+                senderAvatar = '/logo.png';
+            }
+
             return {
                 id: m.id,
                 content: m.content,
                 senderId: m.sender_id,
-                senderName: m.sender?.nickname,
-                senderAvatar: m.sender?.avatar,
+                senderName: senderName,
+                senderAvatar: senderAvatar,
                 createdAt: m.created_at,
                 read: m.read,
                 type: m.type,
@@ -295,6 +382,34 @@ router.post('/:id', authMiddleware, async (req, res) => {
         if (type === 'group') {
             messageData.course_id = id;
             messageData.receiver_id = null; // Group message
+
+            // Determine group_id
+            // 1. Check if user is student (enrolled)
+            const { data: enrollment } = await supabase
+                .from('enrollments')
+                .select('group_id')
+                .eq('course_id', id)
+                .eq('user_id', req.userId)
+                .single();
+
+            if (enrollment && enrollment.group_id) {
+                messageData.group_id = enrollment.group_id;
+            } else {
+                // User is Specialist/Owner (or not enrolled in group)
+                // If replying, try to inherit group_id from original message
+                if (replyToId) {
+                    const { data: originalMsg } = await supabase
+                        .from('messages')
+                        .select('group_id')
+                        .eq('id', replyToId)
+                        .single();
+
+                    if (originalMsg) {
+                        messageData.group_id = originalMsg.group_id;
+                    }
+                }
+                // If not replying, group_id remains null (Global/Broadcast)
+            }
         } else {
             messageData.receiver_id = id;
             messageData.course_id = null; // Direct message
@@ -534,6 +649,40 @@ router.post('/:id/schedule', authMiddleware, async (req, res) => {
 
     } catch (error) {
         console.error('Schedule error:', error);
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+/**
+ * DELETE /api/messages/conversations/:id
+ * Delete a conversation (Direct only for now)
+ */
+router.delete('/conversations/:id', authMiddleware, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { type } = req.query; // 'direct' or 'group'
+
+        if (type === 'group') {
+            // For groups, usually "Leave Group" or "Clear Chat"
+            // For now, let's just allow clearing if implemented, currently restricted
+            return res.status(400).json({ error: 'لا يمكن حذف مجموعات الكورس من هنا' });
+        }
+
+        // Delete all messages between these two users
+        // (sender is ME and receiver is THEM) OR (sender is THEM and receiver is ME)
+        const { error } = await supabase
+            .from('messages')
+            .delete()
+            .or(`and(sender_id.eq.${req.userId},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${req.userId})`);
+
+        if (error) {
+            console.error('Delete conversation error:', error);
+            return res.status(500).json({ error: 'فشل في حذف المحادثة' });
+        }
+
+        res.json({ message: 'تم حذف المحادثة بنجاح' });
+    } catch (error) {
+        console.error('Delete conversation error:', error);
         res.status(500).json({ error: 'حدث خطأ' });
     }
 });

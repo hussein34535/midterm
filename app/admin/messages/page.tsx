@@ -27,6 +27,8 @@ interface Conversation {
     type: 'group' | 'direct';
     created_at: string;
     member_count?: number;
+    isGroup?: boolean;
+    isCourse?: boolean;
 }
 
 interface Message {
@@ -102,7 +104,14 @@ export default function MessagesManagement() {
             const token = localStorage.getItem('token');
             let url = `${API_URL}/api/admin/messages?limit=100`;
 
-            if (chat.type === 'group') {
+            if (chat.isGroup) {
+                // Specific Group Chat
+                url += `&groupId=${chat.id}`;
+            } else if (chat.isCourse) {
+                // Global Course Chat
+                url += `&courseId=${chat.id}`;
+            } else if (chat.type === 'group') {
+                // Fallback for old/unknown group types (shouldn't happen with new backend)
                 url += `&courseId=${chat.id}`;
             } else {
                 url += `&userId=${chat.id}`;
@@ -185,10 +194,10 @@ export default function MessagesManagement() {
                     <h1 className="text-2xl font-bold text-foreground">إدارة المحادثات</h1>
                 </div>
 
-                <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/50 flex-grow flex overflow-hidden">
+                <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/50 flex-grow flex overflow-hidden relative">
 
                     {/* Sidebar */}
-                    <div className="w-full md:w-80 lg:w-96 border-l border-gray-100 flex flex-col bg-white/50">
+                    <div className={`border-l border-gray-100 flex flex-col bg-white/50 transition-all absolute inset-0 z-20 md:relative md:w-80 lg:w-96 ${selectedChat ? 'translate-x-full md:translate-x-0 cursor-default pointer-events-none md:pointer-events-auto opacity-0 md:opacity-100' : 'translate-x-0 opacity-100'} md:flex`}>
                         <div className="p-4 border-b border-gray-100">
                             <div className="relative">
                                 <input
@@ -233,18 +242,24 @@ export default function MessagesManagement() {
                     </div>
 
                     {/* Chat Area */}
-                    <div className="flex-grow flex flex-col bg-slate-50/50">
+                    <div className="flex-grow flex flex-col bg-slate-50/50 w-full">
                         {selectedChat ? (
                             <>
                                 {/* Chat Header */}
-                                <div className="p-4 bg-white border-b border-gray-100 flex items-center justify-between shadow-sm z-10">
+                                <div className="p-3 md:p-4 bg-white border-b border-gray-100 flex items-center justify-between shadow-sm z-10">
                                     <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={() => setSelectedChat(null)}
+                                            className="md:hidden p-2 -mr-2 text-gray-500 rounded-full hover:bg-gray-100"
+                                        >
+                                            <ArrowRight className="w-5 h-5" />
+                                        </button>
                                         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${selectedChat.type === 'group' ? 'bg-indigo-100 text-indigo-600' : 'bg-pink-100 text-pink-600'
                                             }`}>
                                             {selectedChat.type === 'group' ? <Users className="w-5 h-5" /> : <User className="w-5 h-5" />}
                                         </div>
                                         <div>
-                                            <h2 className="font-bold text-gray-900">{selectedChat.name}</h2>
+                                            <h2 className="font-bold text-gray-900 text-sm md:text-base">{selectedChat.name}</h2>
                                             <p className="text-xs text-gray-500">
                                                 {selectedChat.type === 'group' ? `${selectedChat.member_count} عضو` : 'محادثة خاصة'}
                                             </p>
@@ -274,18 +289,18 @@ export default function MessagesManagement() {
                                         </div>
                                     ) : (
                                         messages.map((msg) => (
-                                            <div key={msg.id} className={`flex gap-3 ${msg.sender.id === 'system' ? 'justify-center' : ''}`}>
-                                                {msg.sender.id !== 'system' && (
+                                            <div key={msg.id} className={`flex gap-3 ${msg.sender?.id === 'system' ? 'justify-center' : ''}`}>
+                                                {msg.sender?.id !== 'system' && (
                                                     <div className="w-8 h-8 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center font-bold text-xs text-gray-600 mt-1">
-                                                        {msg.sender.nickname[0]}
+                                                        {msg.sender?.nickname ? msg.sender.nickname[0] : '?'}
                                                     </div>
                                                 )}
-                                                <div className={`max-w-[70%] rounded-2xl p-3 text-sm ${msg.sender.id === 'system'
+                                                <div className={`max-w-[85%] md:max-w-[70%] rounded-2xl p-3 text-sm ${msg.sender?.id === 'system'
                                                     ? 'bg-gray-200 text-gray-600 text-center text-xs px-4 py-1'
                                                     : 'bg-white border border-gray-100 shadow-sm'
                                                     }`}>
-                                                    {msg.sender.id !== 'system' && (
-                                                        <p className="text-xs font-bold text-primary mb-1">{msg.sender.nickname}</p>
+                                                    {msg.sender?.id !== 'system' && (
+                                                        <p className="text-xs font-bold text-primary mb-1">{msg.sender?.nickname || 'مستخدم مجهول'}</p>
                                                     )}
                                                     <p className="text-gray-800 leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                                                     <p className="text-[10px] text-gray-400 mt-1 text-left">
@@ -299,7 +314,7 @@ export default function MessagesManagement() {
                                 </div>
                             </>
                         ) : (
-                            <div className="h-full flex flex-col items-center justify-center text-gray-400 opacity-60">
+                            <div className="h-full hidden md:flex flex-col items-center justify-center text-gray-400 opacity-60">
                                 <MessageCircle className="w-24 h-24 mb-4" />
                                 <h3 className="text-xl font-bold">اختر محادثة لعرضها</h3>
                                 <p>بإمكانك مراقبة جميع المحادثات من هنا</p>

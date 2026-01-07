@@ -1,29 +1,31 @@
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 
 const sendEmail = async (to, subject, html) => {
     try {
-        // Check if Resend API key exists
-        if (process.env.RESEND_API_KEY) {
-            const resend = new Resend(process.env.RESEND_API_KEY);
-
-            const { data, error } = await resend.emails.send({
-                from: 'إيواء <onboarding@resend.dev>', // Use your verified domain in production
-                to: [to],
-                subject,
-                html
+        // Check if Gmail credentials exist
+        if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+            const transporter = nodemailer.createTransport({
+                service: 'gmail',
+                auth: {
+                    user: process.env.EMAIL_USER,
+                    pass: process.env.EMAIL_PASS
+                }
             });
 
-            if (error) {
-                console.error('Resend error:', error);
-                return false;
-            }
+            const mailOptions = {
+                from: `"إيواء" <${process.env.EMAIL_USER}>`,
+                to,
+                subject,
+                html
+            };
 
-            console.log('Email sent via Resend:', data.id);
+            const info = await transporter.sendMail(mailOptions);
+            console.log('Email sent via Gmail:', info.messageId);
             return true;
         } else {
             // Mock Email (Console Log)
             console.log('==================================================');
-            console.log('📧 MOCK EMAIL SENT (No RESEND_API_KEY)');
+            console.log('📧 MOCK EMAIL SENT (No EMAIL_USER/EMAIL_PASS)');
             console.log(`TO: ${to}`);
             console.log(`SUBJECT: ${subject}`);
             console.log('--------------------------------------------------');

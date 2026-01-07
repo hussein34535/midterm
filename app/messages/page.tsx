@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { useRouter } from "next/navigation";
-import { MessageCircle, Send, Loader2, User, Users, Calendar, Clock, ArrowRight, Phone, Video, MoreVertical, Check, CheckCheck, Smile, X, Reply, Image as ImageIcon, Plus, Search } from "lucide-react";
+import { MessageCircle, Send, Loader2, User, Users, Calendar, Clock, ArrowRight, Phone, Video, MoreVertical, Check, CheckCheck, Smile, X, Reply, Image as ImageIcon, Plus, Search, Trash2 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
@@ -16,6 +16,8 @@ interface User {
     nickname: string;
     avatar?: string;
     isCourse?: boolean;
+    role?: string;
+    email?: string;
 }
 
 interface Conversation {
@@ -60,12 +62,15 @@ export default function MessagesPage() {
     const [selectedImage, setSelectedImage] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [uploadingImage, setUploadingImage] = useState(false);
+    const [showChatOptions, setShowChatOptions] = useState(false); // For Delete Menu
 
     // User Search (Owner/Specialist)
     const [showUserSearch, setShowUserSearch] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<User[]>([]);
     const [searching, setSearching] = useState(false);
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
 
     // Scheduling State
     const [showSchedule, setShowSchedule] = useState(false);
@@ -222,6 +227,11 @@ export default function MessagesPage() {
         hadUnreadOnOpen.current = conv.unreadCount > 0;
         previousMessagesCount.current = 0; // Reset for first load detection
         setMessagesReady(false); // Hide until scroll complete
+
+        // Calculate new total to update nav badge immediately (outside of state setter to avoid React error)
+        const currentTotalUnread = conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+        const newTotalUnread = Math.max(0, currentTotalUnread - (conv.unreadCount || 0));
+        window.dispatchEvent(new CustomEvent('unreadCountUpdated', { detail: { count: newTotalUnread } }));
 
         // Clear unread count for this conversation
         setConversations(prev => prev.map(c =>
@@ -434,33 +444,94 @@ export default function MessagesPage() {
         } catch (err) {
             toast.error('حدث خطأ');
         }
+
     };
 
-    if (!currentUser) {
-        return <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        </div>;
-    }
+    const handleDeleteConversation = async () => {
+        if (!selectedConversation) return;
+        if (!confirm('هل أنت متأكد من حذف هذه المحادثة؟ سيتم حذف جميع الرسائل من الطرفين.')) return;
 
-    const handleSearchUsers = async (query: string) => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/api/messages/conversations/${selectedConversation.id}?type=${selectedConversation.type}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (res.ok) {
+                toast.success('تم حذف المحادثة');
+                setConversations(conversations.filter(c => c.id !== selectedConversation.id));
+                setSelectedConversation(null);
+                setShowMobileChat(false);
+                setShowChatOptions(false);
+            } else {
+                toast.error('فشل حذف المحادثة');
+            }
+        } catch (err) {
+            toast.error('حدث خطأ');
+        }
+    };
+
+
+
+    const handleSearchUsers = async (query: string, pageNum: number = 1) => {
         setSearchQuery(query);
-        if (query.length < 2) {
-            setSearchResults([]);
-            return;
+        // Removed length check to allow "Load All" on empty query
+
+        // If query changed (pageNum === 1), reset results
+        if (pageNum === 1) {
+            setPage(1);
+            setHasMore(true);
+            setSearchResults([]); // Optional: clear or keep while loading? Let's clear if query changed. 
         }
 
         setSearching(true);
         try {
             const token = localStorage.getItem('token');
-            const res = await fetch(`${API_URL}/api/users/search?q=${query}`, {
+            // Use limit 100 for empty query (list mode), 10 or 20 for search. Backend handles default.
+            const res = await fetch(`${API_URL}/api/users/search?q=${query}&page=${pageNum}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
-            setSearchResults(data.users || []);
+
+            const newUsers = data.users || [];
+
+            if (pageNum === 1) {
+                setSearchResults(newUsers);
+            } else {
+                setSearchResults(prev => [...prev, ...newUsers]);
+            }
+
+            // Check pagination metadata from backend
+            if (data.pagination) {
+                setHasMore(data.pagination.hasMore);
+            } else {
+                // Fallback logic if backend didn't send pagination (shouldn't happen with new backend)
+                setHasMore(newUsers.length > 0);
+            }
+
+            setPage(pageNum);
+
         } catch (error) {
             console.error(error);
         } finally {
             setSearching(false);
+        }
+    };
+
+    // Load initial users when modal opens
+    useEffect(() => {
+        if (showUserSearch) {
+            // Check if we already have results to avoid re-fetching if just toggling? 
+            // Better to refresh.
+            handleSearchUsers('', 1);
+        }
+    }, [showUserSearch]);
+
+    const handleUserListScroll = (e: React.UIEvent<HTMLDivElement>) => {
+        const { scrollTop, clientHeight, scrollHeight } = e.currentTarget;
+        if (scrollHeight - scrollTop <= clientHeight + 50 && !searching && hasMore) {
+            handleSearchUsers(searchQuery, page + 1);
         }
     };
 
@@ -580,9 +651,13 @@ export default function MessagesPage() {
                                         </button>
 
                                         {/* Avatar */}
-                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center overflow-hidden">
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center overflow-hidden ${selectedConversation.user.avatar === '/logo.png' ? 'bg-transparent' : 'bg-gradient-to-br from-primary to-purple-600'}`}>
                                             {selectedConversation.user.avatar && !selectedConversation.user.avatar.includes('ui-avatars') ? (
-                                                <img src={selectedConversation.user.avatar} alt="" className="w-full h-full object-cover" />
+                                                <img
+                                                    src={selectedConversation.user.avatar}
+                                                    alt=""
+                                                    className={`w-full h-full ${selectedConversation.user.avatar === '/logo.png' ? 'object-contain p-1' : 'object-cover'}`}
+                                                />
                                             ) : selectedConversation.type === 'group' ? (
                                                 <Users className="w-5 h-5 text-white" />
                                             ) : (
@@ -641,9 +716,25 @@ export default function MessagesPage() {
                                                     <Calendar className="w-5 h-5 text-gray-600" />
                                                 </button>
                                             )}
-                                            <button className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors">
-                                                <MoreVertical className="w-5 h-5 text-gray-600" />
-                                            </button>
+                                            <div className="relative">
+                                                <button
+                                                    onClick={() => setShowChatOptions(!showChatOptions)}
+                                                    className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors"
+                                                >
+                                                    <MoreVertical className="w-5 h-5 text-gray-600" />
+                                                </button>
+                                                {showChatOptions && (
+                                                    <div className="absolute top-12 left-0 w-48 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden animate-in fade-in zoom-in duration-200">
+                                                        <button
+                                                            onClick={handleDeleteConversation}
+                                                            className="w-full text-right px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                            حذف المحادثة
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
 
@@ -837,101 +928,108 @@ export default function MessagesPage() {
             {
                 showUserSearch && (
                     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in-95 duration-200">
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="font-bold text-lg text-gray-900">رسالة جديدة</h3>
-                                <button onClick={() => setShowUserSearch(false)} className="text-gray-400 hover:text-gray-600">
-                                    <X className="w-6 h-6" />
-                                </button>
+                        <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden max-h-[80vh] flex flex-col">
+                            <div className="p-4 border-b">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="font-bold text-lg">رسالة جديدة</h3>
+                                    <button onClick={() => setShowUserSearch(false)} className="p-1 hover:bg-gray-100 rounded-full">
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+                                <div className="relative">
+                                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="بحث بالاسم، البريد أو ID..."
+                                        className="w-full pr-10 pl-4 py-2 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                        value={searchQuery}
+                                        onChange={(e) => handleSearchUsers(e.target.value, 1)}
+                                        autoFocus
+                                    />
+                                </div>
                             </div>
-
-                            <div className="relative mb-4">
-                                <Search className="w-5 h-5 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2" />
-                                <input
-                                    type="text"
-                                    placeholder="بحث بالاسم، البريد أو ID..."
-                                    className="w-full pr-10 pl-4 py-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-primary/20"
-                                    value={searchQuery}
-                                    onChange={(e) => handleSearchUsers(e.target.value)}
-                                    autoFocus
-                                />
-                            </div>
-
-                            <div className="max-h-[300px] overflow-y-auto space-y-2">
-                                {searching ? (
-                                    <div className="flex justify-center py-8">
-                                        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                            <div
+                                className="flex-1 overflow-y-auto p-2"
+                                onScroll={handleUserListScroll}
+                            >
+                                {searchResults.length === 0 && !searching ? (
+                                    <div className="text-center py-8 text-gray-500">
+                                        {searchQuery ? 'لا توجد نتائج' : 'ابدأ البحث للعثور على مستخدمين'}
                                     </div>
-                                ) : searchResults.length > 0 ? (
-                                    searchResults.map(user => (
-                                        <button
-                                            key={user.id}
-                                            onClick={() => startConversationWithUser(user)}
-                                            className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl transition-colors text-right group"
-                                        >
-                                            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden shrink-0">
-                                                {user.avatar ? (
-                                                    <img src={user.avatar} alt="" className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <User className="w-5 h-5 text-gray-500" />
-                                                )}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-bold text-gray-800 text-sm group-hover:text-primary transition-colors">{user.nickname}</p>
-                                                <p className="text-xs text-gray-400 font-mono truncate">ID: {user.id}</p>
-                                            </div>
-                                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <MessageCircle className="w-4 h-4" />
-                                            </div>
-                                        </button>
-                                    ))
-                                ) : searchQuery.length > 1 ? (
-                                    <p className="text-center text-gray-400 text-sm py-4">لم يتم العثور على مستخدمين</p>
                                 ) : (
-                                    <p className="text-center text-gray-400 text-sm py-4">ابحث عن مستخدم للمراسلة</p>
+                                    <div className="space-y-1">
+                                        {searchResults.map(user => (
+                                            <button
+                                                key={user.id}
+                                                onClick={() => startConversationWithUser(user)}
+                                                className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl transition-colors text-right"
+                                            >
+                                                <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden shrink-0">
+                                                    {user.avatar ? (
+                                                        <img
+                                                            src={user.avatar}
+                                                            alt=""
+                                                            className={`w-full h-full ${user.avatar === '/logo.png' ? 'object-contain p-1' : 'object-cover'}`}
+                                                        />
+                                                    ) : (
+                                                        <User className="w-5 h-5 text-gray-500" />
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-bold text-sm text-gray-900 truncate">{user.nickname}</p>
+                                                    <p className="text-xs text-gray-500 truncate">{user.email || 'بدون بريد'}</p>
+                                                </div>
+                                            </button>
+                                        ))}
+                                        {searching && (
+                                            <div className="py-4 flex justify-center">
+                                                <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                         </div>
                     </div>
-                )
-            }
+                )}
 
             {/* Group Members Modal */}
-            {showGroupMembers && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowGroupMembers(false)}>
-                    <div className="bg-white rounded-2xl w-full max-w-md p-6 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="font-bold text-lg">أعضاء المجموعة</h3>
-                            <button onClick={() => setShowGroupMembers(false)} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center">
-                                <X className="w-5 h-5 text-gray-500" />
-                            </button>
-                        </div>
+            {
+                showGroupMembers && (
+                    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowGroupMembers(false)}>
+                        <div className="bg-white rounded-2xl w-full max-w-md p-6 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-bold text-lg">أعضاء المجموعة</h3>
+                                <button onClick={() => setShowGroupMembers(false)} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center">
+                                    <X className="w-5 h-5 text-gray-500" />
+                                </button>
+                            </div>
 
-                        {loadingMembers ? (
-                            <div className="flex justify-center py-8">
-                                <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                            </div>
-                        ) : groupMembers.length > 0 ? (
-                            <div className="space-y-3 max-h-[300px] overflow-y-auto">
-                                {groupMembers.map(member => (
-                                    <div key={member.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                                        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
-                                            {member.avatar ? (
-                                                <img src={member.avatar} alt="" className="w-full h-full object-cover" />
-                                            ) : (
-                                                <span className="text-primary font-bold">{member.nickname?.charAt(0)}</span>
-                                            )}
+                            {loadingMembers ? (
+                                <div className="flex justify-center py-8">
+                                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                                </div>
+                            ) : groupMembers.length > 0 ? (
+                                <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                                    {groupMembers.map(member => (
+                                        <div key={member.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                                            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
+                                                {member.avatar ? (
+                                                    <img src={member.avatar} alt="" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <span className="text-primary font-bold">{member.nickname?.charAt(0)}</span>
+                                                )}
+                                            </div>
+                                            <p className="font-medium text-gray-800">{member.nickname}</p>
                                         </div>
-                                        <p className="font-medium text-gray-800">{member.nickname}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <p className="text-center text-gray-400 py-8">لا يوجد أعضاء</p>
-                        )}
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-center text-gray-400 py-8">لا يوجد أعضاء</p>
+                            )}
+                        </div>
                     </div>
-                </div>
-            )}
+                )}
         </div >
     );
 }
@@ -945,9 +1043,13 @@ function ChatItem({ conv, selected, onSelect }: { conv: Conversation, selected: 
             className={`w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors ${selected ? 'bg-gray-100' : ''}`}
         >
             {/* Avatar */}
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 ${conv.type === 'group' ? 'bg-green-500' : 'bg-gradient-to-br from-primary to-purple-600'}`}>
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 ${conv.user.avatar === '/logo.png' ? 'bg-transparent' : conv.type === 'group' ? 'bg-green-500' : 'bg-gradient-to-br from-primary to-purple-600'}`}>
                 {conv.user.avatar && !conv.user.avatar.includes('ui-avatars') ? (
-                    <img src={conv.user.avatar} alt="" className="w-full h-full object-cover" />
+                    <img
+                        src={conv.user.avatar}
+                        alt=""
+                        className={`w-full h-full ${conv.user.avatar === '/logo.png' ? 'object-contain p-1' : 'object-cover'}`}
+                    />
                 ) : conv.type === 'group' ? (
                     <Users className="w-6 h-6 text-white" />
                 ) : (
@@ -1038,7 +1140,8 @@ function ChatBubble({ msg, isMe, isGroup, onReply }: { msg: Message, isMe: boole
     }
 
     // Generate consistent color for sender name based on their ID
-    const getNameColor = (senderId: string) => {
+    const getNameColor = (senderId: string | null) => {
+        if (!senderId) return 'text-gray-600'; // Default for system messages
         const colors = ['text-blue-600', 'text-green-600', 'text-purple-600', 'text-orange-600', 'text-pink-600', 'text-teal-600'];
         let hash = 0;
         for (let i = 0; i < senderId.length; i++) {
@@ -1049,7 +1152,7 @@ function ChatBubble({ msg, isMe, isGroup, onReply }: { msg: Message, isMe: boole
 
     return (
         <div
-            className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} group relative mx-2`}
+            className={`flex w-full group relative mb-3 ${isMe ? 'justify-start' : 'justify-end'}`}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
@@ -1069,112 +1172,115 @@ function ChatBubble({ msg, isMe, isGroup, onReply }: { msg: Message, isMe: boole
                 </div>
             )}
 
-            {/* Avatar + Name row for group (others only) */}
-            {isGroup && !isMe && (
-                <div className="flex items-center gap-2 mb-1 mr-1">
-                    <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center overflow-hidden">
-                        {msg.senderAvatar ? (
-                            <img src={msg.senderAvatar} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                            <span className="text-white text-[9px] font-bold">
-                                {(msg.senderName || 'م').charAt(0)}
-                            </span>
-                        )}
-                    </div>
-                    <span className={`text-sm font-bold ${getNameColor(msg.senderId)}`}>
-                        {msg.senderName || 'مستخدم'}
-                    </span>
-                </div>
-            )}
-
-            {/* Message bubble with reply button */}
-            <div
-                className="flex items-center gap-1 transition-transform duration-100"
-                style={{ transform: `translateX(${swipeX}px)` }}
-            >
-                {/* Reply button - appears on hover (desktop) */}
-                {!isMe && onReply && (
-                    <button
-                        onClick={onReply}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-full hover:bg-gray-200 flex items-center justify-center hidden md:flex"
-                    >
-                        <Reply className="w-4 h-4 text-gray-500" />
-                    </button>
-                )}
-
-                <div className={`max-w-[75%] md:max-w-[55%] min-w-[60px] px-3 py-2 rounded-2xl shadow-sm overflow-hidden ${isMe
-                    ? 'bg-[#dcf8c6] rounded-br-sm'
-                    : 'bg-white rounded-bl-sm'
-                    }`}>
-                    {/* Quoted message - with image thumbnail */}
-                    {msg.replyTo && (
-                        <div className="mb-2 p-2 bg-black/5 rounded-lg border-r-2 border-primary overflow-hidden max-w-full flex items-center gap-2">
-                            {/* Show thumbnail if it's an image */}
-                            {(msg.replyTo.content?.startsWith('http') &&
-                                (msg.replyTo.content.length > 50 ||
-                                    /\.(gif|jpg|jpeg|png|webp|svg)/i.test(msg.replyTo.content))) && (
-                                    <img
-                                        src={msg.replyTo.content}
-                                        alt="صورة"
-                                        className="w-8 h-8 rounded object-cover flex-shrink-0"
-                                    />
-                                )}
-                            <div className="flex-1 min-w-0">
-                                <p className="text-[10px] text-primary font-bold truncate">{msg.replyTo.senderName || 'مستخدم'}</p>
-                                <p className="text-[11px] text-gray-600 truncate">
-                                    {(msg.replyTo.content?.startsWith('http') &&
-                                        (msg.replyTo.content.length > 50 ||
-                                            /\.(gif|jpg|jpeg|png|webp|svg)/i.test(msg.replyTo.content)))
-                                        ? '📷 صورة'
-                                        : msg.replyTo.content}
-                                </p>
-                            </div>
+            {/* Message content wrapper */}
+            <div className="flex flex-col max-w-[75%] md:max-w-[55%]">
+                {/* Avatar + Name row for group (others only) */}
+                {isGroup && !isMe && (
+                    <div className="flex items-center gap-2 mb-1 flex-row-reverse">
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center overflow-hidden">
+                            {msg.senderAvatar ? (
+                                <img src={msg.senderAvatar} alt="" className="w-full h-full object-cover" />
+                            ) : (
+                                <span className="text-white text-[9px] font-bold">
+                                    {(msg.senderName || 'م').charAt(0)}
+                                </span>
+                            )}
                         </div>
-                    )}
-
-                    {/* Check if content is an image URL */}
-                    {msg.type === 'image' || msg.type === 'sticker' ||
-                        /\.(gif|jpg|jpeg|png|webp)/i.test(msg.content.trim()) ||
-                        msg.content.includes('giphy.com') ||
-                        msg.content.includes('jsdelivr.net') ||
-                        msg.content.includes('twemoji') ||
-                        msg.content.includes('zobj.net') ||
-                        msg.content.includes('supabase.co/storage') ? (
-                        <div className="rounded-lg overflow-hidden my-1 cursor-pointer" onClick={() => window.open(msg.content.trim(), '_blank')}>
-                            <img
-                                src={msg.content.trim()}
-                                alt="img"
-                                className={`h-auto object-contain ${msg.content.includes('zobj.net') || msg.content.includes('twemoji') || msg.content.includes('jsdelivr.net')
-                                    ? 'w-20 max-h-20' // Stickers/Emojis: small (80px)
-                                    : 'w-full max-h-[200px]' // Regular images
-                                    }`}
-                                loading="lazy"
-                            />
-                        </div>
-                    ) : (
-                        <p className="text-sm text-gray-900 leading-relaxed whitespace-pre-wrap break-all" dir="auto">{msg.content}</p>
-                    )}
-                    <div className="flex items-center justify-end gap-1 mt-0.5">
-                        <span className="text-[10px] text-gray-500 whitespace-nowrap">
-                            {new Date(msg.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                        <span className={`text-sm font-bold ${getNameColor(msg.senderId)}`}>
+                            {msg.senderName || 'مستخدم'}
                         </span>
-                        {isMe && (
-                            msg.read ? <CheckCheck className="w-3.5 h-3.5 text-blue-500" /> : <Check className="w-3.5 h-3.5 text-gray-400" />
-                        )}
                     </div>
-                </div>
-
-                {/* Reply button for own messages (desktop) */}
-                {isMe && onReply && (
-                    <button
-                        onClick={onReply}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-full hover:bg-gray-200 flex items-center justify-center hidden md:flex"
-                    >
-                        <Reply className="w-4 h-4 text-gray-500" />
-                    </button>
                 )}
+
+                {/* Message bubble with reply button */}
+                <div
+                    className="flex items-center gap-1 transition-transform duration-100"
+                    style={{ transform: `translateX(${swipeX}px)` }}
+                >
+                    {/* Reply button - appears on hover (desktop) */}
+                    {!isMe && onReply && (
+                        <button
+                            onClick={onReply}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-full hover:bg-gray-200 flex items-center justify-center hidden md:flex"
+                        >
+                            <Reply className="w-4 h-4 text-gray-500" />
+                        </button>
+                    )}
+
+                    <div className={`min-w-[60px] px-3 py-2 rounded-2xl shadow-sm overflow-hidden ${isMe
+                        ? 'bg-[#dcf8c6] rounded-bl-sm'
+                        : 'bg-white rounded-br-sm'
+                        }`}>
+                        {/* Quoted message - with image thumbnail */}
+                        {msg.replyTo && (
+                            <div className="mb-2 p-2 bg-black/5 rounded-lg border-r-2 border-primary overflow-hidden max-w-full flex items-center gap-2">
+                                {/* Show thumbnail if it's an image */}
+                                {(msg.replyTo.content?.startsWith('http') &&
+                                    (msg.replyTo.content.length > 50 ||
+                                        /\.(gif|jpg|jpeg|png|webp|svg)/i.test(msg.replyTo.content))) && (
+                                        <img
+                                            src={msg.replyTo.content}
+                                            alt="صورة"
+                                            className="w-8 h-8 rounded object-cover flex-shrink-0"
+                                        />
+                                    )}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-[10px] text-primary font-bold truncate">{msg.replyTo.senderName || 'مستخدم'}</p>
+                                    <p className="text-[11px] text-gray-600 truncate">
+                                        {(msg.replyTo.content?.startsWith('http') &&
+                                            (msg.replyTo.content.length > 50 ||
+                                                /\.(gif|jpg|jpeg|png|webp|svg)/i.test(msg.replyTo.content)))
+                                            ? '📷 صورة'
+                                            : msg.replyTo.content}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Check if content is an image URL */}
+                        {msg.type === 'image' || msg.type === 'sticker' ||
+                            /\.(gif|jpg|jpeg|png|webp)/i.test(msg.content.trim()) ||
+                            msg.content.includes('giphy.com') ||
+                            msg.content.includes('jsdelivr.net') ||
+                            msg.content.includes('twemoji') ||
+                            msg.content.includes('zobj.net') ||
+                            msg.content.includes('supabase.co/storage') ? (
+                            <div className="rounded-lg overflow-hidden my-1 cursor-pointer" onClick={() => window.open(msg.content.trim(), '_blank')}>
+                                <img
+                                    src={msg.content.trim()}
+                                    alt="img"
+                                    className={`h-auto object-contain ${msg.content.includes('zobj.net') || msg.content.includes('twemoji') || msg.content.includes('jsdelivr.net')
+                                        ? 'w-20 max-h-20' // Stickers/Emojis: small (80px)
+                                        : 'w-full max-h-[200px]' // Regular images
+                                        }`}
+                                    loading="lazy"
+                                />
+                            </div>
+                        ) : (
+                            <p className="text-sm text-gray-900 leading-relaxed whitespace-pre-wrap break-all" dir="auto">{msg.content}</p>
+                        )}
+                        <div className="flex items-center justify-end gap-1 mt-0.5">
+                            <span className="text-[10px] text-gray-500 whitespace-nowrap">
+                                {new Date(msg.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            {isMe && (
+                                msg.read ? <CheckCheck className="w-3.5 h-3.5 text-blue-500" /> : <Check className="w-3.5 h-3.5 text-gray-400" />
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Reply button for own messages (desktop) */}
+                    {isMe && onReply && (
+                        <button
+                            onClick={onReply}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-full hover:bg-gray-200 flex items-center justify-center hidden md:flex"
+                        >
+                            <Reply className="w-4 h-4 text-gray-500" />
+                        </button>
+                    )}
+                </div>
             </div>
-        </div >
+        </div>
     );
 }
 
@@ -1186,9 +1292,9 @@ function formatTimeAgo(dateStr: string): string {
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);
 
-    if (diffMins < 1) return 'الآن';
-    if (diffMins < 60) return `${diffMins}د`;
-    if (diffHours < 24) return `${diffHours}س`;
+    if (diffDays === 0) {
+        return date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+    }
     if (diffDays < 7) return `${diffDays}ي`;
     return date.toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' });
 }

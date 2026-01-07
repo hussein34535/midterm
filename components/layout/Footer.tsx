@@ -10,10 +10,10 @@ export default function Footer() {
                             <div className="w-10 h-10 rounded-2xl bg-primary flex items-center justify-center text-white font-serif font-bold text-xl">
                                 س
                             </div>
-                            <span className="text-3xl font-serif font-bold tracking-tight text-foreground">سكينة</span>
+                            <span className="text-3xl font-serif font-bold tracking-tight text-foreground">إيواء</span>
                         </Link>
                         <p className="text-xl text-foreground/60 max-w-md leading-relaxed font-medium">
-                            مساحة دافئة تسكنها المودة، تهدف لتمكين كل روح عربية من العثور على سكينتها الخاصة من خلال الدعم والاحتواء.
+                            مساحة دافئة تسكنها المودة، تهدف لتمكين كل روح من العثور على راحتها من خلال الدعم والاحتواء.
                         </p>
                     </div>
 
@@ -71,7 +71,7 @@ export default function Footer() {
                 </div>
 
                 <div className="border-t border-primary/10 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
-                    <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} سكينة. جميع الحقوق محفوظة.</p>
+                    <p className="text-sm text-muted-foreground">© {new Date().getFullYear()} إيواء. جميع الحقوق محفوظة.</p>
                     <div className="flex gap-6">
                         <Link href="#" className="text-muted-foreground hover:text-primary">
                             X

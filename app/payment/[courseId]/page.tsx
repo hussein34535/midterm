@@ -34,14 +34,19 @@ export default function PaymentPage({ params }: PageProps) {
 
     const [course, setCourse] = useState<Course | null>(null);
     const [loading, setLoading] = useState(true);
-    const [copied, setCopied] = useState(false);
     const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
     const [confirmed, setConfirmed] = useState(false);
     const [enabledMethods, setEnabledMethods] = useState<string[]>([]);
-    // These MUST be before any early returns
-    const [paymentCode] = useState(() =>
-        `EWA-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
-    );
+    // Payment details from settings (per-method)
+    const [vodafoneNumber, setVodafoneNumber] = useState('01012345678');
+    const [vodafoneNotes, setVodafoneNotes] = useState('');
+    const [bankAccount, setBankAccount] = useState('');
+    const [bankName, setBankName] = useState('');
+    const [bankNotes, setBankNotes] = useState('');
+    const [instapayUsername, setInstapayUsername] = useState('@eiwa_pay');
+    const [instapayNotes, setInstapayNotes] = useState('');
+    const [fawryCode, setFawryCode] = useState('7823456');
+    const [fawryNotes, setFawryNotes] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [screenshot, setScreenshot] = useState<File | null>(null);
     const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
@@ -82,6 +87,16 @@ export default function PaymentPage({ params }: PageProps) {
                 const data = await res.json();
                 const methods = data.settings?.payment_methods || ['bank_transfer', 'vodafone_cash'];
                 setEnabledMethods(methods);
+                // Update per-method payment details from settings
+                if (data.settings?.vodafone_number) setVodafoneNumber(data.settings.vodafone_number);
+                if (data.settings?.vodafone_notes) setVodafoneNotes(data.settings.vodafone_notes);
+                if (data.settings?.bank_account) setBankAccount(data.settings.bank_account);
+                if (data.settings?.bank_name) setBankName(data.settings.bank_name);
+                if (data.settings?.bank_notes) setBankNotes(data.settings.bank_notes);
+                if (data.settings?.instapay_username) setInstapayUsername(data.settings.instapay_username);
+                if (data.settings?.instapay_notes) setInstapayNotes(data.settings.instapay_notes);
+                if (data.settings?.fawry_code) setFawryCode(data.settings.fawry_code);
+                if (data.settings?.fawry_notes) setFawryNotes(data.settings.fawry_notes);
             }
         } catch (err) {
             console.error('Failed to fetch settings');
@@ -98,11 +113,7 @@ export default function PaymentPage({ params }: PageProps) {
         );
     }
 
-    const copyCode = () => {
-        navigator.clipboard.writeText(paymentCode);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-    };
+
 
     const handleScreenshotChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -140,7 +151,6 @@ export default function PaymentPage({ params }: PageProps) {
                 },
                 body: JSON.stringify({
                     payment_method: selectedMethod,
-                    payment_code: paymentCode,
                     amount: course.price,
                     payment_screenshot: screenshotPreview // Send as base64
                 })
@@ -160,10 +170,10 @@ export default function PaymentPage({ params }: PageProps) {
     };
 
     const allPaymentMethods = [
-        { id: "bank_transfer", name: "تحويل بنكي", icon: Building2, number: "1234567890" },
-        { id: "vodafone_cash", name: "فودافون كاش", icon: Smartphone, number: "01012345678" },
-        { id: "fawry", name: "فوري", icon: Building2, code: "7823456" },
-        { id: "instapay", name: "InstaPay", icon: Wallet, username: "@sakina_pay" },
+        { id: "bank_transfer", name: "تحويل بنكي", icon: Building2, number: bankAccount, bankName: bankName, notes: bankNotes },
+        { id: "vodafone_cash", name: "فودافون كاش", icon: Smartphone, number: vodafoneNumber, notes: vodafoneNotes },
+        { id: "fawry", name: "فوري", icon: Building2, code: fawryCode, notes: fawryNotes },
+        { id: "instapay", name: "InstaPay", icon: Wallet, username: instapayUsername, notes: instapayNotes },
     ];
 
     // Filter methods based on settings
@@ -199,27 +209,7 @@ export default function PaymentPage({ params }: PageProps) {
                         </p>
                     </div>
 
-                    {/* Payment Code */}
-                    <div className="card-love p-8 mb-8">
-                        <h2 className="text-lg font-bold text-foreground mb-4 text-center">
-                            كود الدفع الخاص بك
-                        </h2>
-                        <div className="bg-secondary/50 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-4 border border-border">
-                            <span className="text-2xl font-mono font-bold text-primary tracking-wider">
-                                {paymentCode}
-                            </span>
-                            <button
-                                onClick={copyCode}
-                                className="flex items-center gap-2 btn-outline py-2 px-6 w-full md:w-auto justify-center"
-                            >
-                                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                                {copied ? "تم النسخ" : "نسخ الكود"}
-                            </button>
-                        </div>
-                        <p className="text-sm text-muted-foreground text-center mt-4">
-                            احفظ هذا الكود واستخدمه في وصف التحويل
-                        </p>
-                    </div>
+
 
                     {/* Amount */}
                     <div className="card-love p-6 mb-8 flex items-center justify-between">
@@ -270,26 +260,40 @@ export default function PaymentPage({ params }: PageProps) {
                     {selectedMethod && (
                         <div className="card-love p-8 mb-8 animate-in fade-in slide-in-from-bottom-2">
                             <h2 className="text-lg font-bold text-foreground mb-4">
-                                خطوات الدفع
+                                ملاحظات الدفع
                             </h2>
-                            <ol className="space-y-4">
-                                <li className="flex items-start gap-4">
-                                    <span className="w-8 h-8 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-sm shrink-0 mt-0.5 border border-primary/20">1</span>
-                                    <span className="text-foreground leading-relaxed pt-1">افتح تطبيق <span className="font-bold text-primary">{paymentMethods.find(m => m.id === selectedMethod)?.name}</span></span>
-                                </li>
-                                <li className="flex items-start gap-4">
-                                    <span className="w-8 h-8 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-sm shrink-0 mt-0.5 border border-primary/20">2</span>
-                                    <span className="text-foreground leading-relaxed pt-1">حوّل مبلغ <span className="font-bold">{course.price} ج.م</span> للرقم/الحساب المذكور أعلاه</span>
-                                </li>
-                                <li className="flex items-start gap-4">
-                                    <span className="w-8 h-8 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-sm shrink-0 mt-0.5 border border-primary/20">3</span>
-                                    <span className="text-foreground leading-relaxed pt-1">اكتب كود الدفع <span className="bg-secondary px-2 py-0.5 rounded font-mono font-bold text-primary mx-1">{paymentCode}</span> في الوصف أو الملاحظات</span>
-                                </li>
-                                <li className="flex items-start gap-4">
-                                    <span className="w-8 h-8 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-sm shrink-0 mt-0.5 border border-primary/20">4</span>
-                                    <span className="text-foreground leading-relaxed pt-1">اضغط "أكدت الدفع" بالأسفل بعد إتمام التحويل</span>
-                                </li>
-                            </ol>
+                            <div className="space-y-4">
+                                {paymentMethods.find(m => m.id === selectedMethod)?.notes ? (
+                                    // Dynamic notes from settings
+                                    paymentMethods.find(m => m.id === selectedMethod)?.notes
+                                        .split('\n')
+                                        .filter(line => line.trim() !== '')
+                                        .map((note, index) => (
+                                            <div key={index} className="flex items-start gap-4 animate-in fade-in slide-in-from-right-2" style={{ animationDelay: `${index * 50}ms` }}>
+                                                <div className="w-2 h-2 rounded-full bg-primary mt-2.5 shrink-0" />
+                                                <p className="text-foreground leading-relaxed font-medium">
+                                                    {note}
+                                                </p>
+                                            </div>
+                                        ))
+                                ) : (
+                                    // Default notes fallback
+                                    <div className="space-y-4">
+                                        <div className="flex items-start gap-4">
+                                            <div className="w-2 h-2 rounded-full bg-primary mt-2.5 shrink-0" />
+                                            <p className="text-foreground leading-relaxed">افتح تطبيق <span className="font-bold text-primary">{paymentMethods.find(m => m.id === selectedMethod)?.name}</span></p>
+                                        </div>
+                                        <div className="flex items-start gap-4">
+                                            <div className="w-2 h-2 rounded-full bg-primary mt-2.5 shrink-0" />
+                                            <p className="text-foreground leading-relaxed">حوّل مبلغ <span className="font-bold">{course.price} ج.م</span> للرقم/الحساب المذكور أعلاه</p>
+                                        </div>
+                                        <div className="flex items-start gap-4">
+                                            <div className="w-2 h-2 rounded-full bg-primary mt-2.5 shrink-0" />
+                                            <p className="text-foreground leading-relaxed">اضغط "أكدت الدفع" بالأسفل بعد إتمام التحويل</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
 

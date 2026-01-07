@@ -31,6 +31,13 @@ const authFetch = async (endpoint: string, options: RequestInit = {}) => {
     const data = await response.json();
 
     if (!response.ok) {
+        // Build-in Maintenance Redirect
+        if (response.status === 503 && typeof window !== 'undefined') {
+            // Only redirect if not already there to avoid loops
+            if (window.location.pathname !== '/maintenance') {
+                window.location.href = '/maintenance';
+            }
+        }
         throw new Error(data.error || 'حدث خطأ');
     }
 

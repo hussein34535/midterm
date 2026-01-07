@@ -7,7 +7,11 @@ import {
     Search,
     Plus,
     UserPlus,
-    Loader2
+    Loader2,
+    Eye,
+    X,
+    Trash2,
+    ArrowRight
 } from 'lucide-react';
 
 // Interfaces
@@ -60,6 +64,13 @@ export default function GroupsManagementPage() {
     const [memberSearch, setMemberSearch] = useState('');
     const [memberResults, setMemberResults] = useState<User[]>([]);
     const [addingMember, setAddingMember] = useState(false);
+
+    // View Members State
+    const [isViewingMembers, setIsViewingMembers] = useState(false);
+    const [viewingGroup, setViewingGroup] = useState<Group | null>(null);
+    const [groupMembers, setGroupMembers] = useState<User[]>([]);
+    const [loadingMembers, setLoadingMembers] = useState(false);
+    const [deletingMember, setDeletingMember] = useState<string | null>(null);
 
     // Create Group State
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -175,7 +186,8 @@ export default function GroupsManagementPage() {
 
     const handleSearchMember = async (query: string) => {
         setMemberSearch(query);
-        if (query.length < 2) return;
+        // Allow empty query to fetch default users (first 100)
+        // if (query.length < 2) return;
 
         try {
             const token = localStorage.getItem('token');
@@ -260,101 +272,97 @@ export default function GroupsManagementPage() {
         }
     };
 
+    const fetchGroupMembers = async (group: Group) => {
+        setViewingGroup(group);
+        setIsViewingMembers(true);
+        setLoadingMembers(true);
+
+        try {
+            const token = localStorage.getItem('token');
+            // Use group.id to get members for this specific group
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}/members`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                setGroupMembers(data.members || []);
+            }
+        } catch (error) {
+            console.error('Error fetching members:', error);
+        } finally {
+            setLoadingMembers(false);
+        }
+    };
+
+    const handleDeleteMember = async (userId: string) => {
+        if (!viewingGroup) return;
+
+        setDeletingMember(userId);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${viewingGroup.id}/members/${userId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                setGroupMembers(groupMembers.filter(m => m.id !== userId));
+                // Update group member count
+                setGroups(groups.map(g =>
+                    g.id === viewingGroup.id
+                        ? { ...g, member_count: Math.max(0, (g.member_count || 1) - 1) }
+                        : g
+                ));
+            }
+        } catch (error) {
+            console.error('Delete member error:', error);
+        } finally {
+            setDeletingMember(null);
+        }
+    };
+
     return (
         <div className="p-6 bg-gray-50 min-h-screen" dir="rtl">
-            <div className="flex items-center justify-between mb-8">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                        <Users className="w-8 h-8 text-primary" />
-                        إدارة المجموعات
-                    </h1>
-                    <p className="text-gray-500 mt-1">إدارة مجموعات الكورسات وتعيين الأخصائيين</p>
-                </div>
-
+            <div className="mb-6">
                 <button
-                    onClick={() => setShowCreateModal(true)}
-                    className="btn-primary flex items-center gap-2"
+                    onClick={() => router.back()}
+                    className="flex items-center gap-2 text-gray-500 hover:text-primary transition-colors font-medium mb-4"
                 >
-                    <Plus className="w-5 h-5" />
-                    مجموعة جديدة
+                    <ArrowRight className="w-5 h-5" />
+                    العودة
                 </button>
             </div>
 
-            {/* Create Group Modal */}
-            {showCreateModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-2xl w-full max-w-md p-6 animate-in fade-in zoom-in duration-200">
-                        <h3 className="font-bold text-lg mb-4">إنشاء مجموعة جديدة</h3>
-
-                        <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">الكورس</label>
-                                <select
-                                    value={newGroupData.course_id}
-                                    onChange={(e) => setNewGroupData({ ...newGroupData, course_id: e.target.value })}
-                                    className="w-full px-4 py-2 border rounded-lg outline-none focus:border-primary"
-                                >
-                                    <option value="">-- اختر الكورس --</option>
-                                    {courses.map(course => (
-                                        <option key={course.id} value={course.id}>{course.title}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">اسم المجموعة</label>
-                                <input
-                                    type="text"
-                                    value={newGroupData.name}
-                                    onChange={(e) => setNewGroupData({ ...newGroupData, name: e.target.value })}
-                                    placeholder="مثال: مجموعة التعافي 1"
-                                    className="w-full px-4 py-2 border rounded-lg outline-none focus:border-primary"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">السعة (عدد الأعضاء)</label>
-                                <input
-                                    type="number"
-                                    value={newGroupData.capacity}
-                                    onChange={(e) => setNewGroupData({ ...newGroupData, capacity: Number(e.target.value) })}
-                                    className="w-full px-4 py-2 border rounded-lg outline-none focus:border-primary"
-                                    min="1"
-                                    max="50"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="flex gap-3 mt-6">
-                            <button
-                                onClick={handleCreateGroup}
-                                disabled={creating}
-                                className="flex-1 btn-primary justify-center"
-                            >
-                                {creating ? <Loader2 className="w-5 h-5 animate-spin" /> : 'إنشاء'}
-                            </button>
-                            <button
-                                onClick={() => setShowCreateModal(false)}
-                                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-bold hover:bg-gray-200"
-                            >
-                                إلغاء
-                            </button>
-                        </div>
-                    </div>
+            {/* Header */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 md:mb-8">
+                <div>
+                    <h1 className="text-2xl md:text-3xl font-bold text-gray-800 flex items-center gap-3">
+                        <Users className="w-8 h-8 md:w-10 md:h-10 text-primary" />
+                        إدارة المجموعات
+                    </h1>
+                    <p className="text-gray-500 mt-1 text-sm md:text-base">إدارة مجموعات الكورسات وتعيين الأخصائيين</p>
                 </div>
-            )}
 
-            {/* Filters */}
-            <div className="bg-white p-4 rounded-xl shadow-sm mb-6 flex flex-wrap gap-4">
-                <div className="flex-1 relative">
-                    <Search className="w-5 h-5 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2" />
-                    <input
-                        type="text"
-                        placeholder="بحث عن مجموعة..."
-                        className="w-full pr-10 pl-4 py-2 border rounded-lg focus:ring-2 focus:ring-primary/20 outline-none"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
+                <div className="flex flex-col-reverse md:flex-row gap-3 md:items-center">
+                    <div className="relative w-full md:w-64">
+                        <Search className="w-5 h-5 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                        <input
+                            type="text"
+                            placeholder="بحث عن مجموعة..."
+                            className="w-full pr-10 pl-4 py-2.5 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-primary/20 outline-none shadow-sm transition-all text-sm"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                    </div>
+                    <button
+                        onClick={() => setShowCreateModal(true)}
+                        className="btn-primary w-full md:w-auto py-2.5 flex items-center justify-center gap-2 shadow-lg shadow-primary/20 active:scale-95 transition-all"
+                    >
+                        <Plus className="w-5 h-5" />
+                        <span>مجموعة جديدة</span>
+                    </button>
                 </div>
             </div>
 
@@ -364,62 +372,118 @@ export default function GroupsManagementPage() {
                     <Loader2 className="w-8 h-8 animate-spin text-primary" />
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                     {groups
                         .filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()))
                         .map(group => (
-                            <div key={group.id} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                            <div key={group.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all group-card relative">
                                 <div className="p-5">
                                     <div className="flex justify-between items-start mb-4">
-                                        <div>
-                                            <h3 className="font-bold text-lg text-gray-800">{group.name}</h3>
+                                        <div className="flex-1 min-w-0 ml-3">
+                                            <h3 className="font-bold text-lg text-gray-800 truncate leading-tight">{group.name}</h3>
+                                            <p className="text-xs text-muted-foreground mt-1 truncate">
+                                                {courses.find(c => c.id === group.course_id)?.title || 'كورس غير معروف'}
+                                            </p>
                                         </div>
-                                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${group.member_count >= group.capacity
-                                            ? 'bg-red-100 text-red-600'
-                                            : 'bg-green-100 text-green-600'
-                                            }`}>
-                                            {group.member_count} / {group.capacity}
-                                        </span>
+                                        <div className="flex flex-col items-end gap-2 shrink-0">
+                                            <button
+                                                onClick={() => {
+                                                    if (confirm('هل أنت متأكد من حذف هذه المجموعة؟ سيتم إزالة جميع الأعضاء منها.')) {
+                                                        const handleDeleteGroup = async () => {
+                                                            try {
+                                                                const token = localStorage.getItem('token');
+                                                                const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/groups/${group.id}`, {
+                                                                    method: 'DELETE',
+                                                                    headers: { 'Authorization': `Bearer ${token}` }
+                                                                });
+                                                                if (res.ok) {
+                                                                    setGroups(groups.filter(g => g.id !== group.id));
+                                                                } else {
+                                                                    alert('فشل حذف المجموعة');
+                                                                }
+                                                            } catch (err) {
+                                                                console.error(err);
+                                                                alert('حدث خطأ');
+                                                            }
+                                                        };
+                                                        handleDeleteGroup();
+                                                    }
+                                                }}
+                                                className="w-8 h-8 rounded-full bg-red-50 hover:bg-red-100 flex items-center justify-center text-red-500 hover:text-red-600 transition-colors"
+                                                title="حذف المجموعة"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide border ${group.member_count >= group.capacity
+                                                ? 'bg-red-50 text-red-600 border-red-100'
+                                                : 'bg-green-50 text-green-600 border-green-100'
+                                                }`}>
+                                                {group.member_count} / {group.capacity}
+                                            </span>
+                                        </div>
                                     </div>
 
-                                    <div className="border-t pt-4">
-                                        <p className="text-xs text-gray-500 mb-2">الأخصائي المسؤول:</p>
-
-                                        {group.specialist ? (
-                                            <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold">
-                                                        {group.specialist.nickname?.charAt(0)}
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-bold text-sm">{group.specialist.nickname}</p>
-                                                        <p className="text-[10px] text-gray-500">{group.specialist.email}</p>
-                                                    </div>
-                                                </div>
+                                    <div className="bg-gray-50/50 rounded-xl p-3 mb-4 border border-gray-100">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">الأخصائي المسؤول</span>
+                                            {group.specialist && (
                                                 <button
                                                     onClick={() => { setSelectedGroup(group); setIsAssigning(true); }}
-                                                    className="text-primary text-xs hover:underline"
+                                                    className="text-[10px] bg-white border border-gray-200 px-2 py-1 rounded text-primary hover:text-primary-dark transition-colors"
                                                 >
                                                     تغيير
                                                 </button>
+                                            )}
+                                        </div>
+
+                                        {group.specialist ? (
+                                            <div className="flex items-center gap-3">
+                                                <div className="relative">
+                                                    <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center text-primary font-bold border border-white shadow-sm overflow-hidden">
+                                                        {group.specialist.avatar ? (
+                                                            <img src={group.specialist.avatar} alt={group.specialist.nickname} className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            group.specialist.nickname?.charAt(0)
+                                                        )}
+                                                    </div>
+                                                    <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-bold text-sm text-gray-900 truncate">{group.specialist.nickname}</p>
+                                                    <p className="text-[10px] text-gray-500 truncate font-medium">{group.specialist.email}</p>
+                                                </div>
                                             </div>
                                         ) : (
                                             <button
                                                 onClick={() => { setSelectedGroup(group); setIsAssigning(true); }}
-                                                className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                                                className="w-full py-3 border border-dashed border-primary/30 bg-primary/5 rounded-lg text-primary hover:bg-primary/10 transition-colors flex items-center justify-center gap-2 text-xs font-bold"
                                             >
                                                 <UserPlus className="w-4 h-4" />
                                                 تعيين أخصائي
                                             </button>
                                         )}
                                     </div>
-                                    <button
-                                        onClick={() => { setSelectedGroupForMember(group); setIsAddingMember(true); }}
-                                        className="w-full mt-2 py-2 border border-primary/20 bg-primary/5 text-primary rounded-lg text-sm font-bold hover:bg-primary/10 transition-colors flex items-center justify-center gap-2"
-                                    >
-                                        <Plus className="w-4 h-4" />
-                                        إضافة عضو
-                                    </button>
+
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => fetchGroupMembers(group)}
+                                            className="flex-1 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-50 hover:border-gray-300 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                                        >
+                                            <Eye className="w-4 h-4" />
+                                            الأعضاء
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setSelectedGroupForMember(group);
+                                                setIsAddingMember(true);
+                                                handleSearchMember('');
+                                            }}
+                                            className="flex-1 py-2.5 bg-primary/10 text-primary border border-primary/10 rounded-xl text-xs font-bold hover:bg-primary hover:text-white transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                                        >
+                                            <Plus className="w-4 h-4" />
+                                            إضافة
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -530,6 +594,73 @@ export default function GroupsManagementPage() {
                             className="w-full py-2.5 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors"
                         >
                             إلغاء
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* View Members Modal */}
+            {isViewingMembers && viewingGroup && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-md p-6 animate-in fade-in zoom-in duration-200">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-bold text-lg">أعضاء {viewingGroup.name}</h3>
+                            <button
+                                onClick={() => { setIsViewingMembers(false); setViewingGroup(null); setGroupMembers([]); }}
+                                className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center"
+                            >
+                                <X className="w-5 h-5 text-gray-500" />
+                            </button>
+                        </div>
+
+                        <p className="text-sm text-gray-500 mb-4">
+                            {groupMembers.length} عضو من {viewingGroup.capacity}
+                        </p>
+
+                        {loadingMembers ? (
+                            <div className="flex justify-center py-8">
+                                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                            </div>
+                        ) : groupMembers.length > 0 ? (
+                            <div className="space-y-3 max-h-[350px] overflow-y-auto">
+                                {groupMembers.map((member: User, index: number) => (
+                                    <div key={`${member.id}-${index}`} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
+                                                {member.avatar ? (
+                                                    <img src={member.avatar} alt="" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <span className="text-primary font-bold">{member.nickname?.charAt(0)}</span>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <p className="font-medium text-gray-800">{member.nickname}</p>
+                                                <p className="text-xs text-gray-400">{member.email}</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => handleDeleteMember(member.id)}
+                                            disabled={deletingMember === member.id}
+                                            className="w-8 h-8 rounded-full bg-red-50 hover:bg-red-100 flex items-center justify-center text-red-500 transition-colors"
+                                        >
+                                            {deletingMember === member.id ? (
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                            ) : (
+                                                <Trash2 className="w-4 h-4" />
+                                            )}
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-center text-gray-400 py-8">لا يوجد أعضاء في هذه المجموعة</p>
+                        )}
+
+                        <button
+                            onClick={() => { setIsViewingMembers(false); setViewingGroup(null); setGroupMembers([]); }}
+                            className="w-full mt-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition-colors"
+                        >
+                            إغلاق
                         </button>
                     </div>
                 </div>

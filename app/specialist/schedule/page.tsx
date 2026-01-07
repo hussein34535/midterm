@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, CalendarPlus, Loader2 } from "lucide-react";
+import { ArrowRight, CalendarPlus, Loader2, Users } from "lucide-react";
 import Header from "@/components/layout/Header";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -17,6 +17,8 @@ export default function SpecialistSchedule() {
 
     // Data
     const [courses, setCourses] = useState<any[]>([]);
+    const [groups, setGroups] = useState<any[]>([]); // Groups for selected course
+    const [syllabus, setSyllabus] = useState<any[]>([]); // Sessions template for selected course
     const [upcoming, setUpcoming] = useState<any[]>([]);
     const [past, setPast] = useState<any[]>([]);
 
@@ -24,8 +26,8 @@ export default function SpecialistSchedule() {
     const [showForm, setShowForm] = useState(false);
     const [form, setForm] = useState({
         courseId: '',
-        title: '',
-        type: 'group',
+        groupId: '',
+        sessionId: '', // Syllabus session
         date: '',
         time: ''
     });
@@ -39,18 +41,26 @@ export default function SpecialistSchedule() {
             const token = localStorage.getItem('token');
             const headers = { 'Authorization': `Bearer ${token}` };
 
-            const [coursesRes, scheduleRes] = await Promise.all([
+            const [coursesRes, groupsRes, scheduleRes] = await Promise.all([
                 fetch(`${API_URL}/api/specialist/courses`, { headers }),
+                fetch(`${API_URL}/api/specialist/groups`, { headers }),
                 fetch(`${API_URL}/api/specialist/schedule`, { headers })
             ]);
 
             if (coursesRes.ok) {
                 const data = await coursesRes.json();
                 setCourses(data.courses || []);
-                // Set default course if only one exists
+                // Set default course and load its syllabus
                 if (data.courses?.length > 0) {
-                    setForm(prev => ({ ...prev, courseId: data.courses[0].id }));
+                    const firstCourse = data.courses[0];
+                    setForm(prev => ({ ...prev, courseId: firstCourse.id }));
+                    setSyllabus(firstCourse.sessions || []);
                 }
+            }
+
+            if (groupsRes.ok) {
+                const data = await groupsRes.json();
+                setGroups(data.groups || []);
             }
 
             if (scheduleRes.ok) {
@@ -65,10 +75,26 @@ export default function SpecialistSchedule() {
         }
     };
 
+    // When course changes, update available syllabus sessions
+    const handleCourseChange = (courseId: string) => {
+        setForm({ ...form, courseId, groupId: '', sessionId: '' });
+        const course = courses.find(c => c.id === courseId);
+        setSyllabus(course?.sessions || []);
+    };
+
+    // Filter groups for selected course
+    const availableGroups = groups.filter(g => g.course_id === form.courseId);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setSubmitting(true);
         setError('');
+
+        if (!form.groupId || !form.sessionId) {
+            setError('يجب اختيار المجموعة والجلسة');
+            setSubmitting(false);
+            return;
+        }
 
         try {
             const token = localStorage.getItem('token');
@@ -76,28 +102,27 @@ export default function SpecialistSchedule() {
             // Combine date and time
             const scheduledAt = new Date(`${form.date}T${form.time}`).toISOString();
 
-            const res = await fetch(`${API_URL}/api/specialist/courses/${form.courseId}/sessions`, {
+            const res = await fetch(`${API_URL}/api/specialist/groups/${form.groupId}/schedule`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    title: form.title,
-                    type: form.type,
+                    session_id: form.sessionId,
                     scheduled_at: scheduledAt
                 })
             });
 
             if (!res.ok) {
                 const data = await res.json();
-                throw new Error(data.error || 'فشل في إنشاء الجلسة');
+                throw new Error(data.error || 'فشل في جدولة الجلسة');
             }
 
             // Refresh data
             await fetchData();
             setShowForm(false);
-            setForm({ ...form, title: '', date: '', time: '' });
+            setForm({ ...form, groupId: '', sessionId: '', date: '', time: '' });
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -164,14 +189,14 @@ export default function SpecialistSchedule() {
                     {/* New Session Form */}
                     {showForm && (
                         <div className="card-love p-6 mb-8 animate-in slide-in-from-top-4">
-                            <h2 className="text-xl font-bold mb-6">جدولة جلسة جديدة</h2>
+                            <h2 className="text-xl font-bold mb-6">جدولة جلسة لمجموعة</h2>
                             <form onSubmit={handleSubmit} className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-bold mb-2 text-foreground">الكورس</label>
                                         <select
                                             value={form.courseId}
-                                            onChange={(e) => setForm({ ...form, courseId: e.target.value })}
+                                            onChange={(e) => handleCourseChange(e.target.value)}
                                             className="w-full p-3 rounded-lg border border-border bg-background text-foreground"
                                             required
                                         >
@@ -181,28 +206,42 @@ export default function SpecialistSchedule() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold mb-2 text-foreground">نوع الجلسة</label>
+                                        <label className="block text-sm font-bold mb-2 text-foreground flex items-center gap-2">
+                                            <Users className="w-4 h-4 text-blue-500" />
+                                            المجموعة
+                                        </label>
                                         <select
-                                            value={form.type}
-                                            onChange={(e) => setForm({ ...form, type: e.target.value })}
+                                            value={form.groupId}
+                                            onChange={(e) => setForm({ ...form, groupId: e.target.value })}
                                             className="w-full p-3 rounded-lg border border-border bg-background text-foreground"
+                                            required
                                         >
-                                            <option value="group">جلسة جماعية</option>
-                                            <option value="individual">جلسة فردية</option>
+                                            <option value="">اختر المجموعة...</option>
+                                            {availableGroups.map(g => (
+                                                <option key={g.id} value={g.id}>{g.name}</option>
+                                            ))}
                                         </select>
+                                        {availableGroups.length === 0 && (
+                                            <p className="text-xs text-amber-600 mt-1">لا توجد مجموعات لهذا الكورس</p>
+                                        )}
                                     </div>
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-bold mb-2 text-foreground">عنوان الجلسة</label>
-                                    <input
-                                        type="text"
-                                        value={form.title}
-                                        onChange={(e) => setForm({ ...form, title: e.target.value })}
+                                    <label className="block text-sm font-bold mb-2 text-foreground">الجلسة (من المنهج)</label>
+                                    <select
+                                        value={form.sessionId}
+                                        onChange={(e) => setForm({ ...form, sessionId: e.target.value })}
                                         className="w-full p-3 rounded-lg border border-border bg-background text-foreground"
-                                        placeholder="مثال: ورشة عمل تفاعلية"
                                         required
-                                    />
+                                    >
+                                        <option value="">اختر الجلسة...</option>
+                                        {syllabus.map(s => (
+                                            <option key={s.id} value={s.id}>
+                                                الجلسة {s.session_number}: {s.title || 'بدون عنوان'}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

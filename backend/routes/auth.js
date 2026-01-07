@@ -100,10 +100,41 @@ router.post('/register', async (req, res) => {
 
         await sendEmail(email, 'رمز تفعيل حسابك في إيواء', emailHtml);
 
-        // 🎯 AUTO-CREATE SUPPORT CHAT (Existing Logic)
-        // ... (Keep existing support chat logic for cleaner code, simplified here) ...
-        // We will execute the support message logic asynchronously to not block response if needed, 
-        // OR just keep it here. For brevity, I'll include the essential part.
+        await sendEmail(email, 'رمز تفعيل حسابك في إيواء', emailHtml);
+
+        // 🎯 AUTO-CREATE SUPPORT CHAT: Send Welcome Message from Owner/Support
+        try {
+            // Find Owner
+            const { data: owner } = await supabase
+                .from('users')
+                .select('id')
+                .eq('role', 'owner')
+                .limit(1)
+                .single();
+
+            if (owner) {
+                // Create Welcome Message
+                const welcomeContent = `مرحباً ${nickname} في منصة إيواء 🌸\nنحن هنا لدعمك في رحلتك. إذا كان لديك أي استفسار، لا تتردد في مراسلتنا هنا.`;
+
+                await supabase
+                    .from('messages')
+                    .insert({
+                        // id: uuidv4(), // letting DB generate ID is safer if uuidv4 not imported, but auth.js usually has it. 
+                        // Wait, auth.js uses uuidv4 at line 64. So it is available.
+                        // But let's check imports. Just in case, let DB handle it if possible or use uuidv4 if confirmed.
+                        // Line 64: id: uuidv4(). So uuidv4 is available.
+                        id: uuidv4(),
+                        sender_id: owner.id,
+                        receiver_id: newUser.id,
+                        content: welcomeContent,
+                        type: 'text',
+                        created_at: new Date().toISOString(),
+                        read: false
+                    });
+            }
+        } catch (msgError) {
+            console.error('Welcome message error:', msgError); // Non-blocking
+        }
 
         // Return success
         res.status(201).json({
@@ -281,8 +312,10 @@ router.post('/verify', async (req, res) => {
 
 /**
  * POST /api/auth/resend-otp
- * Resend verification code
+ * Resend verification code (max 5 times per email)
  */
+const otpAttempts = new Map(); // Track OTP attempts per email
+
 router.post('/resend-otp', async (req, res) => {
     try {
         const { email } = req.body;
@@ -290,6 +323,27 @@ router.post('/resend-otp', async (req, res) => {
         if (!email) {
             return res.status(400).json({ error: 'البريد الإلكتروني مطلوب' });
         }
+
+        // Rate limiting - max 5 attempts per email per hour
+        const now = Date.now();
+        const userAttempts = otpAttempts.get(email) || { count: 0, firstAttempt: now };
+
+        // Reset after 1 hour
+        if (now - userAttempts.firstAttempt > 60 * 60 * 1000) {
+            userAttempts.count = 0;
+            userAttempts.firstAttempt = now;
+        }
+
+        if (userAttempts.count >= 5) {
+            const remainingMinutes = Math.ceil((60 * 60 * 1000 - (now - userAttempts.firstAttempt)) / 60000);
+            return res.status(429).json({
+                error: `تم تجاوز الحد الأقصى (5 محاولات). حاول مرة أخرى بعد ${remainingMinutes} دقيقة.`,
+                remainingMinutes
+            });
+        }
+
+        userAttempts.count++;
+        otpAttempts.set(email, userAttempts);
 
         // Find user
         const { data: user, error } = await supabase
@@ -340,6 +394,147 @@ router.post('/resend-otp', async (req, res) => {
     } catch (error) {
         console.error('Resend OTP error:', error);
         res.status(500).json({ error: 'فشل إرسال الرمز' });
+    }
+});
+
+/**
+ * POST /api/auth/forgot-password
+ * Send password reset link
+ */
+router.post('/forgot-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.status(400).json({ error: 'البريد الإلكتروني مطلوب' });
+        }
+
+        // Find user
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('id, nickname')
+            .eq('email', email)
+            .single();
+
+        if (error || !user) {
+            // Security: Don't reveal if user exists. Delay response slightly.
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return res.json({ message: 'تم إرسال رابط إعادة التعيين إذا كان البريد مسجلاً.' });
+        }
+
+        // Generate Token (32 bytes hex)
+        const resetToken = crypto.randomBytes(32).toString('hex');
+        const resetExpires = new Date(Date.now() + 3600000); // 1 hour
+
+        // Save to DB
+        const { error: updateError } = await supabase
+            .from('users')
+            .update({
+                reset_token: resetToken,
+                reset_token_expiry: resetExpires.toISOString()
+            })
+            .eq('id', user.id);
+
+        if (updateError) {
+            console.error('Reset token save error:', updateError);
+            return res.status(500).json({ error: 'حدث خطأ' });
+        }
+
+        // Send Email
+        // Assuming frontend runs on same domain/port in dev? Or 3000? 
+        // User is running on `d:\midterm`. Next.js is usually 3000. Backend 5000.
+        // We should use process.env.FRONTEND_URL or default to localhost:3000
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
+
+        const emailHtml = `
+            <div style="text-align: right; direction: rtl; font-family: Arial, sans-serif;">
+                <h2>مرحباً ${user.nickname} 👋</h2>
+                <p>لقد تلقينا طلباً لإعادة تعيين كلمة المرور الخاصة بك.</p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="${resetLink}" style="background-color: #E85C3F; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                        إعادة تعيين كلمة المرور
+                    </a>
+                </div>
+                <p>هذا الرابط صالح لمدة ساعة واحدة.</p>
+                <p>إذا لم تطلب هذا التغيير، يرجى تجاهل هذه الرسالة.</p>
+            </div>
+        `;
+
+        await sendEmail(email, 'إعادة تعيين كلمة المرور - إيواء', emailHtml);
+
+        res.json({ message: 'تم إرسال رابط إعادة التعيين إلى بريدك الإلكتروني.' });
+
+    } catch (error) {
+        console.error('Forgot password error:', error);
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+/**
+ * POST /api/auth/reset-password
+ * Reset password with token
+ */
+router.post('/reset-password', async (req, res) => {
+    try {
+        const { token, newPassword } = req.body;
+
+        if (!token || !newPassword) {
+            return res.status(400).json({ error: 'جميع الحقول مطلوبة' });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' });
+        }
+
+        // Find user with valid token
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('id, reset_token_expiry')
+            .eq('reset_token', token)
+            .single();
+
+        if (error || !user) {
+            return res.status(400).json({ error: 'الرابط غير صالح أو منتهي الصلاحية' });
+        }
+
+        // Check expiry
+        // Postgres TIMESTAMP without time zone usually returns a string without 'Z'.
+        // Since we stored it as UTC (toISOString), we must treat it as UTC.
+        let expiryString = user.reset_token_expiry;
+        if (expiryString && typeof expiryString === 'string' && !expiryString.endsWith('Z')) {
+            expiryString += 'Z';
+        }
+
+        const expiryDate = new Date(expiryString);
+        const now = new Date();
+
+        if (!user.reset_token_expiry || expiryDate < now) {
+            return res.status(400).json({ error: 'الرابط منتهي الصلاحية' });
+        }
+
+        // Hash password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // Update User
+        const { error: updateError } = await supabase
+            .from('users')
+            .update({
+                password: hashedPassword,
+                reset_token: null,
+                reset_token_expiry: null
+            })
+            .eq('id', user.id);
+
+        if (updateError) {
+            return res.status(500).json({ error: 'فشل تحديث كلمة المرور' });
+        }
+
+        res.json({ message: 'تم تغيير كلمة المرور بنجاح. يمكنك تسجيل الدخول الآن.' });
+
+    } catch (error) {
+        console.error('Reset password error:', error);
+        res.status(500).json({ error: 'حدث خطأ' });
     }
 });
 

@@ -5,6 +5,7 @@ import GlobalChat from "@/components/chat/GlobalChat";
 import MobileBottomNav from "@/components/layout/MobileBottomNav";
 import { Toaster } from "@/components/ui/sonner";
 import SessionChecker from "@/components/auth/SessionChecker";
+import MaintenanceChecker from "@/components/layout/MaintenanceChecker";
 
 const cairo = Cairo({
   variable: "--font-sans", // Mapping Cairo to --font-sans to match the new globals.css
@@ -37,6 +38,7 @@ export default function RootLayout({
         <MobileBottomNav />
         <GlobalChat />
         <SessionChecker />
+        <MaintenanceChecker />
         <Toaster />
       </body>
     </html>

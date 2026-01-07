@@ -26,6 +26,16 @@ interface SettingsState {
     maintenance_mode: boolean;
     allow_registration: boolean;
     payment_methods: string[];
+    // Per-method payment details
+    vodafone_number?: string;
+    vodafone_notes?: string;
+    bank_account?: string;
+    bank_name?: string;
+    bank_notes?: string;
+    instapay_username?: string;
+    instapay_notes?: string;
+    fawry_code?: string;
+    fawry_notes?: string;
 }
 
 export default function SettingsPage() {
@@ -37,7 +47,16 @@ export default function SettingsPage() {
         support_email: 'support@eiwa.com',
         maintenance_mode: false,
         allow_registration: true,
-        payment_methods: ['bank_transfer', 'vodafone_cash']
+        payment_methods: ['bank_transfer', 'vodafone_cash'],
+        vodafone_number: '',
+        vodafone_notes: '',
+        bank_account: '',
+        bank_name: '',
+        bank_notes: '',
+        instapay_username: '',
+        instapay_notes: '',
+        fawry_code: '',
+        fawry_notes: ''
     });
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -75,7 +94,16 @@ export default function SettingsPage() {
                         support_email: data.settings.support_email || '',
                         maintenance_mode: data.settings.maintenance_mode === true,
                         allow_registration: data.settings.allow_registration !== false,
-                        payment_methods: data.settings.payment_methods || ['bank_transfer']
+                        payment_methods: data.settings.payment_methods || ['bank_transfer'],
+                        vodafone_number: data.settings.vodafone_number || '',
+                        vodafone_notes: data.settings.vodafone_notes || '',
+                        bank_account: data.settings.bank_account || '',
+                        bank_name: data.settings.bank_name || '',
+                        bank_notes: data.settings.bank_notes || '',
+                        instapay_username: data.settings.instapay_username || '',
+                        instapay_notes: data.settings.instapay_notes || '',
+                        fawry_code: data.settings.fawry_code || '',
+                        fawry_notes: data.settings.fawry_notes || ''
                     });
                 }
             }
@@ -250,6 +278,105 @@ export default function SettingsPage() {
                                     <span>{method.name}</span>
                                 </label>
                             ))}
+                        </div>
+
+                        {/* Per-Method Details */}
+                        <div className="mt-6 pt-6 border-t border-gray-200 space-y-6">
+                            <h3 className="font-medium text-gray-900">بيانات كل طريقة دفع</h3>
+
+                            {/* Vodafone Cash */}
+                            {settings.payment_methods.includes('vodafone_cash') && (
+                                <div className="p-4 bg-red-50 rounded-lg space-y-3">
+                                    <p className="font-medium text-red-700">🔴 فودافون كاش</p>
+                                    <input
+                                        type="text"
+                                        value={settings.vodafone_number || ''}
+                                        onChange={(e) => setSettings({ ...settings, vodafone_number: e.target.value })}
+                                        className="w-full p-3 rounded-lg border border-gray-300"
+                                        placeholder="رقم فودافون كاش (مثال: 01012345678)"
+                                        dir="ltr"
+                                    />
+                                    <textarea
+                                        value={settings.vodafone_notes || ''}
+                                        onChange={(e) => setSettings({ ...settings, vodafone_notes: e.target.value })}
+                                        className="w-full p-2 rounded-lg border border-gray-300 text-sm"
+                                        placeholder="اكتب ملاحظات الدفع هنا..."
+                                        rows={3}
+                                    />
+                                </div>
+                            )}
+
+                            {/* Bank Transfer */}
+                            {settings.payment_methods.includes('bank_transfer') && (
+                                <div className="p-4 bg-blue-50 rounded-lg space-y-3">
+                                    <p className="font-medium text-blue-700">🏦 تحويل بنكي</p>
+                                    <input
+                                        type="text"
+                                        value={settings.bank_account || ''}
+                                        onChange={(e) => setSettings({ ...settings, bank_account: e.target.value })}
+                                        className="w-full p-3 rounded-lg border border-gray-300"
+                                        placeholder="رقم الحساب البنكي"
+                                        dir="ltr"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={settings.bank_name || ''}
+                                        onChange={(e) => setSettings({ ...settings, bank_name: e.target.value })}
+                                        className="w-full p-3 rounded-lg border border-gray-300"
+                                        placeholder="اسم البنك"
+                                    />
+                                    <textarea
+                                        value={settings.bank_notes || ''}
+                                        onChange={(e) => setSettings({ ...settings, bank_notes: e.target.value })}
+                                        className="w-full p-2 rounded-lg border border-gray-300 text-sm"
+                                        placeholder="اكتب ملاحظات الدفع هنا..."
+                                        rows={3}
+                                    />
+                                </div>
+                            )}
+
+                            {/* InstaPay */}
+                            {settings.payment_methods.includes('instapay') && (
+                                <div className="p-4 bg-purple-50 rounded-lg space-y-3">
+                                    <p className="font-medium text-purple-700">💳 InstaPay</p>
+                                    <input
+                                        type="text"
+                                        value={settings.instapay_username || ''}
+                                        onChange={(e) => setSettings({ ...settings, instapay_username: e.target.value })}
+                                        className="w-full p-3 rounded-lg border border-gray-300"
+                                        placeholder="اسم المستخدم (مثال: @eiwa_pay)"
+                                        dir="ltr"
+                                    />
+                                    <textarea
+                                        value={settings.instapay_notes || ''}
+                                        onChange={(e) => setSettings({ ...settings, instapay_notes: e.target.value })}
+                                        className="w-full p-2 rounded-lg border border-gray-300 text-sm"
+                                        placeholder="اكتب ملاحظات الدفع هنا..."
+                                        rows={3}
+                                    />
+                                </div>
+                            )}
+
+                            {settings.payment_methods.includes('fawry') && (
+                                <div className="p-4 bg-orange-50 rounded-lg space-y-3">
+                                    <p className="font-medium text-orange-700">🟠 فوري</p>
+                                    <input
+                                        type="text"
+                                        value={settings.fawry_code || ''}
+                                        onChange={(e) => setSettings({ ...settings, fawry_code: e.target.value })}
+                                        className="w-full p-3 rounded-lg border border-gray-300"
+                                        placeholder="كود فوري"
+                                        dir="ltr"
+                                    />
+                                    <textarea
+                                        value={settings.fawry_notes || ''}
+                                        onChange={(e) => setSettings({ ...settings, fawry_notes: e.target.value })}
+                                        className="w-full p-2 rounded-lg border border-gray-300 text-sm"
+                                        placeholder="اكتب ملاحظات الدفع هنا..."
+                                        rows={3}
+                                    />
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

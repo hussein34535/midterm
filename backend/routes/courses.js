@@ -37,7 +37,7 @@ router.get('/', async (req, res) => {
 
 /**
  * GET /api/courses/:id
- * Get course details with sessions
+ * Get course details with sessions (Syllabus)
  */
 router.get('/:id', async (req, res) => {
     try {
@@ -55,8 +55,81 @@ router.get('/:id', async (req, res) => {
             return res.status(404).json({ error: 'الكورس غير موجود' });
         }
 
+        // Sort sessions by number
+        if (course.sessions) {
+            course.sessions.sort((a, b) => a.session_number - b.session_number);
+            // Sanitize syllabus sessions for public view
+            course.sessions = course.sessions.map(s => ({
+                ...s,
+                status: 'waiting' // Always waiting for public/syllabus view
+            }));
+        }
+
         res.json({ course });
     } catch (error) {
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+/**
+ * GET /api/courses/:id/my-sessions
+ * Get sessions with user's group status/schedule
+ */
+router.get('/:id/my-sessions', authMiddleware, async (req, res) => {
+    try {
+        const courseId = req.params.id;
+        const userId = req.userId;
+
+        // 1. Get Enrollment & Group
+        const { data: enrollment } = await supabase
+            .from('enrollments')
+            .select('group_id')
+            .eq('user_id', userId)
+            .eq('course_id', courseId)
+            .single();
+
+        if (!enrollment || !enrollment.group_id) {
+            return res.status(403).json({ error: 'غير مشترك في مجموعة' });
+        }
+
+        // 2. Get Syllabus (Template Sessions)
+        const { data: sessions } = await supabase
+            .from('sessions')
+            .select('id, title, session_number')
+            .eq('course_id', courseId)
+            .order('session_number', { ascending: true });
+
+        // 3. Get Scheduled Group Sessions
+        const { data: groupSessions } = await supabase
+            .from('group_sessions')
+            .select('*')
+            .eq('group_id', enrollment.group_id);
+
+        // 4. Merge
+        const result = sessions.map(session => {
+            const groupSession = groupSessions?.find(gs => gs.session_id === session.id);
+            if (groupSession) {
+                return {
+                    ...session,
+                    id: groupSession.id, // Use Group Session ID for joining
+                    status: groupSession.status,
+                    scheduled_at: groupSession.scheduled_at,
+                    is_group_session: true
+                };
+            } else {
+                return {
+                    ...session,
+                    status: 'waiting', // Not scheduled yet
+                    scheduled_at: null,
+                    is_group_session: false
+                };
+            }
+        });
+
+        res.json({ sessions: result });
+
+    } catch (error) {
+        console.error('My Sessions error:', error);
         res.status(500).json({ error: 'حدث خطأ' });
     }
 });
@@ -170,82 +243,115 @@ router.post('/:id/enroll', authMiddleware, async (req, res) => {
         }
 
         // 🎯 AUTO-ASSIGN TO GROUP (max 4 per group)
-        // Find an existing group for this course with < 4 members
-        const { data: groups } = await supabase
+        // Get all groups for this course with their actual member counts
+        const { data: allGroups } = await supabase
             .from('course_groups')
-            .select('id, name, member_count')
+            .select('id, name, capacity, course_id')
             .eq('course_id', courseId)
-            .lt('member_count', 4)
-            .order('created_at', { ascending: true })
-            .limit(1);
+            .order('created_at', { ascending: true });
 
-        let targetGroupId;
-        let groupName;
+        let targetGroupId = null;
+        let groupName = '';
 
-        if (groups && groups.length > 0) {
-            // Join existing group
-            targetGroupId = groups[0].id;
-            groupName = groups[0].name;
+        console.log(`Auto-assigning user ${userId} to course ${courseId}`);
+        console.log(`Found ${allGroups?.length || 0} existing groups.`);
 
-            // Update enrollment with group_id
-            await supabase
+        // Check each group for available capacity
+        if (allGroups && allGroups.length > 0) {
+            for (const group of allGroups) {
+                // Count actual members in this group (exclude owners)
+                const { count } = await supabase
+                    .from('enrollments')
+                    .select('*, user:users!inner(role)', { count: 'exact', head: true })
+                    .eq('group_id', group.id)
+                    .neq('user.role', 'owner');
+
+                const memberCount = count || 0;
+                const capacity = group.capacity || 4;
+
+                console.log(`Group ${group.name} (${group.id}): ${memberCount}/${capacity}`);
+
+                if (memberCount < capacity) {
+                    targetGroupId = group.id;
+                    groupName = group.name;
+                    console.log(`>> Selected existing group: ${groupName}`);
+                    break;
+                }
+            }
+        }
+
+        // If no available group found, create a new one
+        if (!targetGroupId) {
+            let groupNumber = (allGroups?.length || 0) + 1;
+            let created = false;
+            let attempts = 0;
+
+            console.log('>> No available group found, attempting creation...');
+
+            // Try to create a group with a unique name (retry up to 5 times)
+            while (!created && attempts < 5) {
+                groupName = `${course.title} - مجموعة ${groupNumber}`;
+                console.log(`Attempt ${attempts + 1}: Creating group "${groupName}"`);
+
+                const { data: newGroup, error: createError } = await supabase
+                    .from('course_groups')
+                    .insert({
+                        id: uuidv4(),
+                        name: groupName,
+                        course_id: courseId,
+                        specialist_id: course.specialist_id,
+                        capacity: 4
+                    })
+                    .select()
+                    .single();
+
+                if (!createError && newGroup) {
+                    targetGroupId = newGroup.id;
+                    created = true;
+                    console.log(`>> Created new group: ${newGroup.id}`);
+                } else {
+                    // If error (likely name collision), try next number
+                    console.warn(`Failed to create group ${groupName}, retrying...`, createError);
+                    groupNumber++;
+                    attempts++;
+                }
+            }
+        }
+
+        // Update enrollment with group_id
+        if (targetGroupId) {
+            const { error: updateError } = await supabase
                 .from('enrollments')
                 .update({ group_id: targetGroupId })
                 .eq('user_id', userId)
                 .eq('course_id', courseId);
 
-            // Update member count
-            await supabase
-                .from('course_groups')
-                .update({ member_count: (groups[0].member_count || 0) + 1 })
-                .eq('id', targetGroupId);
-        } else {
-            // Create new group
-            const groupNumber = Math.floor(Math.random() * 1000);
-            groupName = `${course.title} - مجموعة ${groupNumber}`;
+            if (updateError) console.error('Failed to assign group_id:', updateError);
+            else console.log(`>> Successfully assigned user to group ${targetGroupId}`);
 
-            const { data: newGroup } = await supabase
-                .from('course_groups')
-                .insert({
-                    id: uuidv4(),
-                    name: groupName,
-                    course_id: courseId,
-                    specialist_id: course.specialist_id,
-                    member_count: 1
-                })
-                .select()
-                .single();
+            // Send welcome message to the group
+            // ... existing welcome msg code ...
 
-            if (newGroup) {
-                targetGroupId = newGroup.id;
 
-                // Update enrollment with group_id
-                await supabase
-                    .from('enrollments')
-                    .update({ group_id: targetGroupId })
-                    .eq('user_id', userId)
-                    .eq('course_id', courseId);
-            }
-        }
-
-        // Send welcome message to the group
-        if (targetGroupId) {
+            // Send welcome message to the group
             const { data: user } = await supabase
                 .from('users')
                 .select('nickname')
                 .eq('id', userId)
                 .single();
 
-            const welcomeMsg = `مرحباً ${user?.nickname || 'بك'} في ${groupName}! نتمنى لك رحلة موفقة نحو التعافي 🌸`;
+            const welcomeMsg = `🌸 مرحباً بك ${user?.nickname || ''} في المجموعة! نتمنى لك رحلة موفقة نحو التعافي.`;
 
             await supabase
                 .from('messages')
                 .insert({
                     id: uuidv4(),
                     content: welcomeMsg,
-                    sender_id: course.specialist_id, // From specialist
+                    sender_id: null, // System message, no sender
                     course_id: courseId,
-                    type: 'group',
+                    group_id: targetGroupId, // Send to the specific group
+                    is_system: true,
+                    type: 'text',
                     created_at: new Date().toISOString()
                 });
         }

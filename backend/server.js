@@ -26,6 +26,10 @@ app.use(cors()); // Allow all origins for development
 app.use(express.json({ limit: '10mb' })); // For avatar uploads
 app.use(express.urlencoded({ extended: true }));
 
+// Maintenance Mode Check
+const checkMaintenanceMode = require('./middleware/maintenance');
+app.use(checkMaintenanceMode);
+
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);

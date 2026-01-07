@@ -22,8 +22,7 @@ router.get('/', async (req, res) => {
             .from('course_groups')
             .select(`
                 *,
-                specialist:users!specialist_id(id, nickname, email, avatar),
-                enrollments(count)
+                specialist:users!specialist_id(id, nickname, email, avatar)
             `);
 
         if (course_id) {
@@ -34,13 +33,23 @@ router.get('/', async (req, res) => {
 
         if (error) throw error;
 
-        // Transform data to include member count
-        const groups = data.map(group => ({
-            ...group,
-            member_count: group.enrollments[0]?.count || 0
-        }));
+        // Get actual member count for each group from enrollments (exclude owners)
+        const groupsWithCounts = await Promise.all(
+            data.map(async (group) => {
+                const { count } = await supabase
+                    .from('enrollments')
+                    .select('*, user:users!inner(role)', { count: 'exact', head: true })
+                    .eq('group_id', group.id)
+                    .neq('user.role', 'owner');
 
-        res.json({ success: true, groups });
+                return {
+                    ...group,
+                    member_count: count || 0
+                };
+            })
+        );
+
+        res.json({ success: true, groups: groupsWithCounts });
     } catch (error) {
         res.status(500).json({ success: false, error: error.message });
     }
@@ -91,37 +100,40 @@ router.post('/:id/add-user', async (req, res) => {
         const { id } = req.params;
         const { user_id } = req.body;
 
-        // 1. Check Capacity
+        // 1. Check Capacity (exclude owner)
         const { data: group, error: groupError } = await supabase
             .from('course_groups')
-            .select('capacity, enrollments(count)')
+            .select('capacity, course_id')
             .eq('id', id)
             .single();
 
         if (groupError) throw groupError;
 
-        const currentCount = group.enrollments[0]?.count || 0;
+        const { count } = await supabase
+            .from('enrollments')
+            .select('*, user:users!inner(role)', { count: 'exact', head: true })
+            .eq('group_id', id)
+            .neq('user.role', 'owner');
+
+        const currentCount = count || 0;
 
         if (currentCount >= group.capacity) {
             return res.status(400).json({ success: false, error: 'Group is full' });
         }
 
-        // 2. Update Enrollment
-        // Check if enrollment exists
-        const { data: enrollment, error: enrollCheckError } = await supabase
-            .from('enrollments')
-            .select('*')
-            .eq('course_id', group.course_id) // Need to get course_id from group first
-            .eq('user_id', user_id)
-            .single();
-
-        // If not enrolled in course, this might fail or we create enrollment
-        // Assuming user must be enrolled in course first, we just update group_id
-
+        // 2. Update/Create Enrollment
+        // Use upsert to handle both cases (existing enrollment or new one)
         const { data, error } = await supabase
             .from('enrollments')
-            .update({ group_id: id })
-            .eq('user_id', user_id)
+            .upsert({
+                user_id: user_id,
+                course_id: group.course_id,
+                group_id: id,
+                enrolled_at: new Date().toISOString(),
+                status: 'active'
+            }, {
+                onConflict: 'user_id, course_id'
+            })
             .select();
 
         if (error) throw error;
@@ -135,30 +147,66 @@ router.post('/:id/add-user', async (req, res) => {
 /**
  * GET /:id/members
  * Get all members of a specific group (for regular users to see their group members)
+ * Note: id can be either group_id OR course_id (since conversations use course_id)
  */
 router.get('/:id/members', async (req, res) => {
     try {
         const { id } = req.params;
 
-        // Get group info
-        const { data: group, error: groupError } = await supabase
+        // Try to find group by ID first
+        let { data: group, error: groupError } = await supabase
             .from('course_groups')
-            .select('id, name, course_id, member_count, capacity')
+            .select('id, name, course_id, capacity')
             .eq('id', id)
             .single();
 
+        // If not found by group_id, try by course_id
         if (groupError || !group) {
-            return res.status(404).json({ success: false, error: 'المجموعة غير موجودة' });
+            const { data: groupByCourse } = await supabase
+                .from('course_groups')
+                .select('id, name, course_id, capacity')
+                .eq('course_id', id)
+                .limit(1)
+                .single();
+
+            group = groupByCourse;
         }
 
-        // Get members from enrollments table (members are stored here with group_id)
+        // Get course info if we still don't have a group
+        if (!group) {
+            // Maybe there's no group yet, get members directly from enrollments by course_id
+            const { data: members, error: membersError } = await supabase
+                .from('enrollments')
+                .select(`
+                    user_id,
+                    user:users(id, nickname, avatar)
+                `)
+                .eq('course_id', id);
+
+            if (membersError) throw membersError;
+
+            const formattedMembers = (members || []).map(m => ({
+                id: m.user?.id,
+                nickname: m.user?.nickname,
+                avatar: m.user?.avatar
+            })).filter(m => m.id);
+
+            return res.json({
+                success: true,
+                group: { id, name: 'أعضاء الكورس', member_count: formattedMembers.length, capacity: 4 },
+                members: formattedMembers
+            });
+        }
+
+        // Get members from enrollments table using group_id (exclude owners)
         const { data: members, error: membersError } = await supabase
             .from('enrollments')
             .select(`
                 user_id,
-                user:users(id, nickname, avatar)
+                user:users!inner(id, nickname, avatar, role)
             `)
-            .eq('group_id', id);
+            .eq('group_id', group.id)
+            .neq('user.role', 'owner');
 
         if (membersError) throw membersError;
 
@@ -174,7 +222,7 @@ router.get('/:id/members', async (req, res) => {
             group: {
                 id: group.id,
                 name: group.name,
-                member_count: group.member_count || formattedMembers.length,
+                member_count: formattedMembers.length,
                 capacity: group.capacity
             },
             members: formattedMembers
@@ -182,6 +230,72 @@ router.get('/:id/members', async (req, res) => {
     } catch (error) {
         console.error('Get members error:', error);
         res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * DELETE /:id/members/:userId
+ * Remove a member from a group/course (Admin only)
+ * Note: id can be group_id or course_id
+ */
+router.delete('/:id/members/:userId', async (req, res) => {
+    try {
+        const { id, userId } = req.params;
+
+        // First try to find if this is a group_id
+        let courseId = id;
+        const { data: group } = await supabase
+            .from('course_groups')
+            .select('course_id')
+            .eq('id', id)
+            .single();
+
+        if (group) {
+            courseId = group.course_id;
+        }
+
+        // Delete the enrollment entirely (removes user from course)
+        const { error } = await supabase
+            .from('enrollments')
+            .delete()
+            .eq('course_id', courseId)
+            .eq('user_id', userId);
+
+        if (error) throw error;
+
+        res.json({ success: true, message: 'تم إزالة العضو من المجموعة' });
+    } catch (error) {
+        console.error('Remove member error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * DELETE /:id
+ * Delete a group
+ */
+router.delete('/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // 1. Clear group_id from enrollments first
+        await supabase
+            .from('enrollments')
+            .update({ group_id: null })
+            .eq('group_id', id);
+
+        // 2. Delete the group
+        const { error } = await supabase
+            .from('course_groups')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+
+        res.json({ success: true, message: 'تم حذف المجموعة' });
+    } catch (error) {
+        console.error('Delete group error:', error);
+        res.status(500).json({ success: false, error: 'فشل حذف المجموعة' });
     }
 });
 

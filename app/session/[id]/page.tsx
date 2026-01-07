@@ -78,7 +78,7 @@ export default function SessionPage() {
                                     <span className="text-4xl">✨</span>
                                 </div>
                                 <h2 className="text-3xl font-light text-white mb-3">انتهت الجلسة</h2>
-                                <p className="text-slate-400 mb-8 font-light">نتمنى لك يوماً مليئاً بالسكينة</p>
+                                <p className="text-slate-400 mb-8 font-light">نتمنى لك يوماً هادئاً</p>
                                 <Link href="/dashboard" className="px-8 py-3 rounded-full bg-white text-slate-900 font-medium hover:bg-slate-200 transition-colors shadow-lg shadow-white/10">
                                     العودة للرئيسية
                                 </Link>

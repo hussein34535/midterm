@@ -318,7 +318,8 @@ export default function ReportsPage() {
                         </button>
                     </div>
 
-                    <div className="overflow-x-auto">
+                    {/* Desktop Table */}
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full">
                             <thead className="bg-gray-50 border-b border-gray-100">
                                 <tr>
@@ -351,6 +352,35 @@ export default function ReportsPage() {
                                 )}
                             </tbody>
                         </table>
+                    </div>
+
+                    {/* Mobile Cards */}
+                    <div className="md:hidden">
+                        {stats.transactions && stats.transactions.length > 0 ? (
+                            <div className="divide-y divide-gray-100">
+                                {stats.transactions.map((tx: any) => (
+                                    <div key={tx.id} className="p-4 hover:bg-gray-50 transition-colors">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <span className="text-xs font-mono text-gray-400 bg-gray-100 px-2 py-0.5 rounded">#{tx.id.slice(0, 8)}</span>
+                                            <span className="text-xs text-gray-400">
+                                                {new Date(tx.date).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' })}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between items-end">
+                                            <div>
+                                                <h4 className="font-bold text-gray-900 text-sm">{tx.user}</h4>
+                                                <p className="text-xs text-gray-500 mt-0.5">{tx.course}</p>
+                                            </div>
+                                            <span className="font-bold text-green-600 dir-ltr text-lg">{Number(tx.amount).toLocaleString()} ج.م</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="p-8 text-center text-gray-500 text-sm">
+                                لا توجد عمليات في هذه الفترة
+                            </div>
+                        )}
                     </div>
                 </div>
             </main>

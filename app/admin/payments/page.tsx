@@ -11,7 +11,8 @@ import {
     Loader2,
     DollarSign,
     User,
-    BookOpen
+    BookOpen,
+    FileText
 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { toast } from "sonner";
@@ -185,7 +186,7 @@ export default function PaymentsManagement() {
                                 <DollarSign className="w-5 h-5 text-primary" />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold">{stats.totalAmount.toFixed(0)} ر.س</p>
+                                <p className="text-2xl font-bold">{stats.totalAmount.toFixed(0)} ج.م</p>
                                 <p className="text-xs text-gray-500">الإيرادات</p>
                             </div>
                         </div>
@@ -246,7 +247,7 @@ export default function PaymentsManagement() {
                                         <span className="text-sm font-medium">{payment.course?.title || 'كورس محذوف'}</span>
                                     </div>
                                     <div className="flex items-center justify-between mt-2">
-                                        <span className="text-lg font-bold text-primary">{payment.amount} ر.س</span>
+                                        <span className="text-lg font-bold text-primary">{payment.amount} ج.م</span>
                                         <span className="text-xs text-gray-500">
                                             {new Date(payment.created_at).toLocaleDateString('ar-EG', {
                                                 year: 'numeric',
@@ -304,6 +305,18 @@ export default function PaymentsManagement() {
                                         >
                                             <X className="w-4 h-4" />
                                             رفض
+                                        </button>
+                                    </div>
+                                )}
+
+                                {(payment.status === 'confirmed' || payment.status === 'completed') && (
+                                    <div className="mt-4">
+                                        <button
+                                            onClick={() => router.push(`/admin/invoices/${payment.id}`)}
+                                            className="w-full py-2 bg-primary/10 text-primary border border-primary/20 rounded-lg hover:bg-primary/20 transition-all flex items-center justify-center gap-2 font-bold"
+                                        >
+                                            <FileText className="w-4 h-4" />
+                                            عرض الفاتورة الضريبية
                                         </button>
                                     </div>
                                 )}

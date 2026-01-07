@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Users, LayoutDashboard, Settings, LogOut, ShieldAlert, DollarSign, Sparkles, Loader2, TrendingUp } from "lucide-react";
+import {
+    Users, LayoutDashboard, Settings, LogOut, ShieldAlert, DollarSign,
+    Sparkles, Loader2, TrendingUp, FileText, UserPlus, BookOpen,
+    Contact2, Wallet, BadgeCheck, BellRing, ScrollText, BarChart3,
+    Settings2
+} from "lucide-react";
 import Header from "@/components/layout/Header";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -82,157 +87,95 @@ export default function AdminDashboard() {
         <div className="bg-warm-mesh min-h-screen flex flex-col" dir="rtl">
             <Header />
 
-            <main className="flex-grow pb-20 pt-32">
-                <div className="container mx-auto px-6">
+            <main className="flex-grow pb-24 pt-24 md:pt-32">
+                <div className="container mx-auto px-4 md:px-6 max-w-5xl">
 
-                    {/* Header */}
-                    <div className="mb-12 text-center md:text-right animate-in fade-in slide-in-from-bottom-4 duration-700">
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-bold mb-4">
-                            <ShieldAlert className="w-4 h-4" />
-                            <span>لوحة الإدارة</span>
+                    <div className="flex flex-col gap-1 md:gap-2 mb-8 md:mb-12">
+                        <div className="flex items-center gap-3">
+                            <div className="w-1 md:w-1.5 h-6 md:h-8 bg-primary rounded-full shadow-sm shadow-primary/20" />
+                            <h1 className="text-3xl md:text-5xl font-black text-foreground tracking-tight">لوحة التحكم</h1>
                         </div>
-                        <h1 className="text-4xl md:text-5xl font-serif font-bold text-foreground mb-3">
-                            نظرة عامة على المنصة
-                        </h1>
-                        <p className="text-muted-foreground text-lg">تحكم كامل في جميع جوانب النظام 🔐</p>
+                        <p className="text-muted-foreground/60 text-sm md:text-lg font-medium pr-4 border-r-2 border-primary/5 italic truncate">أهلاً بك مجدداً يا مدير 🗝️</p>
                     </div>
 
                     {error && (
-                        <div className="card-love p-4 mb-8 bg-destructive/10 border-destructive/20 text-destructive text-center">
+                        <div className="card-love p-4 mb-8 bg-red-500/5 border-red-500/10 text-red-600 rounded-3xl text-center font-bold">
                             {error}
                         </div>
                     )}
 
-                    {/* Quick Stats */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                        <div className="card-love p-6 flex flex-col items-center justify-center text-center group hover:border-primary/30 transition-all">
-                            <Users className="w-8 h-8 text-primary mb-2" />
-                            <h3 className="text-muted-foreground font-medium">المستخدمين</h3>
-                            <p className="text-3xl font-bold mt-2 text-foreground">{stats.users}</p>
-                        </div>
-                        <div className="card-love p-6 flex flex-col items-center justify-center text-center group hover:border-primary/30 transition-all">
-                            <ShieldAlert className="w-8 h-8 text-primary mb-2" />
-                            <h3 className="text-muted-foreground font-medium">الأخصائيين</h3>
-                            <p className="text-3xl font-bold mt-2 text-foreground">{stats.specialists}</p>
-                        </div>
-                        <div className="card-love p-6 flex flex-col items-center justify-center text-center group hover:border-primary/30 transition-all">
-                            <LayoutDashboard className="w-8 h-8 text-primary mb-2" />
-                            <h3 className="text-muted-foreground font-medium">إجمالي الجلسات</h3>
-                            <p className="text-3xl font-bold mt-2 text-foreground">{stats.totalSessions}</p>
-                        </div>
-                        <div className="card-love p-6 flex flex-col items-center justify-center text-center group hover:border-primary/30 transition-all">
-                            <Settings className="w-8 h-8 text-primary mb-2" />
-                            <h3 className="text-muted-foreground font-medium">جلسات نشطة</h3>
-                            <p className="text-3xl font-bold mt-2 text-foreground">{stats.activeSessions}</p>
-                        </div>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5 mb-8 md:mb-10">
+                        {[
+                            { label: "المستخدمين", value: stats.users, icon: Users },
+                            { label: "الأخصائيين", value: stats.specialists, icon: ShieldAlert },
+                            { label: "الجلسات", value: stats.totalSessions, icon: LayoutDashboard },
+                            { label: "نشطة الآن", value: stats.activeSessions, icon: Settings }
+                        ].map((stat, i) => (
+                            <div key={i} className="card-love p-4 md:p-5 flex items-center gap-3 md:gap-4 group hover:bg-white/80 transition-all active:scale-95">
+                                <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-primary/5 text-primary border border-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-white transition-all duration-300 shadow-inner">
+                                    <stat.icon className="w-5 h-5 md:w-6 md:h-6 stroke-[2]" />
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[8px] md:text-[10px] font-black text-muted-foreground/60 uppercase tracking-widest leading-none mb-1 md:mb-1.5">{stat.label}</p>
+                                    <h3 className="text-xl md:text-2xl font-black text-foreground leading-none tabular-nums tracking-tighter">{stat.value}</h3>
+                                </div>
+                            </div>
+                        ))}
                     </div>
 
-                    {/* Financials (Owner Only Mock) */}
-                    <div className="card-love p-6 mb-8">
-                        <div className="flex items-center gap-3 mb-4">
-                            <DollarSign className="w-6 h-6 text-primary" />
-                            <h2 className="text-xl font-bold text-foreground">التقرير المالي (المالك فقط)</h2>
+                    <div className="mb-14">
+                        <div className="flex items-center gap-2 mb-6 px-4">
+                            <TrendingUp className="w-4 h-4 text-primary" />
+                            <h2 className="text-[10px] font-black text-muted-foreground/60 uppercase tracking-[0.3em]">التقرير المالي الموحد</h2>
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="bg-primary/5 p-4 rounded-lg border border-primary/10">
-                                <p className="text-sm text-muted-foreground">إجمالي الدخل</p>
-                                <p className="text-2xl font-bold text-foreground">{stats.totalRevenue?.toLocaleString()} ر.س</p>
+                        <div className="card-love p-1 flex flex-row items-center divide-x divide-x-reverse divide-primary/5 overflow-hidden">
+                            <div className="flex-1 p-4 md:p-8 text-center group">
+                                <span className="block text-[8px] md:text-[10px] font-black text-muted-foreground/40 mb-2 md:mb-3 uppercase tracking-widest leading-none">الإجمالي</span>
+                                <span className="text-lg md:text-4xl font-black text-foreground tabular-nums tracking-tighter">{stats.totalRevenue?.toLocaleString()} <small className="text-[8px] md:text-xs font-bold opacity-30">ج.م</small></span>
                             </div>
-                            <div className="bg-primary/5 p-4 rounded-lg border border-primary/10">
-                                <p className="text-sm text-muted-foreground">دخل هذا الشهر</p>
-                                <p className="text-2xl font-bold text-foreground">{stats.monthlyRevenue?.toLocaleString()} ر.س</p>
+                            <div className="flex-1 p-4 md:p-8 text-center bg-primary/[0.02] relative overflow-hidden">
+                                <span className="block text-[8px] md:text-[10px] font-black text-primary/60 mb-2 md:mb-3 uppercase tracking-widest leading-none">الشهر</span>
+                                <span className="text-xl md:text-4xl font-black text-primary tabular-nums tracking-tighter">{stats.monthlyRevenue?.toLocaleString()} <small className="text-[8px] md:text-xs font-bold opacity-30">ج.م</small></span>
                             </div>
-                            <div className="bg-primary/5 p-4 rounded-lg border border-primary/10">
-                                <p className="text-sm text-muted-foreground">دفعات معلقة</p>
-                                <p className="text-2xl font-bold text-foreground text-amber-600">{stats.pendingRevenue?.toLocaleString()} ر.س</p>
+                            <div className="flex-1 p-4 md:p-8 text-center group">
+                                <span className="block text-[8px] md:text-[10px] font-black text-muted-foreground/40 mb-2 md:mb-3 uppercase tracking-widest leading-none">معلق</span>
+                                <span className="text-lg md:text-4xl font-black text-foreground tabular-nums tracking-tighter opacity-80">{stats.pendingRevenue?.toLocaleString()} <small className="text-[8px] md:text-xs font-bold opacity-30">ج.م</small></span>
                             </div>
                         </div>
                     </div>
 
-                    {/* Navigation Links */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 p-2">
-                        <Link href="/admin/users" className="card-love p-6 flex items-center gap-4 group hover:border-primary/50 transition-all">
-                            <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary/20 transition-colors">
-                                <Users className="w-7 h-7" />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors">إدارة المستخدمين</h3>
-                                <p className="text-muted-foreground text-sm">عرض وتعديل الصلاحيات</p>
-                            </div>
-                        </Link>
-                        <Link href="/admin/courses" className="card-love p-6 flex items-center gap-4 group hover:border-primary/50 transition-all">
-                            <div className="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500 group-hover:bg-blue-500/20 transition-colors">
-                                <LayoutDashboard className="w-7 h-7" />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-foreground group-hover:text-blue-500 transition-colors">إدارة الكورسات</h3>
-                                <p className="text-muted-foreground text-sm">إنشاء وتعديل الكورسات</p>
-                            </div>
-                        </Link>
-                        <Link href="/admin/groups" className="card-love p-6 flex items-center gap-4 group hover:border-primary/50 transition-all">
-                            <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-500 group-hover:bg-indigo-500/20 transition-colors">
-                                <Users className="w-7 h-7" />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-foreground group-hover:text-indigo-500 transition-colors">إدارة المجموعات</h3>
-                                <p className="text-muted-foreground text-sm">توزيع المجموعات والأخصائيين</p>
-                            </div>
-                        </Link>
-                        <div className="relative">
-                            {pendingPayments > 0 && (
-                                <div className="absolute -top-2 -right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center text-xs font-bold animate-pulse shadow-lg z-20">
-                                    {pendingPayments}
+                    <div className="grid grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-20 px-1">
+                        {[
+                            { name: "المستخدمين", href: "/admin/users", icon: UserPlus, desc: "التحكم في الحسابات والأدوار", color: "text-indigo-600", bg: "bg-indigo-50/80" },
+                            { name: "المناهج", href: "/admin/courses", icon: BookOpen, desc: "المحتويات العلمية والدروس", color: "text-rose-600", bg: "bg-rose-50/80" },
+                            { name: "المجموعات", href: "/admin/groups", icon: Contact2, desc: "توزيع الطلاب والفرق التعليمية", color: "text-emerald-600", bg: "bg-emerald-50/80" },
+                            { name: "المدفوعات", href: "/admin/payments", icon: Wallet, desc: "تأكيد التحصيلات البنكية", color: "text-amber-600", bg: "bg-amber-50/80", badge: pendingPayments },
+                            { name: "الأخصائيين", href: "/admin/specialists", icon: BadgeCheck, desc: "ملفات الكادر التعليمي والمهني", color: "text-blue-600", bg: "bg-blue-50/80" },
+                            { name: "التنبيهات", href: "/admin/messages", icon: BellRing, desc: "مركز التواصل والدعم الفني", color: "text-purple-600", bg: "bg-purple-50/80" },
+                            { name: "الفواتير", href: "/admin/invoices", icon: ScrollText, desc: "إصدار وطباعة الفواتير الرسمية", color: "text-pink-600", bg: "bg-pink-50/80" },
+                            { name: "التقارير", href: "/admin/reports", icon: BarChart3, desc: "التقارير الإحصائية والنمو", color: "text-cyan-600", bg: "bg-cyan-50/80" },
+                            { name: "الإعدادات", href: "/admin/settings", icon: Settings2, desc: "خيارات النظام والتحكم العام", color: "text-slate-600", bg: "bg-slate-50/80" },
+                        ].map((item) => (
+                            <Link
+                                key={item.name}
+                                href={item.href}
+                                className="card-love p-4 md:p-6 flex flex-col md:flex-row items-center md:items-center gap-3 md:gap-5 hover:border-primary/40 hover:bg-white transition-all group relative active:scale-[0.97] border-white/60 shadow-sm text-center md:text-right"
+                            >
+                                {item.badge && item.badge > 0 ? (
+                                    <div className="absolute top-2 right-2 md:top-4 md:right-4 px-1.5 md:px-2 py-0.5 bg-primary text-white rounded-full flex items-center justify-center text-[8px] md:text-[10px] font-black shadow-lg shadow-primary/30 border-2 border-white z-10 animate-pulse">
+                                        {item.badge}
+                                    </div>
+                                ) : null}
+                                <div className={`w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl ${item.bg} ${item.color} border border-white flex items-center justify-center group-hover:scale-110 group-hover:shadow-lg transition-all duration-500 relative overflow-hidden backdrop-blur-sm shrink-0`}>
+                                    <div className="absolute inset-0 bg-white/40 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    <item.icon className="w-5 h-5 md:w-7 md:h-7 stroke-[1.5] drop-shadow-sm relative z-10" />
                                 </div>
-                            )}
-                            <Link href="/admin/payments" className="card-love p-6 flex items-center gap-4 group hover:border-primary/50 transition-all block">
-                                <div className="w-14 h-14 rounded-2xl bg-green-500/10 flex items-center justify-center text-green-500 group-hover:bg-green-500/20 transition-colors">
-                                    <DollarSign className="w-7 h-7" />
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-bold text-foreground group-hover:text-green-500 transition-colors">إدارة المدفوعات</h3>
-                                    <p className="text-muted-foreground text-sm">تأكيد ورفض الدفعات</p>
-                                    {pendingPayments > 0 && (
-                                        <p className="text-xs text-red-500 font-bold mt-1">🔔 {pendingPayments} دفعة جديدة</p>
-                                    )}
+                                <div className="flex-1 overflow-hidden">
+                                    <h3 className="text-[10px] md:text-lg font-black text-foreground group-hover:text-primary transition-colors leading-tight mb-0.5 truncate">{item.name}</h3>
+                                    <p className="hidden md:block text-muted-foreground/40 text-[11px] font-black tracking-tight">{item.desc}</p>
                                 </div>
                             </Link>
-                        </div>
-                        <Link href="/admin/specialists" className="card-love p-6 flex items-center gap-4 group hover:border-primary/50 transition-all">
-                            <div className="w-14 h-14 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-500 group-hover:bg-amber-500/20 transition-colors">
-                                <ShieldAlert className="w-7 h-7" />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-foreground group-hover:text-amber-500 transition-colors">إدارة الأخصائيين</h3>
-                                <p className="text-muted-foreground text-sm">إدارة حسابات الأخصائيين</p>
-                            </div>
-                        </Link>
-                        <Link href="/admin/messages" className="card-love p-6 flex items-center gap-4 group hover:border-primary/50 transition-all">
-                            <div className="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center text-purple-500 group-hover:bg-purple-500/20 transition-colors">
-                                <Sparkles className="w-7 h-7" />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-foreground group-hover:text-purple-500 transition-colors">إدارة الرسائل</h3>
-                                <p className="text-muted-foreground text-sm">عرض وحذف الرسائل</p>
-                            </div>
-                        </Link>
-                        <Link href="/admin/reports" className="card-love p-6 flex items-center gap-4 group hover:border-primary/50 transition-all">
-                            <div className="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500 group-hover:bg-blue-500/20 transition-colors">
-                                <TrendingUp className="w-7 h-7" />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-foreground group-hover:text-blue-500 transition-colors">التقارير والإحصائيات</h3>
-                                <p className="text-muted-foreground text-sm">متابعة أداء المنصة</p>
-                            </div>
-                        </Link>
-                        <Link href="/admin/settings" className="card-love p-6 flex items-center gap-4 group hover:border-primary/50 transition-all">
-                            <div className="w-14 h-14 rounded-2xl bg-gray-500/10 flex items-center justify-center text-gray-500 group-hover:bg-gray-500/20 transition-colors">
-                                <Settings className="w-7 h-7" />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-foreground group-hover:text-gray-500 transition-colors">إعدادات المنصة</h3>
-                                <p className="text-muted-foreground text-sm">تخصيص الإعدادات (المالك فقط)</p>
-                            </div>
-                        </Link>
+                        ))}
                     </div>
 
                 </div>

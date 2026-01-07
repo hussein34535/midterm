@@ -468,6 +468,40 @@ router.get('/payments', requireAdmin, async (req, res) => {
 });
 
 /**
+ * GET /api/admin/payments/:id
+ * Get single payment details (Admin+)
+ */
+router.get('/payments/:id', requireAdmin, async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const { data: payment, error } = await supabase
+            .from('payments')
+            .select(`
+                *,
+                user:users!payments_user_id_fkey(id, nickname, email, avatar),
+                course:courses!payments_course_id_fkey(id, title, price, description)
+            `)
+            .eq('id', id)
+            .single();
+
+        if (error) {
+            console.error('Payment fetch error:', error);
+            return res.status(500).json({ error: 'حدث خطأ في جلب بيانات الدفعة' });
+        }
+
+        if (!payment) {
+            return res.status(404).json({ error: 'الدفعة غير موجودة' });
+        }
+
+        res.json({ payment });
+    } catch (error) {
+        console.error('Payment detail error:', error);
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+/**
  * PATCH /api/admin/payments/:id
  * Update payment status (Owner only - confirm/reject)
  */
@@ -531,80 +565,99 @@ router.patch('/payments/:id', requireOwner, async (req, res) => {
                     .eq('id', payment.course_id)
                     .single();
 
-                // AUTO-ASSIGN TO GROUP (max 4 per group)
-                const { data: groups } = await supabase
+                // 🎯 AUTO-ASSIGN TO GROUP (max 4 per group)
+                // Get all groups for this course with their actual member counts
+                const { data: allGroups } = await supabase
                     .from('course_groups')
-                    .select('id, name, member_count')
+                    .select('id, name, capacity, course_id')
                     .eq('course_id', payment.course_id)
-                    .lt('member_count', 4)
-                    .order('created_at', { ascending: true })
-                    .limit(1);
+                    .order('created_at', { ascending: true });
 
-                let targetGroupId;
-                let groupName;
+                let targetGroupId = null;
+                let groupName = '';
 
-                if (groups && groups.length > 0) {
-                    // Join existing group
-                    targetGroupId = groups[0].id;
-                    groupName = groups[0].name;
+                // Check each group for available capacity
+                if (allGroups && allGroups.length > 0) {
+                    for (const group of allGroups) {
+                        // Count actual members in this group (exclude owners)
+                        const { count } = await supabase
+                            .from('enrollments')
+                            .select('*, user:users!inner(role)', { count: 'exact', head: true })
+                            .eq('group_id', group.id)
+                            .neq('user.role', 'owner');
 
-                    // Update enrollment with group_id
+                        const memberCount = count || 0;
+                        const capacity = group.capacity || 4;
+
+                        if (memberCount < capacity) {
+                            targetGroupId = group.id;
+                            groupName = group.name;
+                            break;
+                        }
+                    }
+                }
+
+                // If no available group found, create a new one
+                if (!targetGroupId) {
+                    let groupNumber = (allGroups?.length || 0) + 1;
+                    let created = false;
+                    let attempts = 0;
+
+                    // Try to create a group with a unique name (retry up to 5 times)
+                    while (!created && attempts < 5) {
+                        groupName = `${course?.title || 'كورس'} - مجموعة ${groupNumber}`;
+
+                        const { data: newGroup, error: createError } = await supabase
+                            .from('course_groups')
+                            .insert({
+                                id: uuidv4(),
+                                name: groupName,
+                                course_id: payment.course_id,
+                                specialist_id: course?.specialist_id,
+                                capacity: 4
+                            })
+                            .select()
+                            .single();
+
+                        if (!createError && newGroup) {
+                            targetGroupId = newGroup.id;
+                            created = true;
+                        } else {
+                            // If error (likely name collision), try next number
+                            console.warn(`Failed to create group ${groupName}, retrying...`, createError);
+                            groupNumber++;
+                            attempts++;
+                        }
+                    }
+                }
+
+                // Update enrollment with group_id and Send welcome message
+                if (targetGroupId) {
                     await supabase
                         .from('enrollments')
                         .update({ group_id: targetGroupId })
                         .eq('user_id', payment.user_id)
                         .eq('course_id', payment.course_id);
 
-                    await supabase
-                        .from('course_groups')
-                        .update({ member_count: (groups[0].member_count || 0) + 1 })
-                        .eq('id', targetGroupId);
-                } else {
-                    // Create new group
-                    const groupNumber = Math.floor(Math.random() * 1000);
-                    groupName = `${course?.title || 'كورس'} - مجموعة ${groupNumber}`;
-
-                    const { data: newGroup } = await supabase
-                        .from('course_groups')
-                        .insert({
-                            id: uuidv4(),
-                            name: groupName,
-                            course_id: payment.course_id,
-                            specialist_id: course?.specialist_id,
-                            member_count: 1
-                        })
-                        .select()
-                        .single();
-
-                    if (newGroup) {
-                        targetGroupId = newGroup.id;
-                        // Update enrollment with group_id
-                        await supabase
-                            .from('enrollments')
-                            .update({ group_id: targetGroupId })
-                            .eq('user_id', payment.user_id)
-                            .eq('course_id', payment.course_id);
-                    }
-                }
-
-                // Send welcome message
-                if (targetGroupId && course) {
+                    // Send welcome message
                     const { data: user } = await supabase
                         .from('users')
                         .select('nickname')
                         .eq('id', payment.user_id)
                         .single();
 
-                    const welcomeMsg = `مرحباً ${user?.nickname || 'بك'} في ${groupName}! نتمنى لك رحلة موفقة نحو التعافي 🌸`;
+                    const welcomeMsg = `🌸 مرحباً بك ${user?.nickname || ''} في المجموعة! نتمنى لك رحلة موفقة نحو التعافي.`;
 
                     await supabase
                         .from('messages')
                         .insert({
                             id: uuidv4(),
                             content: welcomeMsg,
-                            sender_id: course.specialist_id,
+                            sender_id: null, // System message
                             course_id: payment.course_id,
-                            type: 'group',
+                            group_id: targetGroupId,
+                            is_system: true,
+                            type: 'text',
                             created_at: new Date().toISOString()
                         });
                 }
@@ -630,13 +683,21 @@ router.get('/conversations', requireAdmin, async (req, res) => {
             .select(`
                 id,
                 name,
-                member_count,
+                capacity,
                 created_at,
                 course:courses(title)
             `)
             .order('created_at', { ascending: false });
 
         if (groupsError) throw groupsError;
+
+        // 1.5 Get Courses (Global Chats)
+        const { data: courses, error: coursesError } = await supabase
+            .from('courses')
+            .select('id, title, created_at')
+            .order('created_at', { ascending: false });
+
+        if (coursesError) throw coursesError;
 
         // 2. Get Direct Conversations (Users who have messaged)
         // Since we don't have a conversations table, we aggregate messages
@@ -702,11 +763,23 @@ router.get('/conversations', requireAdmin, async (req, res) => {
             subtitle: g.course?.title,
             type: 'group',
             created_at: g.created_at,
-            member_count: g.members?.[0]?.count || 0
+            member_count: g.members?.[0]?.count || 0,
+            isGroup: true
+        }));
+
+        // Format Courses (Global)
+        const formattedCourses = (courses || []).map(c => ({
+            id: c.id,
+            name: c.title,
+            subtitle: 'المحادثة العامة',
+            type: 'group', // handled as group in UI but logic differs
+            isCourse: true,
+            created_at: c.created_at,
+            member_count: 0 // Could fetch enrollment count if needed
         }));
 
         // Combine and Sort
-        const allConversations = [...formattedGroups, ...enrichedDirects].sort((a, b) =>
+        const allConversations = [...formattedCourses, ...formattedGroups, ...enrichedDirects].sort((a, b) =>
             new Date(b.created_at) - new Date(a.created_at)
         );
 
@@ -756,7 +829,7 @@ router.delete('/sessions/:id', requireOwner, async (req, res) => {
  */
 router.get('/messages', requireAdmin, async (req, res) => {
     try {
-        const { limit = 100, type, courseId, userId } = req.query;
+        const { limit = 100, type, courseId, userId, groupId } = req.query;
 
         let query = supabase
             .from('messages')
@@ -767,8 +840,11 @@ router.get('/messages', requireAdmin, async (req, res) => {
             .order('created_at', { ascending: false })
             .limit(parseInt(limit));
 
-        if (courseId) {
-            query = query.eq('course_id', courseId);
+        if (groupId) {
+            query = query.eq('group_id', groupId);
+        } else if (courseId) {
+            // Global Course Chat (No Group)
+            query = query.eq('course_id', courseId).is('group_id', null);
         } else if (userId) {
             // For DM, we want messages between this user and ANYONE (usually admin/support)
             // But usually DMs are User <-> System.

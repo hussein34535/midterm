@@ -92,13 +92,6 @@ export default function Header() {
 
     // Dynamic nav items based on login state
     const navItems = user ? [
-        // Admin/Specialist links first (appear on right in RTL)
-        ...(user.role === 'owner' ? [
-            { name: "الإدارة", href: "/admin", icon: Crown },
-        ] : []),
-        ...(user.role === 'specialist' || user.role === 'owner' ? [
-            { name: "الأخصائي", href: "/specialist", icon: Shield }
-        ] : []),
         // Regular nav items
         { name: "جلساتي", href: "/dashboard", badge: 0, icon: Home },
         { name: "الرسائل", href: "/messages", badge: unreadCount, icon: MessageCircle },
@@ -129,9 +122,6 @@ export default function Header() {
                                     onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                                     className="flex items-center gap-1.5 md:gap-2 p-1.5 md:p-2 rounded-full bg-white/70 hover:bg-white transition-all border border-border/40 hover:border-primary/30 shadow-md hover:shadow-lg group backdrop-blur-sm"
                                 >
-                                    {/* Dropdown Arrow */}
-                                    <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
-
                                     {/* Avatar with Crown for Owner/Specialist */}
                                     <div className="relative">
                                         {/* Crown/Shield Badge for special roles */}
@@ -153,6 +143,9 @@ export default function Header() {
                                             )}
                                         </div>
                                     </div>
+
+                                    {/* Dropdown Arrow */}
+                                    <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
                                 </button>
 
                                 {/* Dropdown Menu */}
@@ -183,9 +176,8 @@ export default function Header() {
                                             </div>
                                         </div>
 
-                                        {/* Navigation Links */}
                                         <div className="py-1 border-b border-border/50 mb-1">
-                                            {navItems.map((item) => (
+                                            {navItems.map((item: any) => (
                                                 <Link
                                                     key={item.name}
                                                     href={item.href}
@@ -194,7 +186,7 @@ export default function Header() {
                                                 >
                                                     {'icon' in item && item.icon && <item.icon className="w-4 h-4 text-muted-foreground" />}
                                                     <span>{item.name}</span>
-                                                    {'badge' in item && item.badge > 0 && (
+                                                    {item.badge && item.badge > 0 && (
                                                         <span className="mr-auto min-w-[20px] h-5 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                                                             {item.badge > 9 ? '9+' : item.badge}
                                                         </span>
@@ -250,14 +242,37 @@ export default function Header() {
 
                     {/* Desktop Nav - Floating Capsule Style (hidden on mobile) */}
                     <nav className="hidden md:flex items-center gap-1 p-1.5 bg-background/60 backdrop-blur-xl border border-border/40 rounded-full shadow-lg shadow-black/5 absolute left-1/2 transform -translate-x-1/2">
-                        {navItems.map((item) => (
+                        {/* Special Role Badges */}
+                        {user?.role === 'owner' && (
+                            <Link
+                                href="/admin"
+                                className="px-4 py-1.5 rounded-full text-xs font-bold bg-gradient-to-r from-yellow-500 to-amber-600 text-white shadow-md hover:shadow-lg hover:scale-105 transition-all flex items-center gap-1.5 mx-0.5"
+                            >
+                                <Crown className="w-3.5 h-3.5" />
+                                <span>الإدارة</span>
+                            </Link>
+                        )}
+
+                        {(user?.role === 'owner' || user?.role === 'specialist') && (
+                            <Link
+                                href="/specialist"
+                                className="px-4 py-1.5 rounded-full text-xs font-bold bg-gradient-to-r from-primary to-indigo-600 text-white shadow-md hover:shadow-lg hover:scale-105 transition-all flex items-center gap-1.5 mx-0.5"
+                            >
+                                <Shield className="w-3.5 h-3.5" />
+                                <span>الأخصائي</span>
+                            </Link>
+                        )}
+
+                        <div className="w-px h-4 bg-border/50 mx-1" />
+
+                        {navItems.map((item: any) => (
                             <Link
                                 key={item.name}
                                 href={item.href}
-                                className="px-5 py-2 rounded-full text-sm font-medium text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-300 relative group"
+                                className="px-4 py-2 rounded-full text-sm font-bold text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all duration-300 relative group"
                             >
                                 <span className="relative z-10">{item.name}</span>
-                                {'badge' in item && item.badge > 0 && (
+                                {item.badge && item.badge > 0 && (
                                     <span className="absolute top-0 right-0 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse z-20">
                                         {item.badge > 9 ? '9+' : item.badge}
                                     </span>
@@ -265,22 +280,6 @@ export default function Header() {
                                 <span className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/5 to-primary/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-sm" />
                             </Link>
                         ))}
-
-                        {/* Admin/Specialist buttons inside nav bar */}
-                        {user && roleInfo && (user.role === 'owner' || user.role === 'specialist') && (
-                            <Link
-                                href={roleInfo.link}
-                                className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${user.role === 'owner'
-                                    ? 'bg-gradient-to-r from-yellow-500 to-amber-600 text-white shadow-sm'
-                                    : 'bg-gradient-to-r from-primary to-indigo-600 text-white shadow-sm'
-                                    }`}
-                            >
-                                <span className="flex items-center gap-1.5">
-                                    <roleInfo.icon className="w-3.5 h-3.5" />
-                                    {user.role === 'owner' ? 'لوحة الإدارة' : 'مكتب الأخصائي'}
-                                </span>
-                            </Link>
-                        )}
                     </nav>
                 </div>
             </header>

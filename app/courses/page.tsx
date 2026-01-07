@@ -52,27 +52,22 @@ export default function CoursesPage() {
         <div className="bg-warm-mesh min-h-screen flex flex-col" dir="rtl">
             <Header />
 
-            <main className="flex-grow pt-40 pb-20">
-                {/* 🌌 Page Hero */}
-                <div className="container mx-auto px-6 mb-16 relative">
-                    <div className="max-w-3xl ml-auto text-right relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 mb-6">
-                            <Sparkles className="w-4 h-4 text-primary" />
-                            <span className="text-sm font-bold text-primary">رحلات التعافي</span>
-                        </div>
-                        <h1 className="text-5xl md:text-7xl font-serif font-black text-foreground mb-6 leading-tight">
-                            اختر مسارك <br />
-                            <span className="text-primary">نحو السكينة</span>
+            <main className="flex-grow pt-28 pb-20">
+                {/* 🌌 Simple Page Header */}
+                <div className="container mx-auto px-6 mb-8 relative">
+                    <div className="text-center relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        <h1 className="text-3xl md:text-4xl font-serif font-bold text-foreground mb-2">
+                            الكورسات المتاحة
                         </h1>
-                        <p className="text-xl text-muted-foreground font-light leading-relaxed max-w-2xl border-r-4 border-primary/20 pr-6 mr-0">
-                            مكتبة متكاملة من الجلسات الصوتية، الكورسات المكثفة، وورش العمل التفاعلية المصممة لمساعدتك على تجاوز التحديات اليومية.
+                        <p className="text-muted-foreground">
+                            اختر رحلتك نحو التعافي
                         </p>
                     </div>
                 </div>
 
                 <div className="container mx-auto px-6">
                     {/* 🔍 Search Bar - Simple & Clean */}
-                    <div className="max-w-xl mx-auto mb-12 -mt-8 relative z-20">
+                    <div className="max-w-xl mx-auto mb-12 relative z-20">
                         <div className="relative">
                             <input
                                 type="text"

@@ -140,99 +140,168 @@ export default function UsersManagement() {
                         </div>
                     )}
 
-                    {/* Users Table */}
+                    {/* Users Table / Mobile Cards */}
                     <div className="card-love overflow-hidden">
-                        <table className="w-full">
-                            <thead className="bg-primary/5 border-b border-border">
-                                <tr>
-                                    <th className="text-right p-4 font-medium text-muted-foreground">المستخدم</th>
-                                    <th className="text-right p-4 font-medium text-muted-foreground">البريد</th>
-                                    <th className="text-right p-4 font-medium text-muted-foreground">الرتبة</th>
-                                    <th className="text-right p-4 font-medium text-muted-foreground">إجراءات</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border">
-                                {loading ? (
+                        <div className="hidden md:block">
+                            <table className="w-full">
+                                <thead className="bg-primary/5 border-b border-border">
                                     <tr>
-                                        <td colSpan={4} className="h-24 text-center">
-                                            <div className="flex justify-center items-center h-full">
-                                                <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                                            </div>
-                                        </td>
+                                        <th className="text-right p-4 font-medium text-muted-foreground">المستخدم</th>
+                                        <th className="text-right p-4 font-medium text-muted-foreground">البريد</th>
+                                        <th className="text-right p-4 font-medium text-muted-foreground">الرتبة</th>
+                                        <th className="text-right p-4 font-medium text-muted-foreground">إجراءات</th>
                                     </tr>
-                                ) : users.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={4} className="p-8 text-center text-muted-foreground">
-                                            لا يوجد مستخدمين حالياً
-                                        </td>
-                                    </tr>
-                                ) : filteredUsers.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={4} className="p-8 text-center text-muted-foreground">
-                                            عذراً، لا يوجد مستخدمين مطابقين للبحث 🔍
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    filteredUsers.map((user) => (
-                                        <tr key={user.id} className="hover:bg-primary/5 transition-colors">
-                                            <td className="p-4">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
-                                                        {user.nickname?.charAt(0).toUpperCase() || 'U'}
-                                                    </div>
-                                                    <span className="font-medium text-foreground">{user.nickname}</span>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {loading ? (
+                                        <tr>
+                                            <td colSpan={4} className="h-24 text-center">
+                                                <div className="flex justify-center items-center h-full">
+                                                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
                                                 </div>
                                             </td>
-                                            <td className="p-4 text-muted-foreground">{user.email}</td>
-                                            <td className="p-4">
-                                                <span className={`px-2 py-1 rounded-full text-xs font-bold ${user.role === 'owner' ? 'bg-yellow-100 text-yellow-800' :
-                                                    user.role === 'specialist' ? 'bg-primary/10 text-primary' :
-                                                        'bg-muted text-muted-foreground'
-                                                    }`}>
-                                                    {user.role === 'owner' ? 'مالك' :
-                                                        user.role === 'specialist' ? 'أخصائي' : 'مستخدم'}
-                                                </span>
-                                            </td>
-                                            <td className="p-4">
-                                                {actionLoading === user.id ? (
-                                                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                                                ) : (
-                                                    <div className="flex items-center gap-2">
-                                                        {user.role === 'user' && (
-                                                            <button
-                                                                onClick={() => handleRoleChange(user.id, 'specialist')}
-                                                                className="p-2 text-primary hover:bg-primary/10 rounded-lg"
-                                                                title="ترقية لأخصائي"
-                                                            >
-                                                                <Shield className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                        {user.role === 'specialist' && (
-                                                            <button
-                                                                onClick={() => handleRoleChange(user.id, 'user')}
-                                                                className="p-2 text-muted-foreground hover:bg-muted rounded-lg"
-                                                                title="إلغاء صفة الأخصائي"
-                                                            >
-                                                                <ShieldOff className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                        {user.role !== 'owner' && (
-                                                            <button
-                                                                onClick={() => handleDelete(user.id)}
-                                                                className="p-2 text-destructive hover:bg-destructive/10 rounded-lg"
-                                                                title="حذف"
-                                                            >
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                )}
+                                        </tr>
+                                    ) : filteredUsers.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={4} className="p-8 text-center text-muted-foreground">
+                                                {users.length === 0 ? 'لا يوجد مستخدمين حالياً' : 'عذراً، لا يوجد مستخدمين مطابقين للبحث 🔍'}
                                             </td>
                                         </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
+                                    ) : (
+                                        filteredUsers.map((user) => (
+                                            <tr key={user.id} className="hover:bg-primary/5 transition-colors">
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
+                                                            {user.nickname?.charAt(0).toUpperCase() || 'U'}
+                                                        </div>
+                                                        <span className="font-medium text-foreground">{user.nickname}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="p-4 text-muted-foreground">{user.email}</td>
+                                                <td className="p-4">
+                                                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${user.role === 'owner' ? 'bg-yellow-100 text-yellow-800' :
+                                                        user.role === 'specialist' ? 'bg-primary/10 text-primary' :
+                                                            'bg-muted text-muted-foreground'
+                                                        }`}>
+                                                        {user.role === 'owner' ? 'مالك' :
+                                                            user.role === 'specialist' ? 'أخصائي' : 'مستخدم'}
+                                                    </span>
+                                                </td>
+                                                <td className="p-4">
+                                                    {actionLoading === user.id ? (
+                                                        <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                                                    ) : (
+                                                        <div className="flex items-center gap-2">
+                                                            {user.role === 'user' && (
+                                                                <button
+                                                                    onClick={() => handleRoleChange(user.id, 'specialist')}
+                                                                    className="p-2 text-primary hover:bg-primary/10 rounded-lg"
+                                                                    title="ترقية لأخصائي"
+                                                                >
+                                                                    <Shield className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                            {user.role === 'specialist' && (
+                                                                <button
+                                                                    onClick={() => handleRoleChange(user.id, 'user')}
+                                                                    className="p-2 text-muted-foreground hover:bg-muted rounded-lg"
+                                                                    title="إلغاء صفة الأخصائي"
+                                                                >
+                                                                    <ShieldOff className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                            {user.role !== 'owner' && (
+                                                                <button
+                                                                    onClick={() => handleDelete(user.id)}
+                                                                    className="p-2 text-destructive hover:bg-destructive/10 rounded-lg"
+                                                                    title="حذف"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Mobile Cards Layout */}
+                        <div className="md:hidden divide-y divide-border/50">
+                            {loading ? (
+                                <div className="p-8 text-center">
+                                    <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+                                </div>
+                            ) : filteredUsers.length === 0 ? (
+                                <div className="p-8 text-center text-muted-foreground text-sm">
+                                    لم يتم العثور على نتائج للتحكم بها
+                                </div>
+                            ) : (
+                                filteredUsers.map((user) => (
+                                    <div key={user.id} className="p-4 space-y-4 active:bg-gray-50/50 transition-colors">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-black text-primary border border-primary/20">
+                                                    {user.nickname?.charAt(0).toUpperCase() || 'U'}
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold text-foreground leading-none mb-1">{user.nickname}</span>
+                                                    <span className="text-[10px] text-muted-foreground opacity-60 truncate max-w-[150px]">{user.email}</span>
+                                                </div>
+                                            </div>
+                                            <span className={`px-2 py-1 rounded-lg text-[10px] font-black ${user.role === 'owner' ? 'bg-yellow-100 text-yellow-800' :
+                                                user.role === 'specialist' ? 'bg-primary/10 text-primary' :
+                                                    'bg-gray-100 text-gray-600'
+                                                }`}>
+                                                {user.role === 'owner' ? 'مالك' : user.role === 'specialist' ? 'أخصائي' : 'مستخدم'}
+                                            </span>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 pt-1">
+                                            {actionLoading === user.id ? (
+                                                <div className="w-full flex justify-center py-2">
+                                                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    {user.role === 'user' && (
+                                                        <button
+                                                            onClick={() => handleRoleChange(user.id, 'specialist')}
+                                                            className="flex-1 py-2 bg-primary/5 text-primary rounded-xl text-xs font-black border border-primary/10 flex items-center justify-center gap-2 active:scale-95 transition-all"
+                                                        >
+                                                            <Shield className="w-3.5 h-3.5" />
+                                                            ترقية
+                                                        </button>
+                                                    )}
+                                                    {user.role === 'specialist' && (
+                                                        <button
+                                                            onClick={() => handleRoleChange(user.id, 'user')}
+                                                            className="flex-1 py-2 bg-gray-50 text-gray-500 rounded-xl text-xs font-black border border-gray-200 flex items-center justify-center gap-2 active:scale-95 transition-all"
+                                                        >
+                                                            <ShieldOff className="w-3.5 h-3.5" />
+                                                            خفض الرتبة
+                                                        </button>
+                                                    )}
+                                                    {user.role !== 'owner' && (
+                                                        <button
+                                                            onClick={() => handleDelete(user.id)}
+                                                            className="flex-1 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-black border border-red-100 flex items-center justify-center gap-2 active:scale-95 transition-all"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                            حذف
+                                                        </button>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
                     </div>
                 </div>
             </main>

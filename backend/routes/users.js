@@ -113,14 +113,14 @@ router.get('/enrollments', authMiddleware, async (req, res) => {
 
 /**
  * GET /api/users/schedule
- * Get user's upcoming sessions
+ * Get user's upcoming sessions (from their enrolled groups only)
  */
 router.get('/schedule', authMiddleware, async (req, res) => {
     try {
-        // Get user's enrolled courses
+        // Get user's enrolled groups
         const { data: enrollments, error: enrollError } = await supabase
             .from('enrollments')
-            .select('course_id')
+            .select('group_id, course_id')
             .eq('user_id', req.userId);
 
         if (enrollError) {
@@ -131,26 +131,30 @@ router.get('/schedule', authMiddleware, async (req, res) => {
             return res.json({ sessions: [] });
         }
 
-        const courseIds = enrollments.map(e => e.course_id);
+        // Filter out enrollments without group_id
+        const groupIds = enrollments.filter(e => e.group_id).map(e => e.group_id);
 
-        // Get upcoming sessions for enrolled courses
-        const { data: sessions, error: sessError } = await supabase
-            .from('sessions')
+        if (groupIds.length === 0) {
+            return res.json({ sessions: [] });
+        }
+
+        // Get upcoming group_sessions for user's groups
+        const { data: groupSessions, error: sessError } = await supabase
+            .from('group_sessions')
             .select(`
                 id,
-                title,
                 scheduled_at,
                 status,
-                course:courses (
+                session:sessions!session_id(title),
+                course:courses!course_id(
                     id,
                     title,
-                    specialist:users!courses_specialist_id_fkey (
-                        nickname
-                    )
+                    specialist:users!courses_specialist_id_fkey(nickname)
                 )
             `)
-            .in('course_id', courseIds)
+            .in('group_id', groupIds)
             .gte('scheduled_at', new Date().toISOString())
+            .neq('status', 'ended')
             .order('scheduled_at', { ascending: true })
             .limit(5);
 
@@ -160,9 +164,9 @@ router.get('/schedule', authMiddleware, async (req, res) => {
         }
 
         // Format sessions for frontend
-        const formattedSessions = (sessions || []).map(s => ({
-            id: s.id,
-            title: s.title,
+        const formattedSessions = (groupSessions || []).map(s => ({
+            id: s.id, // group_session id
+            title: s.session?.title || 'جلسة',
             course_title: s.course?.title || '',
             scheduled_at: s.scheduled_at,
             specialist_name: s.course?.specialist?.nickname || 'أخصائي'
@@ -210,37 +214,116 @@ router.patch('/avatar', authMiddleware, async (req, res) => {
 
 /**
  * GET /api/users/search
- * Search users by name, email or ID
+ * Search users by name, email or ID with Pagination
+ * Query Params:
+ * - q: Search query (optional)
+ * - page: Page number (default 1)
+ * - limit: Items per page (default 100 for list, 20 for search)
  */
 router.get('/search', authMiddleware, async (req, res) => {
     try {
-        const { q } = req.query;
+        const { q, page = 1 } = req.query;
+        let { limit } = req.query;
 
-        if (!q || q.length < 2) {
-            return res.json({ users: [] });
+        // Default limit: 100 for browsing (no query), 20 for searching
+        if (!limit) {
+            limit = (q && q.length >= 2) ? 20 : 100;
         }
+
+        const from = (page - 1) * limit;
+        const to = from + limit - 1;
 
         let query = supabase
             .from('users')
-            .select('id, nickname, email, avatar, role');
+            .select('id, nickname, email, avatar, role', { count: 'exact' });
 
-        // Check if query is UUID
-        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q);
+        if (q && q.length >= 2) {
+            // Check if query is UUID
+            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q);
 
-        if (isUUID) {
-            query = query.eq('id', q);
-        } else {
-            query = query.or(`nickname.ilike.%${q}%,email.ilike.%${q}%`);
+            if (isUUID) {
+                query = query.eq('id', q);
+            } else {
+                query = query.or(`nickname.ilike.%${q}%,email.ilike.%${q}%`);
+            }
         }
 
-        const { data, error } = await query.limit(10);
+        const { data, count, error } = await query
+            .order('created_at', { ascending: false })
+            .range(from, to);
 
         if (error) throw error;
 
-        res.json({ users: data });
+        // Check if there are more results
+        const hasMore = count > to + 1;
+
+        res.json({
+            users: data,
+            pagination: {
+                page: parseInt(page),
+                limit: parseInt(limit),
+                total: count,
+                hasMore
+            }
+        });
     } catch (error) {
         console.error('Search error:', error);
         res.status(500).json({ error: 'حدث خطأ في البحث' });
+    }
+});
+
+/**
+ * PUT /api/users/change-password
+ * Update user password
+ */
+const bcrypt = require('bcryptjs'); // Ensure bcrypt is imported
+
+router.put('/change-password', authMiddleware, async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ error: 'كلمة المرور الحالية والجديدة مطلوبة' });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({ error: 'كلمة المرور الجديدة يجب أن تكون 6 أحرف على الأقل' });
+        }
+
+        // Get current password hash
+        const { data: user, error } = await supabase
+            .from('users')
+            .select('password')
+            .eq('id', req.userId)
+            .single();
+
+        if (error || !user) {
+            return res.status(404).json({ error: 'المستخدم غير موجود' });
+        }
+
+        // Verify current password
+        const isValid = await bcrypt.compare(currentPassword, user.password);
+        if (!isValid) {
+            return res.status(400).json({ error: 'كلمة المرور الحالية غير صحيحة' });
+        }
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // Update password
+        const { error: updateError } = await supabase
+            .from('users')
+            .update({ password: hashedPassword, updated_at: new Date().toISOString() })
+            .eq('id', req.userId);
+
+        if (updateError) {
+            return res.status(500).json({ error: 'فشل تغيير كلمة المرور' });
+        }
+
+        res.json({ message: 'تم تغيير كلمة المرور بنجاح' });
+    } catch (error) {
+        console.error('Password change error:', error);
+        res.status(500).json({ error: 'حدث خطأ' });
     }
 });
 
