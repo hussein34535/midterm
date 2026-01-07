@@ -21,6 +21,10 @@ const crypto = require('crypto');
  * POST /api/auth/register
  * Register a new user + Create support chat + Send Verification Email
  */
+/**
+ * POST /api/auth/register
+ * Register a new user + Create support chat + Send Verification Email
+ */
 router.post('/register', async (req, res) => {
     try {
         const { nickname, email, password, avatar } = req.body;
@@ -550,6 +554,218 @@ router.post('/reset-password', async (req, res) => {
     } catch (error) {
         console.error('Reset password error:', error);
         res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+/**
+ * POST /api/auth/guest
+ * Create a guest account for support chat
+ */
+router.post('/guest', async (req, res) => {
+    try {
+        const { nickname } = req.body;
+        if (!nickname) {
+            return res.status(400).json({ error: 'الاسم مطلوب' });
+        }
+
+        const guestId = uuidv4();
+        // Generate unique dummy credentials
+        const email = `guest_${Date.now()}_${Math.floor(Math.random() * 1000)}@sakina.guest`;
+        const password = uuidv4(); // Random secure password
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Create Guest User
+        const { data: user, error } = await supabase
+            .from('users')
+            .insert({
+                id: guestId,
+                email,
+                password: hashedPassword,
+                nickname: nickname,
+                role: 'user',
+                avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(nickname)}&background=random`,
+                is_verified: true // Auto-verify guests
+            })
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Guest creation error:', error);
+            return res.status(500).json({ error: 'فشل إنشاء حساب زائر' });
+        }
+
+        // Generate Token
+        const token = jwt.sign(
+            { userId: user.id, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: '30d' }
+        );
+
+        res.json({
+            message: 'تم تسجيل الدخول كزائر',
+            token,
+            user: {
+                id: user.id,
+                nickname: user.nickname,
+                email: user.email,
+                role: user.role,
+                avatar: user.avatar
+            }
+        });
+
+    } catch (error) {
+        console.error('Guest auth error:', error);
+        res.status(500).json({ error: 'حدث خطأ غير متوقع' });
+    }
+});
+
+/**
+ * POST /api/auth/guest-message
+ * Send a message from a shared guest account to Owner (no individual account creation)
+ */
+router.post('/guest-message', async (req, res) => {
+    try {
+        const { name, message } = req.body;
+
+        if (!name || !message) {
+            return res.status(400).json({ error: 'الاسم والرسالة مطلوبين' });
+        }
+
+        const GUEST_EMAIL = 'guest@sakina.guest';
+
+        // 1. Find or Create shared Guest account
+        let { data: guestUser } = await supabase
+            .from('users')
+            .select('id')
+            .eq('email', GUEST_EMAIL)
+            .single();
+
+        if (!guestUser) {
+            const guestHash = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
+            const { data: newGuest } = await supabase
+                .from('users')
+                .insert({
+                    id: uuidv4(),
+                    nickname: 'صندوق الزوار',
+                    email: GUEST_EMAIL,
+                    password: guestHash,
+                    avatar: '/logo.png',
+                    role: 'user',
+                    is_verified: true,
+                    created_at: new Date().toISOString()
+                })
+                .select('id')
+                .single();
+            guestUser = newGuest;
+        }
+
+        // 2. Find Owner (first owner account)
+        const { data: owner } = await supabase
+            .from('users')
+            .select('id')
+            .eq('role', 'owner')
+            .limit(1)
+            .single();
+
+        if (!owner) {
+            return res.status(500).json({ error: 'لا يوجد مالك للنظام' });
+        }
+
+        // 3. Send message with guest name prefix
+        const fullMessage = `[${name}]: ${message}`;
+
+        const { error: msgError } = await supabase
+            .from('messages')
+            .insert({
+                id: uuidv4(),
+                sender_id: guestUser.id,
+                receiver_id: owner.id,
+                content: fullMessage,
+                type: 'text',
+                created_at: new Date().toISOString(),
+                read: false
+            });
+
+        if (msgError) {
+            console.error('Guest message error:', msgError);
+            return res.status(500).json({ error: 'فشل إرسال الرسالة' });
+        }
+
+        // 4. Emit socket notification to owner
+        const io = req.app.get('io');
+        if (io) {
+            io.emit('new-guest-message', {
+                from: name,
+                preview: message.substring(0, 50),
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        res.json({ message: 'تم إرسال رسالتك بنجاح! سنرد عليك قريباً.' });
+
+    } catch (error) {
+        console.error('Guest message error:', error);
+        res.status(500).json({ error: 'حدث خطأ غير متوقع' });
+    }
+});
+
+/**
+ * GET /api/auth/guest-messages
+ * Fetch conversation between shared guest account and Owner (for live chat polling)
+ */
+router.get('/guest-messages', async (req, res) => {
+    try {
+        const GUEST_EMAIL = 'guest@sakina.guest';
+
+        // 1. Find Guest account
+        const { data: guestUser } = await supabase
+            .from('users')
+            .select('id')
+            .eq('email', GUEST_EMAIL)
+            .single();
+
+        if (!guestUser) {
+            return res.json({ messages: [] });
+        }
+
+        // 2. Find Owner
+        const { data: owner } = await supabase
+            .from('users')
+            .select('id')
+            .eq('role', 'owner')
+            .limit(1)
+            .single();
+
+        if (!owner) {
+            return res.json({ messages: [] });
+        }
+
+        // 3. Fetch messages between guest and owner (both directions)
+        const { data: messages, error } = await supabase
+            .from('messages')
+            .select('id, content, sender_id, receiver_id, created_at')
+            .or(`and(sender_id.eq.${guestUser.id},receiver_id.eq.${owner.id}),and(sender_id.eq.${owner.id},receiver_id.eq.${guestUser.id})`)
+            .order('created_at', { ascending: true })
+            .limit(50);
+
+        if (error) {
+            console.error('Fetch guest messages error:', error);
+            return res.json({ messages: [] });
+        }
+
+        // 4. Map to isMe format (guest perspective)
+        const formatted = messages.map(m => ({
+            id: m.id,
+            content: m.content,
+            isMe: m.sender_id === guestUser.id,
+            createdAt: m.created_at
+        }));
+
+        res.json({ messages: formatted });
+
+    } catch (error) {
+        console.error('Guest messages error:', error);
+        res.json({ messages: [] });
     }
 });
 

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Cairo } from "next/font/google"; // Using Cairo for better Arabic support
 import "./globals.css";
 import GlobalChat from "@/components/chat/GlobalChat";
+import SupportWidget from "@/components/chat/SupportWidget";
 import MobileBottomNav from "@/components/layout/MobileBottomNav";
 import { Toaster } from "@/components/ui/sonner";
 import SessionChecker from "@/components/auth/SessionChecker";
@@ -37,6 +38,7 @@ export default function RootLayout({
         {children}
         <MobileBottomNav />
         <GlobalChat />
+        <SupportWidget />
         <SessionChecker />
         <MaintenanceChecker />
         <Toaster />

@@ -74,6 +74,9 @@ const io = new Server(server, {
     }
 });
 
+// Expose io to routes
+app.set('io', io);
+
 // Room user tracking
 const roomUsers = new Map(); // roomId -> Set<userId>
 

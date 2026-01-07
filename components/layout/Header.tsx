@@ -4,6 +4,8 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Shield, Crown, User, MessageCircle, BookOpen, Home, Settings, LogOut, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { io } from "socket.io-client"
+import { toast } from "sonner"
 
 export default function Header() {
     const [isScrolled, setIsScrolled] = useState(false)
@@ -52,6 +54,20 @@ export default function Header() {
         fetchUnread();
         const unreadInterval = setInterval(fetchUnread, 30000);
 
+        // Socket.io for real-time guest message notifications
+        const socket = io(API_URL);
+        socket.on('new-guest-message', (data: { from: string, preview: string }) => {
+            toast.info(`📩 رسالة جديدة من زائر: ${data.from}`, {
+                description: data.preview,
+                duration: 5000,
+                action: {
+                    label: 'عرض',
+                    onClick: () => window.location.href = '/messages'
+                }
+            });
+            fetchUnread(); // Refresh unread count
+        });
+
         const handleClickOutside = (event: MouseEvent) => {
             const target = event.target as HTMLElement;
             if (!target.closest('.user-menu-container')) {
@@ -74,6 +90,7 @@ export default function Header() {
             document.removeEventListener('mousedown', handleClickOutside);
             window.removeEventListener('unreadCountUpdated', handleUnreadUpdate);
             clearInterval(unreadInterval);
+            socket.disconnect();
         }
     }, [])
 
