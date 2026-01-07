@@ -7,6 +7,7 @@ import Header from "@/components/layout/Header";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
 import { useNSFW } from "@/hooks/useNSFW";
+import { containsProfanity } from "@/lib/profanity";
 
 const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
 
@@ -257,6 +258,13 @@ export default function MessagesPage() {
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        // Profanity Check
+        if (containsProfanity(newMessage)) {
+            toast.error('عفواً، لا يمكن إرسال هذه الرسالة لاحتوائها على كلمات غير لائقة.');
+            return;
+        }
+
         if (!newMessage.trim() || !selectedConversation || sending) return;
 
         setSending(true);
