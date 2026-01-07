@@ -659,32 +659,32 @@ router.post('/guest-message', async (req, res) => {
             guestUser = newGuest;
         }
 
-        // 2. Find Owner (first owner account)
-        const { data: owner } = await supabase
+        // 2. Find ALL Owners
+        const { data: owners } = await supabase
             .from('users')
             .select('id')
-            .eq('role', 'owner')
-            .limit(1)
-            .single();
+            .eq('role', 'owner');
 
-        if (!owner) {
+        if (!owners || owners.length === 0) {
             return res.status(500).json({ error: 'لا يوجد مالك للنظام' });
         }
 
-        // 3. Send message with guest name prefix
+        // 3. Send message to ALL owners
         const fullMessage = `[${name}]: ${message}`;
+
+        const messagesToInsert = owners.map(owner => ({
+            id: uuidv4(),
+            sender_id: guestUser.id,
+            receiver_id: owner.id,
+            content: fullMessage,
+            type: 'text',
+            created_at: new Date().toISOString(),
+            read: false
+        }));
 
         const { error: msgError } = await supabase
             .from('messages')
-            .insert({
-                id: uuidv4(),
-                sender_id: guestUser.id,
-                receiver_id: owner.id,
-                content: fullMessage,
-                type: 'text',
-                created_at: new Date().toISOString(),
-                read: false
-            });
+            .insert(messagesToInsert);
 
         if (msgError) {
             console.error('Guest message error:', msgError);
