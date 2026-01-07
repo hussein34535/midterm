@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
-import { Heart, Mail, Lock, Eye, EyeOff, ArrowLeft } from "lucide-react";
+import { useState, useEffect, Suspense } from "react";
+import { Heart, Mail, Lock, Eye, EyeOff, ArrowLeft, Loader2 } from "lucide-react";
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { authAPI } from "@/lib/api";
 
-export default function LoginPage() {
+function LoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const redirectUrl = searchParams.get('redirect'); // Get redirect param if exists
@@ -188,5 +188,17 @@ export default function LoginPage() {
                 <div className="h-20 md:h-0" />
             </div>
         </div>
+    );
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-warm-mesh flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+        }>
+            <LoginForm />
+        </Suspense>
     );
 }

@@ -38,10 +38,6 @@ export default function AdminCoursesPage() {
         title: '',
         description: '',
         price: 0,
-        total_sessions: 4,
-        title: '',
-        description: '',
-        price: 0,
         total_sessions: 4
     });
     const [saving, setSaving] = useState(false);
@@ -97,7 +93,6 @@ export default function AdminCoursesPage() {
             title: course.title,
             description: course.description || '',
             price: course.price,
-            total_sessions: course.total_sessions,
             total_sessions: course.total_sessions
         });
         setShowForm(true);
@@ -109,7 +104,6 @@ export default function AdminCoursesPage() {
             title: '',
             description: '',
             price: 0,
-            total_sessions: 4,
             total_sessions: 4
         });
         setShowForm(true);
