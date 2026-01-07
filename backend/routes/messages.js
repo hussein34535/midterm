@@ -71,7 +71,7 @@ router.get('/conversations', authMiddleware, async (req, res) => {
         const conversationsMap = new Map();
 
         // Process Direct Messages
-        console.log(`Conversations for User ${req.userId}: found ${messages?.length} messages`);
+        // console.log(`Conversations for User ${req.userId}: found ${messages?.length} messages`);
 
         // Helper to check if ID is System
         const SYSTEM_EMAIL = 'system@sakina.com';
