@@ -89,23 +89,44 @@ router.post('/register', async (req, res) => {
         await sendEmail(email, 'رمز تفعيل حسابك في إيواء', emailHtml);
         */
 
-        // 🎯 AUTO-CREATE SUPPORT CHAT: Send Welcome Message from Owner/Support
+        // 🎯 AUTO-CREATE SUPPORT CHAT: Send Welcome Message from System/Platform
         try {
-            // Find Owner
-            const { data: owner } = await supabase
+            const SYSTEM_EMAIL = 'system@sakina.com';
+
+            // Check for System User
+            let { data: systemUser } = await supabase
                 .from('users')
                 .select('id')
-                .eq('role', 'owner')
-                .limit(1)
+                .eq('email', SYSTEM_EMAIL)
                 .single();
 
-            if (owner) {
+            // If not exists, CREATE System User
+            if (!systemUser) {
+                const systemHash = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
+                const { data: newSystem } = await supabase
+                    .from('users')
+                    .insert({
+                        id: uuidv4(),
+                        nickname: 'إدارة منصة إيواء',
+                        email: SYSTEM_EMAIL,
+                        password: systemHash,
+                        avatar: '/logo.png', // Use platform logo
+                        role: 'admin',
+                        is_verified: true,
+                        created_at: new Date().toISOString()
+                    })
+                    .select('id')
+                    .single();
+                systemUser = newSystem;
+            }
+
+            if (systemUser) {
                 const welcomeContent = `مرحباً ${nickname} في منصة إيواء 🌸\nنحن هنا لدعمك في رحلتك. إذا كان لديك أي استفسار، لا تتردد في مراسلتنا هنا.`;
                 await supabase
                     .from('messages')
                     .insert({
                         id: uuidv4(),
-                        sender_id: owner.id,
+                        sender_id: systemUser.id,
                         receiver_id: newUser.id,
                         content: welcomeContent,
                         type: 'text',

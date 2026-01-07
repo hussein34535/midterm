@@ -141,6 +141,31 @@ router.patch('/users/:id/role', requireAdmin, async (req, res) => {
             return res.status(400).json({ error: 'لا يمكنك تغيير رتبتك الخاصة' });
         }
 
+        // Special Logic: Transfer Ownership
+        if (role === 'owner') {
+            // 1. Promote new user to Owner
+            const { error: promoteError } = await supabase
+                .from('users')
+                .update({ role: 'owner', updated_at: new Date().toISOString() })
+                .eq('id', id);
+
+            if (promoteError) throw promoteError;
+
+            // 2. Demote current owner (Self) to Admin
+            const { error: demoteError } = await supabase
+                .from('users')
+                .update({ role: 'admin', updated_at: new Date().toISOString() })
+                .eq('id', req.userId);
+
+            if (demoteError) throw demoteError;
+
+            return res.json({
+                message: 'تم نقل الملكية بنجاح! أنت الآن "مدير".',
+                needRelogin: true
+            });
+        }
+
+        // Standard Role Update (for other roles)
         const { data: updatedUser, error } = await supabase
             .from('users')
             .update({ role, updated_at: new Date().toISOString() })
