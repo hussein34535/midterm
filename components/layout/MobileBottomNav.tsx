@@ -54,17 +54,35 @@ export default function MobileBottomNav() {
             setUnreadCount(e.detail?.count || 0);
         };
 
+        // Listen for login/logout events (Triggered by authAPI)
+        const handleLogin = () => {
+            const storedUser = localStorage.getItem('user');
+            if (storedUser) {
+                try {
+                    setUser(JSON.parse(storedUser));
+                } catch (e) { }
+            }
+        };
+
+        const handleLogout = () => {
+            setUser(null);
+        };
+
         // Listen for chat open/close events
         const handleChatOpen = () => setChatOpen(true);
         const handleChatClose = () => setChatOpen(false);
 
         window.addEventListener('unreadCountUpdated', handleUnreadUpdate as EventListener);
+        window.addEventListener('user-login', handleLogin);
+        window.addEventListener('user-logout', handleLogout);
         window.addEventListener('chatOpened', handleChatOpen);
         window.addEventListener('chatClosed', handleChatClose);
 
         return () => {
             clearInterval(unreadInterval);
             window.removeEventListener('unreadCountUpdated', handleUnreadUpdate as EventListener);
+            window.removeEventListener('user-login', handleLogin);
+            window.removeEventListener('user-logout', handleLogout);
             window.removeEventListener('chatOpened', handleChatOpen);
             window.removeEventListener('chatClosed', handleChatClose);
         };
