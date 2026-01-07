@@ -25,6 +25,7 @@ interface PaymentDetail {
     payment_method: string;
     created_at: string;
     status: string;
+    sender_number?: string;
     user: {
         nickname: string;
         email: string;
@@ -176,6 +177,12 @@ export default function InvoiceDetail() {
                                         <span className="font-bold text-foreground">{payment.payment_method === 'vodafone_cash' ? 'فودافون كاش' : payment.payment_method === 'bank_transfer' ? 'تحويل بنكي' : payment.payment_method === 'instapay' ? 'InstaPay' : 'فوري'}</span>
                                         <span className="text-muted-foreground">وسيلة الدفع:</span>
                                     </div>
+                                    {payment.sender_number && (
+                                        <div className="flex items-center justify-end gap-2 text-sm">
+                                            <span className="font-bold text-foreground font-mono">{payment.sender_number}</span>
+                                            <span className="text-muted-foreground">رقم المحفظة:</span>
+                                        </div>
+                                    )}
                                     <div className="flex items-center justify-end gap-2 text-sm">
                                         <span className="px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-black rounded-md border border-green-200 uppercase">PAID / مدفوعة</span>
                                         <span className="text-muted-foreground">الحالة:</span>

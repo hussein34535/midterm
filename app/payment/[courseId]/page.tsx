@@ -137,8 +137,16 @@ export default function PaymentPage({ params }: PageProps) {
         reader.readAsDataURL(file);
     };
 
+    const [senderNumber, setSenderNumber] = useState('');
+
     const handleConfirmPayment = async () => {
         if (!selectedMethod) return;
+
+        // Validation for Vodafone Cash
+        if (selectedMethod === 'vodafone_cash' && !senderNumber.trim()) {
+            alert('يرجى كتابة رقم المحفظة التي تم التحويل منها');
+            return;
+        }
 
         setSubmitting(true);
         try {
@@ -152,7 +160,8 @@ export default function PaymentPage({ params }: PageProps) {
                 body: JSON.stringify({
                     payment_method: selectedMethod,
                     amount: course.price,
-                    payment_screenshot: screenshotPreview // Send as base64
+                    payment_screenshot: screenshotPreview, // Send as base64
+                    sender_number: senderNumber // Send sender number
                 })
             });
 
@@ -294,6 +303,26 @@ export default function PaymentPage({ params }: PageProps) {
                                     </div>
                                 )}
                             </div>
+                        </div>
+                    )}
+
+                    {/* Sender Number Input (Vodafone Cash Only) */}
+                    {selectedMethod === 'vodafone_cash' && (
+                        <div className="card-love p-8 mb-8 animate-in fade-in slide-in-from-bottom-2">
+                            <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                                <Smartphone className="w-5 h-5 text-primary" />
+                                رقم المحفظة المحول منها
+                            </h2>
+                            <p className="text-sm text-muted-foreground mb-4">
+                                يرجى كتابة الرقم الذي قمت بالتحويل منه لتسهيل مراجعة العملية.
+                            </p>
+                            <input
+                                type="tel"
+                                value={senderNumber}
+                                onChange={(e) => setSenderNumber(e.target.value)}
+                                placeholder="01xxxxxxxxx"
+                                className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:border-primary outline-none font-mono text-left"
+                            />
                         </div>
                     )}
 

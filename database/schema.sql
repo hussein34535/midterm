@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS payments (
     amount DECIMAL NOT NULL,
     payment_method TEXT,
     payment_code TEXT,
+    sender_number TEXT,
     status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'rejected')),
     confirmed_by UUID REFERENCES users(id),
     confirmed_at TIMESTAMP,

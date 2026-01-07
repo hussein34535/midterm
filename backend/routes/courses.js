@@ -517,7 +517,7 @@ router.post('/:id/payment', authMiddleware, async (req, res) => {
         }
 
         // Record payment
-        const { payment_screenshot } = req.body; // Screenshot as base64
+        const { payment_screenshot, sender_number } = req.body; // Screenshot as base64
 
         const { data: payment, error: payError } = await supabase
             .from('payments')
@@ -528,6 +528,7 @@ router.post('/:id/payment', authMiddleware, async (req, res) => {
                 amount: amount || course.price,
                 payment_method: payment_method || 'unknown',
                 payment_code: payment_code,
+                sender_number: sender_number || null,
                 screenshot: payment_screenshot || null,
                 status: 'pending',
                 created_at: new Date().toISOString()
