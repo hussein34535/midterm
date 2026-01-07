@@ -81,8 +81,13 @@ export default function RegisterPage() {
                 avatar: formData.avatar,
             });
 
-            toast.success("تم إنشاء الحساب بنجاح! رمز التفعيل وصلك عالإيميل");
-            router.push(`/verify-code?email=${encodeURIComponent(formData.email)}`);
+            // Backend handles verification automatically now
+            toast.success("تم إنشاء الحساب بنجاح! جاري الدخول...");
+
+            // Allow token save in api.ts to propagate
+            setTimeout(() => {
+                router.push('/dashboard');
+            }, 1000);
         } catch (error: any) {
             toast.error(error.message || "حدث خطأ ما، يرجى المحاولة مرة أخرى");
         } finally {

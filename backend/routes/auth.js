@@ -54,8 +54,8 @@ router.post('/register', async (req, res) => {
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Generate 6-digit OTP
-        const verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
+        // Generate 6-digit OTP (Not used for now)
+        // const verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
 
         // Create user in Supabase
         const { data: newUser, error } = await supabase
@@ -67,16 +67,15 @@ router.post('/register', async (req, res) => {
                 password: hashedPassword,
                 avatar: avatar || null,
                 created_at: new Date().toISOString(),
-                is_verified: false, // Default false
-                verification_token: verificationToken
+                is_verified: true, // Auto-verified temporarily
+                verification_token: null
             })
             .select()
             .single();
 
         if (error) {
             console.error('Supabase error:', error);
-            // Handle potentially missing columns gracefully-ish?
-            if (error.code === '42703') { // Undefined column
+            if (error.code === '42703') {
                 return res.status(500).json({
                     error: 'خطأ في قاعدة البيانات: الأعمدة غير موجودة. يرجى مراجعة المسؤول.'
                 });
@@ -84,23 +83,11 @@ router.post('/register', async (req, res) => {
             return res.status(500).json({ error: 'حدث خطأ أثناء إنشاء الحساب' });
         }
 
-        // Send Verification Email with OTP
-        const emailHtml = `
-            <div style="text-align: right; direction: rtl; font-family: Arial, sans-serif;">
-                <h2>مرحباً ${nickname}! 👋</h2>
-                <p>شكراً لتسجيلك في منصة "إيواء". رمز التفعيل الخاص بك هو:</p>
-                <div style="text-align: center; margin: 30px 0;">
-                    <span style="background-color: #f3f4f6; color: #1f2937; padding: 15px 30px; font-size: 24px; letter-spacing: 5px; font-weight: bold; border-radius: 10px; border: 2px dashed #E85C3F;">
-                        ${verificationToken}
-                    </span>
-                </div>
-                <p>يرجى إدخال هذا الرمز في صفحة التفعيل لإكمال التسجيل.</p>
-            </div>
-        `;
-
+        // Send Verification Email with OTP (DISABLED TEMPORARILY)
+        /*
+        const emailHtml = `...`;
         await sendEmail(email, 'رمز تفعيل حسابك في إيواء', emailHtml);
-
-        await sendEmail(email, 'رمز تفعيل حسابك في إيواء', emailHtml);
+        */
 
         // 🎯 AUTO-CREATE SUPPORT CHAT: Send Welcome Message from Owner/Support
         try {
@@ -113,16 +100,10 @@ router.post('/register', async (req, res) => {
                 .single();
 
             if (owner) {
-                // Create Welcome Message
                 const welcomeContent = `مرحباً ${nickname} في منصة إيواء 🌸\nنحن هنا لدعمك في رحلتك. إذا كان لديك أي استفسار، لا تتردد في مراسلتنا هنا.`;
-
                 await supabase
                     .from('messages')
                     .insert({
-                        // id: uuidv4(), // letting DB generate ID is safer if uuidv4 not imported, but auth.js usually has it. 
-                        // Wait, auth.js uses uuidv4 at line 64. So it is available.
-                        // But let's check imports. Just in case, let DB handle it if possible or use uuidv4 if confirmed.
-                        // Line 64: id: uuidv4(). So uuidv4 is available.
                         id: uuidv4(),
                         sender_id: owner.id,
                         receiver_id: newUser.id,
@@ -136,10 +117,20 @@ router.post('/register', async (req, res) => {
             console.error('Welcome message error:', msgError); // Non-blocking
         }
 
-        // Return success
+        // Generate JWT for Auto-Login
+        const sessionToken = jwt.sign(
+            { userId: newUser.id, email: newUser.email, role: 'user' },
+            process.env.JWT_SECRET,
+            { expiresIn: '365d' }
+        );
+
+        const { password: _, ...userWithoutPassword } = newUser;
+
+        // Return success with Token (Auto Login)
         res.status(201).json({
-            message: 'تم إنشاء الحساب بنجاح. يرجى تفعيل حسابك عبر البريد الإلكتروني.',
-            userId: newUser.id
+            message: 'تم إنشاء الحساب بنجاح.',
+            user: userWithoutPassword,
+            token: sessionToken
         });
 
     } catch (error) {
