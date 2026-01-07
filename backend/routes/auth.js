@@ -243,12 +243,15 @@ router.post('/login', async (req, res) => {
         // Assuming default FALSE for new users. Old users might be NULL. 
         // Let's enforce check if column exists. 
 
+        // Check Verification STATUS (DISABLED TEMPORARILY)
+        /*
         if (user.is_verified === false) {
             return res.status(403).json({
                 error: 'يرجى تأكيد بريدك الإلكتروني أولاً.',
                 notVerified: true
             });
         }
+        */
 
         const token = jwt.sign(
             { userId: user.id, email: user.email, role: user.role },

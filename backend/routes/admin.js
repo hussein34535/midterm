@@ -199,29 +199,41 @@ router.delete('/users/:id', requireAdmin, async (req, res) => {
 
         // CASCADE DELETE: Delete related data first to avoid foreign key constraints
 
-        // 1. Delete user's messages (as sender)
-        await supabase
-            .from('messages')
-            .delete()
-            .eq('sender_id', id);
+        // 1. Delete user's messages (as sender or receiver)
+        await supabase.from('messages').delete().eq('sender_id', id);
+        await supabase.from('messages').delete().eq('receiver_id', id);
 
-        // 2. Delete user's enrollments
-        await supabase
-            .from('enrollments')
-            .delete()
-            .eq('user_id', id);
+        // 2. Delete user's enrollments (as a student)
+        await supabase.from('enrollments').delete().eq('user_id', id);
 
-        // 3. Delete user's sessions (as participant or specialist)
-        await supabase
-            .from('sessions')
-            .delete()
-            .eq('specialist_id', id);
+        // 3. Delete user's payments
+        await supabase.from('payments').delete().eq('user_id', id);
 
-        // 4. Delete user's payments
-        await supabase
-            .from('payments')
-            .delete()
-            .eq('user_id', id);
+        // 4. If Specialist: Delete their Courses/Content
+        if (targetUser.role === 'specialist') {
+            const { data: specialistCourses } = await supabase
+                .from('courses')
+                .select('id')
+                .eq('specialist_id', id);
+
+            if (specialistCourses && specialistCourses.length > 0) {
+                const courseIds = specialistCourses.map(c => c.id);
+
+                // 4a. Delete Enrollments in these courses
+                await supabase.from('enrollments').delete().in('course_id', courseIds);
+
+                // 4b. Delete Sessions in these courses
+                // Note: Sessions usually cascade on course delete, but doing it explicitly is safer
+                await supabase.from('sessions').delete().in('course_id', courseIds);
+
+                // 4c. Delete Groups in these courses (if table exists)
+                // Check schema: table is 'course_groups' or similar? We saw 'course_groups' in admin.js L571
+                await supabase.from('course_groups').delete().in('course_id', courseIds);
+
+                // 4d. Delete the Courses themselves
+                await supabase.from('courses').delete().in('id', courseIds);
+            }
+        }
 
         // 5. Finally, delete the user
         const { error } = await supabase
@@ -231,10 +243,14 @@ router.delete('/users/:id', requireAdmin, async (req, res) => {
 
         if (error) {
             console.error('Delete error:', error);
+            // Check for FK violation
+            if (error.code === '23503') {
+                return res.status(400).json({ error: 'عذراً، لا يمكن حذف المستخدم لوجود بيانات مرتبطة به لم يتم تنظيفها.' });
+            }
             return res.status(500).json({ error: 'حدث خطأ أثناء الحذف' });
         }
 
-        res.json({ message: 'تم حذف المستخدم بنجاح' });
+        res.json({ message: 'تم حذف المستخدم وجميع بياناته بنجاح' });
     } catch (error) {
         console.error('Delete error:', error);
         res.status(500).json({ error: 'حدث خطأ' });
