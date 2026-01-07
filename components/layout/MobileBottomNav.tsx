@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, MessageCircle, BookOpen, Crown, Shield, Settings } from 'lucide-react';
+import { Home, MessageCircle, BookOpen, Crown, Shield } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 interface NavItem {
@@ -105,8 +105,8 @@ export default function MobileBottomNav() {
             href: "/admin",
             icon: Crown,
             isSpecial: true,
-            colorClass: "text-amber-600 bg-amber-50 border-amber-100",
-            activeColorClass: "bg-amber-500 text-white shadow-lg shadow-amber-500/25 border-transparent"
+            colorClass: "text-amber-600 hover:bg-amber-50",
+            activeColorClass: "bg-amber-500 text-white shadow-none"
         });
     }
 
@@ -117,8 +117,8 @@ export default function MobileBottomNav() {
             href: "/specialist",
             icon: Shield,
             isSpecial: true,
-            colorClass: "text-indigo-600 bg-indigo-50 border-indigo-100",
-            activeColorClass: "bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 border-transparent"
+            colorClass: "text-indigo-600 hover:bg-indigo-50",
+            activeColorClass: "bg-indigo-600 text-white shadow-none"
         });
     }
 
@@ -154,7 +154,7 @@ export default function MobileBottomNav() {
                                 }
                             } else {
                                 if (isActive) {
-                                    containerClass = "bg-primary/10 text-primary";
+                                    containerClass = "bg-primary text-white";
                                 }
                             }
 

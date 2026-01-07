@@ -8,6 +8,7 @@ const jwt = require('jsonwebtoken');
 const router = express.Router();
 const { createClient } = require('@supabase/supabase-js');
 const multer = require('multer');
+const sharp = require('sharp');
 
 // Configure Multer for memory storage
 const upload = multer({
@@ -622,13 +623,20 @@ router.post('/:id/image', authMiddleware, upload.single('image'), async (req, re
             }
         }
 
-        // Filename: timestamp_random_cleanoriginal
-        const filename = `${Date.now()}_${Math.random().toString(36).substring(7)}_${file.originalname.replace(/[^a-zA-Z0-9.]/g, '')}`;
+        // Optimize with Sharp
+        // Resize to max 1280px width, convert to WebP, quality 80
+        const optimizedBuffer = await sharp(file.buffer)
+            .resize(1280, 1280, { fit: 'inside', withoutEnlargement: true })
+            .webp({ quality: 80 })
+            .toBuffer();
+
+        // Filename: timestamp_random.webp
+        const filename = `${Date.now()}_${Math.random().toString(36).substring(7)}.webp`;
 
         const { data: uploadData, error: uploadError } = await supabase.storage
             .from('chat-images')
-            .upload(filename, file.buffer, {
-                contentType: file.mimetype,
+            .upload(filename, optimizedBuffer, {
+                contentType: 'image/webp',
                 upsert: false
             });
 
@@ -650,9 +658,9 @@ router.post('/:id/image', authMiddleware, upload.single('image'), async (req, re
             created_at: new Date().toISOString(),
             // type removed - let DB use default
             metadata: {
-                fileName: file.originalname,
-                size: file.size,
-                mimetype: file.mimetype
+                fileName: file.originalname, // Keep original name for reference
+                size: optimizedBuffer.length, // use optimized size
+                mimetype: 'image/webp' // use optimized type
             }
         };
 

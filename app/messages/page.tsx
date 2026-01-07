@@ -164,7 +164,7 @@ export default function MessagesPage() {
 
         const interval = setInterval(() => {
             fetchConversationsQuiet();
-        }, 15000);
+        }, 5000);
 
         return () => clearInterval(interval);
     }, [currentUser]);
