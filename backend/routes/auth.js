@@ -711,7 +711,7 @@ router.post('/guest-message', async (req, res) => {
 
 /**
  * GET /api/auth/guest-messages
- * Fetch conversation between shared guest account and Owner (for live chat polling)
+ * Fetch ALL messages to/from guest account (shared inbox - visible to all owners)
  */
 router.get('/guest-messages', async (req, res) => {
     try {
@@ -728,32 +728,20 @@ router.get('/guest-messages', async (req, res) => {
             return res.json({ messages: [] });
         }
 
-        // 2. Find Owner
-        const { data: owner } = await supabase
-            .from('users')
-            .select('id')
-            .eq('role', 'owner')
-            .limit(1)
-            .single();
-
-        if (!owner) {
-            return res.json({ messages: [] });
-        }
-
-        // 3. Fetch messages between guest and owner (both directions)
+        // 2. Fetch ALL messages where guest is sender or receiver (shared inbox)
         const { data: messages, error } = await supabase
             .from('messages')
             .select('id, content, sender_id, receiver_id, created_at')
-            .or(`and(sender_id.eq.${guestUser.id},receiver_id.eq.${owner.id}),and(sender_id.eq.${owner.id},receiver_id.eq.${guestUser.id})`)
+            .or(`sender_id.eq.${guestUser.id},receiver_id.eq.${guestUser.id}`)
             .order('created_at', { ascending: true })
-            .limit(50);
+            .limit(100);
 
         if (error) {
             console.error('Fetch guest messages error:', error);
             return res.json({ messages: [] });
         }
 
-        // 4. Map to isMe format (guest perspective)
+        // 3. Map to isMe format (guest perspective)
         const formatted = messages.map(m => ({
             id: m.id,
             content: m.content,
@@ -761,7 +749,7 @@ router.get('/guest-messages', async (req, res) => {
             createdAt: m.created_at
         }));
 
-        res.json({ messages: formatted });
+        res.json({ messages: formatted, guestId: guestUser.id });
 
     } catch (error) {
         console.error('Guest messages error:', error);
