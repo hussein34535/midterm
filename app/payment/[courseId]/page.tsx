@@ -50,6 +50,7 @@ export default function PaymentPage({ params }: PageProps) {
     const [submitting, setSubmitting] = useState(false);
     const [screenshot, setScreenshot] = useState<File | null>(null);
     const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
+    const [senderNumber, setSenderNumber] = useState('');
 
     // Auth Gate + Fetch Course + Settings
     useEffect(() => {
@@ -136,8 +137,6 @@ export default function PaymentPage({ params }: PageProps) {
         };
         reader.readAsDataURL(file);
     };
-
-    const [senderNumber, setSenderNumber] = useState('');
 
     const handleConfirmPayment = async () => {
         if (!selectedMethod) return;

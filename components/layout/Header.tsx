@@ -99,8 +99,8 @@ export default function Header() {
     ] : [
         { name: "الرئيسية", href: "/home", icon: Home },
         { name: "الكورسات", href: "/courses", icon: BookOpen },
-        { name: "من نحن", href: "/#about" },
-        { name: "تواصل معنا", href: "/#contact" },
+        { name: "من نحن", href: "/about" },
+        { name: "تواصل معنا", href: "/contact" },
     ];
 
     return (

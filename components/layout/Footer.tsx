@@ -26,7 +26,7 @@ export default function Footer() {
                                 </Link>
                             </li>
                             <li>
-                                <Link href="#" className="text-muted-foreground hover:text-primary transition-colors">
+                                <Link href="/about" className="text-muted-foreground hover:text-primary transition-colors">
                                     كيفية العمل
                                 </Link>
                             </li>
