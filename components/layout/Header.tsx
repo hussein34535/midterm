@@ -93,7 +93,7 @@ export default function Header() {
     // Dynamic nav items based on login state
     const navItems = user ? [
         // Regular nav items
-        { name: "جلساتي", href: "/dashboard", badge: 0, icon: Home },
+        { name: "جلساتي", href: "/dashboard", icon: Home },
         { name: "الرسائل", href: "/messages", badge: unreadCount, icon: MessageCircle },
         { name: "الكورسات", href: "/courses", icon: BookOpen },
     ] : [
@@ -186,9 +186,9 @@ export default function Header() {
                                                 >
                                                     {'icon' in item && item.icon && <item.icon className="w-4 h-4 text-muted-foreground" />}
                                                     <span>{item.name}</span>
-                                                    {item.badge && item.badge > 0 && (
+                                                    {(item.badge || 0) > 0 && (
                                                         <span className="mr-auto min-w-[20px] h-5 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                                                            {item.badge > 9 ? '9+' : item.badge}
+                                                            {item.badge! > 9 ? '9+' : item.badge}
                                                         </span>
                                                     )}
                                                 </Link>
@@ -272,9 +272,9 @@ export default function Header() {
                                 className="px-4 py-2 rounded-full text-sm font-bold text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all duration-300 relative group"
                             >
                                 <span className="relative z-10">{item.name}</span>
-                                {item.badge && item.badge > 0 && (
+                                {(item.badge || 0) > 0 && (
                                     <span className="absolute top-0 right-0 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse z-20">
-                                        {item.badge > 9 ? '9+' : item.badge}
+                                        {item.badge! > 9 ? '9+' : item.badge}
                                     </span>
                                 )}
                                 <span className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/5 to-primary/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-sm" />
