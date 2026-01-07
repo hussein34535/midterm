@@ -25,8 +25,8 @@ export default function AvatarSelector({ onSelect, selectedAvatar }: AvatarSelec
         const file = e.target.files?.[0];
         if (!file) return;
 
-        if (file.size > 2 * 1024 * 1024) { // 2MB limit
-            toast.error("حجم الصورة كبير جداً (أقصى حد 2 ميجا)");
+        if (file.size > 5 * 1024 * 1024) { // 5MB limit
+            toast.error("حجم الصورة كبير جداً (أقصى حد 5 ميجا)");
             return;
         }
 

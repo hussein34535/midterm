@@ -172,9 +172,17 @@ export default function UsersManagement() {
                                             <tr key={user.id} className="hover:bg-primary/5 transition-colors">
                                                 <td className="p-4">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary">
-                                                            {user.nickname?.charAt(0).toUpperCase() || 'U'}
-                                                        </div>
+                                                        {user.avatar ? (
+                                                            <img
+                                                                src={user.avatar}
+                                                                alt={user.nickname}
+                                                                className="w-8 h-8 rounded-full object-cover border border-primary/20"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary border border-primary/20">
+                                                                {user.nickname?.charAt(0).toUpperCase() || 'U'}
+                                                            </div>
+                                                        )}
                                                         <span className="font-medium text-foreground">{user.nickname}</span>
                                                     </div>
                                                 </td>
@@ -245,9 +253,17 @@ export default function UsersManagement() {
                                     <div key={user.id} className="p-4 space-y-4 active:bg-gray-50/50 transition-colors">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-black text-primary border border-primary/20">
-                                                    {user.nickname?.charAt(0).toUpperCase() || 'U'}
-                                                </div>
+                                                {user.avatar ? (
+                                                    <img
+                                                        src={user.avatar}
+                                                        alt={user.nickname}
+                                                        className="w-10 h-10 rounded-full object-cover border border-primary/20"
+                                                    />
+                                                ) : (
+                                                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-black text-primary border border-primary/20">
+                                                        {user.nickname?.charAt(0).toUpperCase() || 'U'}
+                                                    </div>
+                                                )}
                                                 <div className="flex flex-col">
                                                     <span className="font-bold text-foreground leading-none mb-1">{user.nickname}</span>
                                                     <span className="text-[10px] text-muted-foreground opacity-60 truncate max-w-[150px]">{user.email}</span>
