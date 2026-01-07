@@ -8,6 +8,12 @@ import { toast } from "sonner";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
+interface User {
+    id: string;
+    nickname: string;
+    role: string;
+}
+
 interface Course {
     id: string;
     title: string;
@@ -20,10 +26,9 @@ interface Course {
     created_at: string;
 }
 
-
-
 export default function AdminCoursesPage() {
     const [courses, setCourses] = useState<Course[]>([]);
+    const [specialists, setSpecialists] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
 
@@ -36,19 +41,51 @@ export default function AdminCoursesPage() {
         price: number | string;
         total_sessions: number | string;
         group_capacity: number | string;
+        specialist_id: string;
     }>({
         title: '',
         description: '',
         price: 0,
         total_sessions: 4,
-        group_capacity: 4
+        group_capacity: 4,
+        specialist_id: ''
     });
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
-        fetchCourses();
+        fetchData();
     }, []);
 
+    const fetchData = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const headers = { 'Authorization': `Bearer ${token}` };
+
+            const [coursesRes, usersRes] = await Promise.all([
+                fetch(`${API_URL}/api/courses`, { headers }),
+                fetch(`${API_URL}/api/admin/users`, { headers })
+            ]);
+
+            if (coursesRes.ok) {
+                const data = await coursesRes.json();
+                setCourses(data.courses || []);
+            }
+
+            if (usersRes.ok) {
+                const data = await usersRes.json();
+                // Filter only specialists
+                const specs = (data.users || []).filter((u: User) => u.role === 'specialist');
+                setSpecialists(specs);
+            }
+
+        } catch (err) {
+            setError('فشل في جلب البيانات');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Refresh only courses
     const fetchCourses = async () => {
         try {
             const token = localStorage.getItem('token');
@@ -61,13 +98,9 @@ export default function AdminCoursesPage() {
                 setCourses(data.courses || []);
             }
         } catch (err) {
-            setError('فشل في جلب الكورسات');
-        } finally {
-            setLoading(false);
+            console.error(err);
         }
     };
-
-
 
     const handleDelete = async (courseId: string) => {
         if (!confirm('هل أنت متأكد من حذف هذا الكورس؟')) return;
@@ -97,7 +130,8 @@ export default function AdminCoursesPage() {
             description: course.description || '',
             price: course.price,
             total_sessions: course.total_sessions,
-            group_capacity: course.group_capacity || 4
+            group_capacity: course.group_capacity || 4,
+            specialist_id: course.specialist_id || ''
         });
         setShowForm(true);
     };
@@ -109,7 +143,8 @@ export default function AdminCoursesPage() {
             description: '',
             price: 0,
             total_sessions: 4,
-            group_capacity: 4
+            group_capacity: 4,
+            specialist_id: ''
         });
         setShowForm(true);
     };
@@ -132,7 +167,8 @@ export default function AdminCoursesPage() {
                 ...formData,
                 price: Number(formData.price),
                 total_sessions: Number(formData.total_sessions),
-                group_capacity: Number(formData.group_capacity)
+                group_capacity: Number(formData.group_capacity),
+                specialist_id: formData.specialist_id || null // Send null if empty
             };
 
             const res = await fetch(url, {
@@ -224,6 +260,23 @@ export default function AdminCoursesPage() {
                                         />
                                     </div>
 
+                                    {/* Specialist Selector */}
+                                    <div>
+                                        <label className="block text-sm font-bold text-foreground mb-2">الأخصائي المسؤول</label>
+                                        <select
+                                            value={formData.specialist_id}
+                                            onChange={(e) => setFormData({ ...formData, specialist_id: e.target.value })}
+                                            className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:border-primary outline-none"
+                                        >
+                                            <option value="">-- بدون أخصائي --</option>
+                                            {specialists.map(specialist => (
+                                                <option key={specialist.id} value={specialist.id}>
+                                                    {specialist.nickname}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
                                     <div className="grid grid-cols-3 gap-4">
                                         <div>
                                             <label className="block text-sm font-bold text-foreground mb-2">السعر (ج.م)</label>
@@ -306,9 +359,16 @@ export default function AdminCoursesPage() {
                                         <BookOpen className="w-8 h-8" />
                                     </div>
                                     <div className="flex-1">
-                                        <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors">
-                                            {course.title}
-                                        </h3>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors">
+                                                {course.title}
+                                            </h3>
+                                            {course.specialist && (
+                                                <span className="text-xs bg-secondary text-foreground px-2 py-1 rounded-full border border-border">
+                                                    👨‍⚕️ {course.specialist.nickname}
+                                                </span>
+                                            )}
+                                        </div>
                                         <p className="text-sm text-muted-foreground line-clamp-1">{course.description}</p>
                                         <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
                                             <span className="flex items-center gap-1">
