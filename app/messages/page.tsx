@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import dynamic from "next/dynamic";
 import { useNSFW } from "@/hooks/useNSFW";
 import { containsProfanity } from "@/lib/profanity";
+import { useSocket } from "@/hooks/useSocket";
 
 const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
 
@@ -29,6 +30,8 @@ interface Conversation {
     lastMessage?: string;
     lastMessageAt?: string;
     unreadCount: number;
+    group_id?: string;
+    course_id?: string;
 }
 
 interface Message {
@@ -88,6 +91,64 @@ export default function MessagesPage() {
     const [showSchedule, setShowSchedule] = useState(false);
     const [scheduleData, setScheduleData] = useState({ date: '', time: '', title: '' });
     const [scheduling, setScheduling] = useState(false);
+
+    // Socket.io
+    const socketRef = useSocket(currentUser?.id);
+
+    useEffect(() => {
+        const socket = socketRef.current;
+        if (!socket) return;
+
+        socket.on('receive_message', (newMessage: any) => {
+            // 1. If chat is open and matches sender/group, append message
+            // AND the message is NOT from me (I already added my own optimistic/response)
+            // Actually, for multi-device sync, we might want to append mine too if not exists.
+
+            // Check if this message belongs to the currently selected conversation
+            if (selectedConversation) {
+                const isRelevant =
+                    (selectedConversation.type === 'direct' && (newMessage.sender_id === selectedConversation.user?.id ||
+                        (newMessage.sender_id === currentUser?.id && newMessage.receiver_id === selectedConversation.user?.id))) ||
+                    (selectedConversation.type === 'group' && newMessage.group_id === selectedConversation.group_id) || // Specific group
+                    (selectedConversation.type === 'group' && !newMessage.group_id && newMessage.course_id === selectedConversation.id); // Course global
+
+                if (isRelevant) {
+                    setMessages(prev => {
+                        // Prevent duplicates
+                        if (prev.some(m => m.id === newMessage.id)) return prev;
+                        return [...prev, newMessage];
+                    });
+
+                    // Mark as read immediately if window is focused? (Optional)
+                }
+            }
+
+            // 2. Update Conversations List (Unread count / Last message)
+            // If we are polling, this might overlap, but real-time is better.
+            // We can update the conversation list optimisticly here.
+            setConversations(prev => prev.map(c => {
+                let match = false;
+                if (c.type === 'direct' && (c.user?.id === newMessage.sender_id || c.user?.id === newMessage.receiver_id)) match = true;
+                if (c.type === 'group' && (c.id === newMessage.course_id || c.id === newMessage.group_id)) match = true;
+
+                if (match) {
+                    return {
+                        ...c,
+                        lastMessage: newMessage.content.startsWith('http') ? 'صورة' : newMessage.content,
+                        // Increment unread if it's NOT my message AND not currently selected
+                        unreadCount: (newMessage.sender_id !== currentUser?.id && (!selectedConversation || selectedConversation.id !== c.id))
+                            ? (c.unreadCount || 0) + 1
+                            : c.unreadCount
+                    };
+                }
+                return c;
+            }));
+        });
+
+        return () => {
+            socket.off('receive_message');
+        };
+    }, [currentUser, selectedConversation, socketRef]);
 
     // Group Members Modal
     const [showGroupMembers, setShowGroupMembers] = useState(false);
@@ -1210,7 +1271,7 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
     }
 
     // Generate consistent color for sender name based on their ID
-    const getNameColor = (senderId: string | null) => {
+    const getNameColor = (senderId?: string | null) => {
         if (!senderId) return 'text-gray-600'; // Default for system messages
         const colors = ['text-blue-600', 'text-green-600', 'text-purple-600', 'text-orange-600', 'text-pink-600', 'text-teal-600'];
         let hash = 0;

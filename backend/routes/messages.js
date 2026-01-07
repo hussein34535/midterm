@@ -197,16 +197,41 @@ router.get('/conversations', authMiddleware, async (req, res) => {
         }
 
         // Fetch last message for each course
-        const groupConversations = await Promise.all(myCourses.map(async (course) => {
+        // Fetch last message for ALL courses in one query (Optimization)
+        const courseIds = myCourses.map(c => c.id).filter(id => id);
+
+        let latestMessagesMap = new Map();
+
+        if (courseIds.length > 0) {
+            // Fetch latest messages for these courses
+            // Since we can't easily "group by" and get latest in one simple query without RPC,
+            // we will fetch the recent messages for these courses and filter in JS.
+            // Assumption: Not too many courses, or recent messages are enough.
+            // Better strategy: Limit to decent number (e.g., 50 last messages total?) 
+            // No, that might miss a course. 
+            // We fetch messages for these courses, ordered by date desc.
+            // To avoid fetching HUGE data, we can try to rely on the fact that we need just ONE per course.
+            // But standard SQL 'distinct on' is needed. 
+            // For now, we fetch a batch and process.
+
+            const { data: batchMessages } = await supabase
+                .from('messages')
+                .select('id, content, created_at, type, course_id')
+                .in('course_id', courseIds)
+                .order('created_at', { ascending: false })
+                .limit(500); // Fetch last 500 course messages total. Should cover most active courses.
+
+            (batchMessages || []).forEach(msg => {
+                if (!latestMessagesMap.has(msg.course_id)) {
+                    latestMessagesMap.set(msg.course_id, msg);
+                }
+            });
+        }
+
+        const groupConversations = myCourses.map(course => {
             if (!course) return null;
 
-            const { data: lastMsg } = await supabase
-                .from('messages')
-                .select('*')
-                .eq('course_id', course.id)
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .single();
+            const lastMsg = latestMessagesMap.get(course.id);
 
             // Display Name: Group Name for students, Course Title for specialist
             const displayName = course.groupName || course.title;
@@ -224,7 +249,7 @@ router.get('/conversations', authMiddleware, async (req, res) => {
                 lastMessageAt: lastMsg?.created_at || new Date().toISOString(),
                 unreadCount: 0
             };
-        }));
+        });
 
         const allConversations = [
             ...Array.from(conversationsMap.values()),
@@ -466,6 +491,34 @@ router.get('/:id', authMiddleware, async (req, res) => {
     }
 });
 
+// Helper to emit real-time message
+const emitRealtimeMessage = (req, message) => {
+    const io = req.app.get('io');
+    if (!io) return;
+
+    // Emit to Sender (for sync across devices)
+    io.to(`user_${message.sender_id}`).emit('receive_message', message);
+
+    // Emit to Receiver (Direct Message)
+    if (message.receiver_id) {
+        io.to(`user_${message.receiver_id}`).emit('receive_message', message);
+        // Also emit to 'system' if message is to system (Shared Inbox case)
+        // (Not needed if we impersonate system, as receiver is the user)
+    }
+
+    // Emit to Group/Course (Group Message)
+    if (message.type === 'group') {
+        // Emit to specific group room if exists, else course room
+        const room = message.group_id ? `group_${message.group_id}` : `course_${message.course_id}`;
+        io.to(room).emit('receive_message', message);
+
+        // Also emit to course room generally (optional, for broad listeners)
+        if (message.course_id && message.group_id) {
+            io.to(`course_${message.course_id}`).emit('receive_message', message);
+        }
+    }
+};
+
 /**
  * POST /api/messages/:id
  * Send a message to a specific user or course group
@@ -585,6 +638,13 @@ router.post('/:id', authMiddleware, async (req, res) => {
                 replyTo
             }
         });
+
+        // Emit Real-time event
+        emitRealtimeMessage(req, {
+            ...message,
+            sender: message.sender, // Ensure sender info is passed
+            replyTo // Include reply info
+        });
     } catch (error) {
         console.error('Send message error:', error);
         res.status(500).json({ error: 'حدث خطأ' });
@@ -696,6 +756,12 @@ router.post('/:id/image', authMiddleware, upload.single('image'), async (req, re
                 type: message.type,
                 metadata: message.metadata
             }
+        });
+
+        // Emit Real-time event
+        emitRealtimeMessage(req, {
+            ...message,
+            sender: message.sender // Ensure sender info is passed
         });
 
     } catch (error) {
