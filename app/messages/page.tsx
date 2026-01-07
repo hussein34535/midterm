@@ -32,7 +32,15 @@ interface Conversation {
 interface Message {
     id: string;
     content: string;
-    senderId: string;
+    senderId?: string; // Optional (legacy)
+    sender_id?: string; // Backend format
+    sender?: {
+        id: string;
+        nickname: string;
+        avatar?: string;
+        role?: string;
+        email?: string;
+    };
     senderName?: string;
     senderAvatar?: string;
     type: 'text' | 'schedule' | 'alert' | 'image' | 'sticker';
@@ -810,17 +818,27 @@ export default function MessagesPage() {
                                                 <p className="text-sm">أرسل رسالتك الأولى</p>
                                             </div>
                                         ) : (
-                                            messages.map((msg) => (
-                                                <ChatBubble
-                                                    key={msg.id}
-                                                    msg={msg}
-                                                    isMe={msg.senderId === currentUser.id}
-                                                    isGroup={selectedConversation.type === 'group'}
-                                                    onReply={() => setReplyingTo(msg)}
-                                                    onHide={() => handleHideMessage(msg.id)}
-                                                    canHide={['owner', 'specialist'].includes(currentUser?.role)}
-                                                />
-                                            ))
+                                            messages.map((msg) => {
+                                                const senderId = msg.sender_id || msg.senderId;
+                                                const isSystem = msg.sender?.role === 'admin' || msg.sender?.email === 'system@sakina.com';
+                                                const isOwner = currentUser?.role === 'owner';
+                                                // Check if system message (admin role) AND I am owner
+                                                const isMe = senderId === currentUser.id || (isOwner && isSystem);
+
+                                                console.log(`Msg: ${msg.id}, Role: ${msg.sender?.role}, Email: ${msg.sender?.email}, IsOwner: ${isOwner}, IsSystem: ${isSystem} -> IsMe: ${isMe} (SenderId: ${senderId}, MyId: ${currentUser.id})`);
+
+                                                return (
+                                                    <ChatBubble
+                                                        key={msg.id}
+                                                        msg={msg}
+                                                        isMe={isMe}
+                                                        isGroup={selectedConversation.type === 'group'}
+                                                        onReply={() => setReplyingTo(msg)}
+                                                        onHide={() => handleHideMessage(msg.id)}
+                                                        canHide={['owner', 'specialist'].includes(currentUser?.role)}
+                                                    />
+                                                );
+                                            })
                                         )}
                                         <div ref={messagesEndRef} />
                                     </div>

@@ -30,6 +30,22 @@ const { authMiddleware } = require('../middleware/auth');
 router.get('/conversations', authMiddleware, async (req, res) => {
     try {
         // 1. Get Direct Messages (users)
+        // 1. Get Direct Messages (users)
+        let orQuery = `sender_id.eq.${req.userId},receiver_id.eq.${req.userId}`;
+
+        // If Owner, also fetch messages interacting with SYSTEM USER (Shared Inbox)
+        if (req.userRole === 'owner') {
+            const { data: systemUser } = await supabase
+                .from('users')
+                .select('id')
+                .eq('email', 'system@sakina.com')
+                .single();
+
+            if (systemUser) {
+                orQuery += `,sender_id.eq.${systemUser.id},receiver_id.eq.${systemUser.id}`;
+            }
+        }
+
         const { data: messages, error } = await supabase
             .from('messages')
             .select(`
@@ -44,7 +60,7 @@ router.get('/conversations', authMiddleware, async (req, res) => {
                 sender:users!messages_sender_id_fkey (id, nickname, avatar, role),
                 receiver:users!messages_receiver_id_fkey (id, nickname, avatar, role)
             `)
-            .or(`sender_id.eq.${req.userId},receiver_id.eq.${req.userId}`)
+            .or(orQuery)
             .is('course_id', null) // Only direct messages
             .order('created_at', { ascending: false });
 
@@ -56,17 +72,51 @@ router.get('/conversations', authMiddleware, async (req, res) => {
 
         // Process Direct Messages
         console.log(`Conversations for User ${req.userId}: found ${messages?.length} messages`);
+
+        // Helper to check if ID is System
+        const SYSTEM_EMAIL = 'system@sakina.com';
+        // (Optimally this ID should be fetched once and cached, but for now we rely on the query above having worked
+        //  or we can deduce it from the message if one participant is System).
+        // Actually, we need to know WHICH ID is System to map correctly. 
+        // Let's assume the System User was found in the query block above if owner.
+
+        let systemUserId = null;
+        if (req.userRole === 'owner') {
+            const { data: systemUser } = await supabase.from('users').select('id').eq('email', SYSTEM_EMAIL).single();
+            systemUserId = systemUser?.id;
+        }
+
         (messages || []).forEach(msg => {
-            const partnerId = msg.sender_id === req.userId ? msg.receiver_id : msg.sender_id;
-            let partner = msg.sender_id === req.userId ? msg.receiver : msg.sender;
+            // Logic for Owner viewing Shared Inbox:
+            // If msg is (System <-> User), the partner is User.
+            // If msg is (Owner <-> User), the partner is User.
+            // If msg is (Owner <-> Owner), standard logic.
+
+            let partnerId, partner;
+
+            // Check if this is a System Message (Shared Inbox)
+            if (systemUserId && (msg.sender_id === systemUserId || msg.receiver_id === systemUserId)) {
+                // Partner is the OTHER person (The User)
+                partnerId = msg.sender_id === systemUserId ? msg.receiver_id : msg.sender_id;
+                partner = msg.sender_id === systemUserId ? msg.receiver : msg.sender;
+            } else {
+                // Standard Direct Message
+                partnerId = msg.sender_id === req.userId ? msg.receiver_id : msg.sender_id;
+                partner = msg.sender_id === req.userId ? msg.receiver : msg.sender;
+            }
 
             // Debug log for missing partner
             if (!partner) {
                 console.log('Missing partner for msg:', msg.id, 'PartnerID:', partnerId);
+                return; // Skip invalid messages
             }
 
-            // BRANDING: If partner is Owner, mask as Support
-            if (partner && partner.role === 'owner') {
+            // BRANDING: If partner is Owner, mask as Support (only if I am NOT an owner)
+            if (req.userRole !== 'owner' && partner && partner.role === 'owner') {
+                partner = { ...partner, nickname: 'دعم إيواء', avatar: '/logo.png' };
+            }
+            // BRANDING: If partner is System, mask as Support
+            if (partner && partner.email === SYSTEM_EMAIL) {
                 partner = { ...partner, nickname: 'دعم إيواء', avatar: '/logo.png' };
             }
 
@@ -118,7 +168,32 @@ router.get('/conversations', authMiddleware, async (req, res) => {
             isStudent: false
         }));
 
-        const myCourses = [...studentCourses, ...specialistCourses];
+        let ownerCourses = [];
+        if (req.userRole === 'owner') {
+            // Fetch ALL courses for owners
+            const { data: allCourses } = await supabase
+                .from('courses')
+                .select('id, title, specialist_id');
+
+            ownerCourses = (allCourses || []).map(c => ({
+                ...c,
+                groupName: c.title, // Owners see full course title (global view)
+                isStudent: false
+            }));
+        }
+
+        // Avoid duplicates if owner is also specialist
+        // For simplicity, if owner, use ownerCourses (which is all).
+        // If not owner, use teaching + student.
+        let myCourses = [];
+        if (req.userRole === 'owner') {
+            myCourses = ownerCourses;
+            // Add enrollments if they are enrolled in OTHER courses? 
+            // Owners usually don't enroll, but if they do, merging might duplicate if they are also owners.
+            // Simplest: Owner sees ALL courses.
+        } else {
+            myCourses = [...studentCourses, ...specialistCourses];
+        }
 
         // Fetch last message for each course
         const groupConversations = await Promise.all(myCourses.map(async (course) => {
@@ -237,7 +312,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
             .from('messages')
             .select(`
                 id, content, sender_id, receiver_id, course_id, created_at, read, type, metadata, reply_to_id, hidden,
-                sender:users!messages_sender_id_fkey(id, nickname, avatar, role)
+                sender:users!messages_sender_id_fkey(id, nickname, avatar, role, email)
             `)
             .order('created_at', { ascending: true });
 
@@ -310,7 +385,19 @@ router.get('/:id', authMiddleware, async (req, res) => {
             }
         } else {
             // Fetch direct messages
-            query = query.or(`and(sender_id.eq.${req.userId},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${req.userId})`);
+            let orQuery = `and(sender_id.eq.${req.userId},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${req.userId})`;
+
+            // SHARED INBOX LOGIC:
+            // If Owner, also fetch messages between System and the Partner (id)
+            if (currentUser?.role === 'owner') {
+                // Get System User ID (Optimized: hardcoded or fetched. Let's fetch to be safe/clean)
+                const { data: systemUser } = await supabase.from('users').select('id').eq('email', 'system@sakina.com').single();
+                if (systemUser) {
+                    orQuery += `,and(sender_id.eq.${systemUser.id},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${systemUser.id})`;
+                }
+            }
+
+            query = query.or(orQuery);
         }
 
         const { data: messages, error } = await query;
@@ -366,7 +453,8 @@ router.get('/:id', authMiddleware, async (req, res) => {
                 type: m.type,
                 metadata: m.metadata || {},
                 replyTo,
-                hidden: m.hidden || false
+                hidden: m.hidden,
+                sender: m.sender || false
             };
         });
 
@@ -433,6 +521,25 @@ router.post('/:id', authMiddleware, async (req, res) => {
         } else {
             messageData.receiver_id = id;
             messageData.course_id = null; // Direct message
+
+            // SHARED INBOX LOGIC:
+            // If sender is Owner, and they are replying to a User who has a thread with System...
+            // Check if this thread should be from System.
+            // Simplified Rule: If Owner sends to a Regular User, it goes as "System" (Shared Inbox).
+            // Unless it's an internal owner-owner chat.
+
+            // Note: We need to know receiver role.
+            if (req.userRole === 'owner') {
+                // Check receiver role
+                const { data: receiverUser } = await supabase.from('users').select('role').eq('id', id).single();
+                if (receiverUser && receiverUser.role === 'user') {
+                    // Get System User ID
+                    const { data: systemUser } = await supabase.from('users').select('id').eq('email', 'system@sakina.com').single();
+                    if (systemUser) {
+                        messageData.sender_id = systemUser.id; // Impersonate System
+                    }
+                }
+            }
         }
 
         const { data: message, error } = await supabase

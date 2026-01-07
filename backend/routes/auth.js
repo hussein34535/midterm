@@ -119,45 +119,30 @@ router.post('/register', async (req, res) => {
             }
         }
 
-        // 🎯 AUTO-CREATE SUPPORT CHAT: Send Welcome Message from OWNER
+        // 🎯 AUTO-CREATE SUPPORT CHAT: Send Welcome Message from SYSTEM (Shared Inbox)
         try {
-            // Find an Owner to send the welcome message
-            const { data: owners } = await supabase
+            const SYSTEM_EMAIL = 'system@sakina.com';
+            let { data: systemUser } = await supabase
                 .from('users')
                 .select('id')
-                .eq('role', 'owner')
-                .limit(1);
+                .eq('email', SYSTEM_EMAIL)
+                .single();
 
-            let welcomeSenderId = null;
-            if (owners && owners.length > 0) {
-                // Use the first owner
-                welcomeSenderId = owners[0].id;
-            } else {
-                // Fallback: Check/Create System User only if no owner found
-                const SYSTEM_EMAIL = 'system@sakina.com';
-                let { data: systemUser } = await supabase
-                    .from('users')
-                    .select('id')
-                    .eq('email', SYSTEM_EMAIL)
-                    .single();
-
-                if (!systemUser) {
-                    const systemHash = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
-                    const { data: newSystem } = await supabase.from('users').insert({
-                        id: uuidv4(), nickname: 'إدارة منصة إيواء', email: SYSTEM_EMAIL, password: systemHash,
-                        avatar: '/logo.png', role: 'admin', is_verified: true, created_at: new Date().toISOString()
-                    }).select('id').single();
-                    systemUser = newSystem;
-                }
-                welcomeSenderId = systemUser?.id;
+            // If not exists, CREATE System User
+            if (!systemUser) {
+                const systemHash = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
+                const { data: newSystem } = await supabase.from('users').insert({
+                    id: uuidv4(), nickname: 'إدارة منصة إيواء', email: SYSTEM_EMAIL, password: systemHash,
+                    avatar: '/logo.png', role: 'admin', is_verified: true, created_at: new Date().toISOString()
+                }).select('id').single();
+                systemUser = newSystem;
             }
 
-            if (welcomeSenderId) {
+            if (systemUser) {
                 const welcomeContent = `مرحباً ${nickname} في منصة إيواء 🌸\nنحن هنا لدعمك في رحلتك. إذا كان لديك أي استفسار، لا تتردد في مراسلتنا هنا.`;
-
                 await supabase.from('messages').insert({
                     id: uuidv4(),
-                    sender_id: welcomeSenderId,
+                    sender_id: systemUser.id,
                     receiver_id: newUser.id,
                     content: welcomeContent,
                     type: 'text',
