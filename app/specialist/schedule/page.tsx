@@ -88,9 +88,9 @@ export default function SpecialistSchedule() {
             // Only auto-fill for NEW session if we are not editing
             if (!editingId && !showForm && !paramEditSessionId) {
                 if (paramGroupId && fetchedGroups.length > 0) {
-                    const targetGroup = fetchedGroups.find(g => g.id === paramGroupId);
+                    const targetGroup = fetchedGroups.find((g: any) => g.id === paramGroupId);
                     if (targetGroup) {
-                        const targetCourse = fetchedCourses.find(c => c.id === targetGroup.course_id);
+                        const targetCourse = fetchedCourses.find((c: any) => c.id === targetGroup.course_id);
                         setForm(prev => ({
                             ...prev,
                             courseId: targetGroup.course_id,
