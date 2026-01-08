@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { MessageCircle, Send, Loader2, User, Users, Calendar, Clock, ArrowRight, Phone, Video, MoreVertical, Check, CheckCheck, Smile, X, Reply, Image as ImageIcon, Plus, Search, Trash2 } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { toast } from "sonner";
@@ -82,9 +83,7 @@ export default function MessagesPage() {
     const [searching, setSearching] = useState(false);
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
-    const [showSchedule, setShowSchedule] = useState(false);
-    const [scheduleData, setScheduleData] = useState({ date: '', time: '', title: '' });
-    const [scheduling, setScheduling] = useState(false);
+
 
     // Initial Load - Get Current User
     useEffect(() => {
@@ -313,12 +312,20 @@ export default function MessagesPage() {
                 }
                 const { data: teaching } = await supabase
                     .from('courses')
-                    .select('id, title')
+                    .select('id, title, groups:course_groups(id, name)')
                     .eq('specialist_id', currentUser.id);
                 if (teaching) {
-                    teaching.forEach(c => {
+                    teaching.forEach((c: any) => {
                         myCourseIds.push(c.id);
                         courseMap.set(c.id, { id: c.id, name: c.title, isCourse: true });
+
+                        // Also add all groups for this course
+                        if (c.groups) {
+                            c.groups.forEach((g: any) => {
+                                myCourseIds.push(g.id);
+                                courseMap.set(g.id, { id: g.id, name: g.name || `${c.title} - Group`, isCourse: false });
+                            });
+                        }
                     });
                 }
             }
@@ -743,32 +750,7 @@ export default function MessagesPage() {
         }
     };
 
-    const handleScheduleSession = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedConversation || !scheduleData.date || !scheduleData.time || scheduling) return;
-        setScheduling(true);
-        try {
-            // Need ISO string
-            const scheduledAt = new Date(`${scheduleData.date}T${scheduleData.time}`).toISOString();
-            const { error } = await supabase.from('messages').insert({
-                content: scheduleData.title,
-                type: 'schedule',
-                metadata: { scheduled_at: scheduledAt },
-                sender_id: currentUser.id,
-                receiver_id: selectedConversation.type === 'direct' ? selectedConversation.user.id : null,
-                course_id: selectedConversation.type === 'group' && selectedConversation.id === selectedConversation.course_id ? selectedConversation.id : null,
-                group_id: selectedConversation.type === 'group' && selectedConversation.id !== selectedConversation.course_id ? selectedConversation.id : null,
-            });
-            if (error) throw error;
-            setShowSchedule(false);
-            setScheduleData({ date: '', time: '', title: '' });
-            toast.success('تم جدولة الجلسة بنجاح');
-        } catch (err) {
-            toast.error('فشل في الجدولة');
-        } finally {
-            setScheduling(false);
-        }
-    };
+
 
     const handleContactSupport = async () => {
         try {
@@ -1051,12 +1033,13 @@ export default function MessagesPage() {
                                                 </button>
                                             )}
                                             {selectedConversation.type === 'group' && (currentUser.role === 'specialist' || currentUser.role === 'owner') && (
-                                                <button
-                                                    onClick={() => setShowSchedule(!showSchedule)}
+                                                <Link
+                                                    href={`/specialist/schedule?groupId=${selectedConversation.id}`}
                                                     className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-100 transition-colors"
+                                                    title="جدولة جلسة للمجموعة"
                                                 >
                                                     <Calendar className="w-5 h-5 text-gray-600" />
-                                                </button>
+                                                </Link>
                                             )}
                                             <div className="relative">
                                                 <button
@@ -1079,38 +1062,6 @@ export default function MessagesPage() {
                                             </div>
                                         </div>
                                     </div>
-
-                                    {showSchedule && (
-                                        <div className="p-4 bg-white border-b border-gray-200">
-                                            <form onSubmit={handleScheduleSession} className="flex flex-wrap gap-3">
-                                                <input
-                                                    type="text"
-                                                    required
-                                                    placeholder="عنوان الجلسة"
-                                                    className="flex-1 min-w-[150px] px-4 py-2 rounded-lg bg-gray-100 border-0 text-sm"
-                                                    value={scheduleData.title}
-                                                    onChange={e => setScheduleData({ ...scheduleData, title: e.target.value })}
-                                                />
-                                                <input
-                                                    type="date"
-                                                    required
-                                                    className="px-4 py-2 rounded-lg bg-gray-100 border-0 text-sm"
-                                                    value={scheduleData.date}
-                                                    onChange={e => setScheduleData({ ...scheduleData, date: e.target.value })}
-                                                />
-                                                <input
-                                                    type="time"
-                                                    required
-                                                    className="px-4 py-2 rounded-lg bg-gray-100 border-0 text-sm"
-                                                    value={scheduleData.time}
-                                                    onChange={e => setScheduleData({ ...scheduleData, time: e.target.value })}
-                                                />
-                                                <button type="submit" disabled={scheduling} className="px-6 py-2 bg-primary text-white rounded-lg text-sm font-medium">
-                                                    {scheduling ? <Loader2 className="w-4 h-4 animate-spin" /> : 'جدولة'}
-                                                </button>
-                                            </form>
-                                        </div>
-                                    )}
 
                                     <div ref={messagesContainerRef} className={`flex-1 overflow-y-auto p-4 space-y-2 transition-opacity duration-100 overflow-x-hidden ${messagesReady || messages.length === 0 ? 'opacity-100' : 'opacity-0'}`} style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }}>
                                         {messages.length === 0 ? (

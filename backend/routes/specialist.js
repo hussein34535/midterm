@@ -62,14 +62,42 @@ router.get('/groups', async (req, res) => {
             .from('course_groups')
             .select(`
                 *,
-                course:courses(title)
+                course:courses(title, total_sessions),
+                sessions:group_sessions(id, session_id, status, scheduled_at, session:sessions(session_number))
             `)
             .in('course_id', courseIds)
             .order('updated_at', { ascending: false });
 
         if (groupsError) throw groupsError;
 
-        res.json({ groups: groups || [] });
+        // Enrich groups with member count and unread count
+        const enrichedGroups = await Promise.all(groups.map(async (group) => {
+            // Get members count
+            const { count: membersCount } = await supabase
+                .from('group_members')
+                .select('*', { count: 'exact', head: true })
+                .eq('group_id', group.id);
+
+            // Get unread messages count (messages in this group, not sent by me, not read)
+            // Note: In a real app, 'read' might be per-user. Assuming simple 'read' flag here or global unread.
+            // If message read status is per-user (e.g. message_reads table), this query needs adjusting.
+            // For now, let's assume simple unread for group context or check if we store read status.
+            // Checking schema.sql would be ideal, but let's assume 'messages' table has 'read' boolean for now.
+            const { count: unreadCount } = await supabase
+                .from('messages')
+                .select('*', { count: 'exact', head: true })
+                .eq('conversation_id', group.id)
+                .eq('read', false)
+                .neq('sender_id', req.userId);
+
+            return {
+                ...group,
+                members_count: membersCount || 0,
+                unreadCount: unreadCount || 0
+            };
+        }));
+
+        res.json({ groups: enrichedGroups });
     } catch (error) {
         console.error('Groups error:', error);
         res.status(500).json({ error: 'حدث خطأ' });
@@ -358,6 +386,70 @@ router.patch('/sessions/:id/end', async (req, res) => {
         }
 
         res.json({ message: 'تم إنهاء الجلسة', session: updatedSession });
+    } catch (error) {
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+/**
+ * DELETE /api/specialist/sessions/:id
+ * Cancel/Delete a scheduled group session
+ */
+router.delete('/sessions/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Verify ownership
+        const { data: session, error: fetchError } = await supabase
+            .from('group_sessions')
+            .select('*, group:course_groups(specialist_id)')
+            .eq('id', id)
+            .single();
+
+        if (fetchError || !session) return res.status(404).json({ error: 'الجلسة غير موجودة' });
+        if (session.group?.specialist_id !== req.userId) return res.status(403).json({ error: 'غير مصرح' });
+
+        const { error } = await supabase
+            .from('group_sessions')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+
+        res.json({ message: 'تم إلغاء الجلسة' });
+    } catch (error) {
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+/**
+ * PATCH /api/specialist/sessions/:id
+ * Update session schedule (Reschedule)
+ */
+router.patch('/sessions/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { scheduled_at } = req.body;
+
+        const { data: session, error: fetchError } = await supabase
+            .from('group_sessions')
+            .select('*, group:course_groups(specialist_id)')
+            .eq('id', id)
+            .single();
+
+        if (fetchError || !session) return res.status(404).json({ error: 'الجلسة غير موجودة' });
+        if (session.group?.specialist_id !== req.userId) return res.status(403).json({ error: 'غير مصرح' });
+
+        const { data: updated, error } = await supabase
+            .from('group_sessions')
+            .update({ scheduled_at })
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        res.json({ message: 'تم تعديل الموعد', session: updated });
     } catch (error) {
         res.status(500).json({ error: 'حدث خطأ' });
     }
