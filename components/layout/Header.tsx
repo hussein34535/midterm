@@ -10,6 +10,7 @@ import { toast } from "sonner"
 export default function Header() {
     const [isScrolled, setIsScrolled] = useState(false)
     const [user, setUser] = useState<any>(null);
+    const [isAuthLoaded, setIsAuthLoaded] = useState(false);
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
 
@@ -30,6 +31,7 @@ export default function Header() {
             } else {
                 setUser(null);
             }
+            setIsAuthLoaded(true);
         };
 
         checkUser();
@@ -147,7 +149,9 @@ export default function Header() {
                 <div className="container mx-auto flex items-center justify-between">
                     {/* User Profile - Right side in RTL (appears first in DOM) */}
                     <div className="flex items-center gap-2 md:gap-3 user-menu-container relative">
-                        {user ? (
+                        {!isAuthLoaded ? (
+                            <div className="w-10 h-10 rounded-full bg-gray-200/50 animate-pulse border border-gray-200" />
+                        ) : user ? (
                             /* User Profile Button */
                             <>
                                 <button
@@ -251,7 +255,7 @@ export default function Header() {
                             </>
                         ) : (
                             /* Guest - Login/Register buttons */
-                            <div className="flex items-center gap-2 md:gap-3">
+                            <div className="flex items-center gap-2 md:gap-3 animate-in fade-in duration-300">
                                 <Link href="/login" className="text-sm md:text-base font-bold text-foreground/70 hover:text-primary transition-colors px-2 md:px-3 py-2">
                                     دخول
                                 </Link>

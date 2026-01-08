@@ -2,18 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-    ArrowRight,
-    Check,
-    X,
-    Clock,
-    Filter,
-    Loader2,
-    DollarSign,
-    User,
-    BookOpen,
-    FileText
-} from "lucide-react";
+import Link from "next/link"
+import Image from "next/image"
+import { DollarSign, Search, CheckCircle, XCircle, Clock, Filter, ChevronLeft, ChevronRight, FileText, Check, X, User, Calendar, BookOpen, Loader2, ArrowRight } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { toast } from "sonner";
 
@@ -227,9 +218,15 @@ export default function PaymentsManagement() {
                             <div key={payment.id} className="bg-white rounded-xl p-4 shadow-sm">
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+                                        <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden relative">
                                             {payment.user?.avatar ? (
-                                                <img src={payment.user.avatar} alt="" className="w-full h-full object-cover" />
+                                                <Image
+                                                    src={payment.user.avatar}
+                                                    alt={payment.user.nickname || 'User'}
+                                                    fill
+                                                    sizes="48px"
+                                                    className="object-cover"
+                                                />
                                             ) : (
                                                 <User className="w-6 h-6 text-gray-500" />
                                             )}

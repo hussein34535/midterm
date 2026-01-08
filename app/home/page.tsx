@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link"
+import Image from "next/image"
 import { ArrowRight, Shield, Sparkles, Heart, Clock } from "lucide-react"
 import Header from "../../components/layout/Header"
 import Footer from "../../components/layout/Footer"
@@ -48,10 +49,13 @@ export default function LandingPage() {
                             </div>
 
                             {/* Image Side - Visible on Mobile now */}
-                            <div className="block animate-in fade-in slide-in-from-left-10 duration-1000 delay-300 mt-8 md:mt-0 w-[85%] mx-auto md:w-full">
-                                <img
+                            <div className="block animate-in fade-in slide-in-from-left-10 duration-1000 delay-300 mt-8 md:mt-0 w-[85%] mx-auto md:w-full relative">
+                                <Image
                                     src="/hero.png"
                                     alt="إيواء - مجتمع دافئ"
+                                    width={600}
+                                    height={500}
+                                    priority
                                     className="w-full h-auto rounded-3xl shadow-2xl shadow-primary/10 animate-float"
                                 />
                             </div>

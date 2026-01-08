@@ -990,7 +990,12 @@ export default function MessagesPage() {
                             </div>
                         </div>
 
-                        <div className={`flex-1 flex flex-col bg-[#f0f2f5] ${!showMobileChat ? 'hidden md:flex' : 'flex'}`}>
+                        <div className={`
+                            ${!showMobileChat ? 'hidden md:flex' : 'flex'}
+                            md:relative
+                            ${showMobileChat ? 'fixed inset-0 z-[10000] h-[100dvh] w-full bg-[#f0f2f5]' : 'flex-1'}
+                            md:flex-1 md:flex md:flex-col md:h-auto md:w-auto md:z-auto
+                        `}>
                             {selectedConversation ? (
                                 <>
                                     <div className="px-3 py-2.5 bg-white border-b border-gray-200 flex items-center gap-2 shadow-sm">
@@ -1196,7 +1201,7 @@ export default function MessagesPage() {
                                         </div>
                                     )}
 
-                                    <div className="p-3 bg-white border-t border-gray-200 relative">
+                                    <div className="p-3 bg-white border-t border-gray-200 relative shrink-0 safe-area-bottom">
                                         <form onSubmit={selectedImage ? (e) => { e.preventDefault(); handleSendImage(); } : handleSendMessage} className="flex items-center gap-2 overflow-hidden">
                                             <button
                                                 type="button"
