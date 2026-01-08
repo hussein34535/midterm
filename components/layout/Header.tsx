@@ -197,7 +197,6 @@ export default function Header() {
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="font-bold text-base text-foreground truncate">{user.nickname || "المستخدم"}</p>
-                                                    <p className="text-xs text-muted-foreground truncate" dir="ltr">{user.email}</p>
                                                     {roleInfo && (
                                                         <span className={`inline-flex items-center gap-1 mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold ${roleInfo.color}`}>
                                                             <roleInfo.icon className="w-2.5 h-2.5" />

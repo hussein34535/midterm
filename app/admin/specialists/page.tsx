@@ -124,8 +124,7 @@ export default function AdminSpecialistsPage() {
                                                 {specialist.nickname}
                                             </h3>
                                             <p className="text-sm text-muted-foreground flex items-center gap-1">
-                                                <Mail className="w-3 h-3" />
-                                                {specialist.email}
+                                                ID: {specialist.id.substring(0, 8)}
                                             </p>
                                             <div className="flex items-center gap-3 mt-2 text-xs">
                                                 <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-green-100 text-green-700">

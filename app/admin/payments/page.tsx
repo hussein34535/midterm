@@ -236,7 +236,7 @@ export default function PaymentsManagement() {
                                         </div>
                                         <div>
                                             <h3 className="font-semibold">{payment.user?.nickname || 'مستخدم'}</h3>
-                                            <p className="text-xs text-gray-500">{payment.user?.email}</p>
+                                            <p className="text-xs text-gray-500">ID: {payment.user?.id.substring(0, 8)}</p>
                                         </div>
                                     </div>
                                     {getStatusBadge(payment.status)}

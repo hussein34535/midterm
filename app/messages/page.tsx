@@ -303,10 +303,11 @@ export default function MessagesPage() {
                 if (enrolls) {
                     enrolls.forEach((e: any) => {
                         const targetId = e.group_id || e.course_id;
-                        const name = e.group?.name || e.course?.title;
+                        const name = e.course?.title || e.group?.name;
+
                         if (targetId) {
                             myCourseIds.push(targetId);
-                            courseMap.set(targetId, { id: targetId, name, isCourse: true });
+                            courseMap.set(targetId, { id: targetId, name: name || 'Group Chat', isCourse: true });
                         }
                     });
                 }
@@ -828,7 +829,7 @@ export default function MessagesPage() {
         try {
             let q = supabase.from('users').select('*', { count: 'exact' });
             if (query) {
-                q = q.or(`nickname.ilike.%${query}%,email.ilike.%${query}%`);
+                q = q.ilike('nickname', `%${query}%`);
             }
             const pageSize = 20;
             const from = (pageNum - 1) * pageSize;
@@ -1239,7 +1240,7 @@ export default function MessagesPage() {
                                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                                 <input
                                     type="text"
-                                    placeholder="بحث بالاسم، البريد أو ID..."
+                                    placeholder="بحث بالاسم أو ID..."
                                     className="w-full pr-10 pl-4 py-2 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
                                     value={searchQuery}
                                     onChange={(e) => handleSearchUsers(e.target.value, 1)}
@@ -1276,7 +1277,7 @@ export default function MessagesPage() {
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <p className="font-bold text-sm text-gray-900 truncate">{user.nickname}</p>
-                                                <p className="text-xs text-gray-500 truncate">{user.email || 'بدون بريد'}</p>
+                                                <p className="text-xs text-gray-500 truncate">{user.role === 'specialist' ? 'أخصائي' : user.role === 'owner' ? 'مالك' : 'مستخدم'}</p>
                                             </div>
                                         </button>
                                     ))}

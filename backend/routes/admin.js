@@ -185,6 +185,7 @@ router.patch('/users/:id/role', requireAdmin, async (req, res) => {
  * DELETE /api/admin/users/:id
  * Ban/Delete user (Admin+, but only Owner can delete Admins)
  */
+// 188: router.delete('/users/:id', requireAdmin, async (req, res) => {
 router.delete('/users/:id', requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
@@ -215,19 +216,9 @@ router.delete('/users/:id', requireAdmin, async (req, res) => {
             return res.status(400).json({ error: 'لا يمكنك حذف حسابك من هنا' });
         }
 
-        // CASCADE DELETE: Delete related data first to avoid foreign key constraints
+        // --- CASCADE DELETE LOGIC ---
 
-        // 1. Delete user's messages (as sender or receiver)
-        await supabase.from('messages').delete().eq('sender_id', id);
-        await supabase.from('messages').delete().eq('receiver_id', id);
-
-        // 2. Delete user's enrollments (as a student)
-        await supabase.from('enrollments').delete().eq('user_id', id);
-
-        // 3. Delete user's payments
-        await supabase.from('payments').delete().eq('user_id', id);
-
-        // 4. If Specialist: Delete their Courses/Content
+        // 1. If Specialist: Delete their Courses/Content & Sub-dependencies
         if (targetUser.role === 'specialist') {
             const { data: specialistCourses } = await supabase
                 .from('courses')
@@ -237,23 +228,64 @@ router.delete('/users/:id', requireAdmin, async (req, res) => {
             if (specialistCourses && specialistCourses.length > 0) {
                 const courseIds = specialistCourses.map(c => c.id);
 
-                // 4a. Delete Enrollments in these courses
+                // Get Groups for these courses
+                const { data: courseGroups } = await supabase
+                    .from('course_groups')
+                    .select('id')
+                    .in('course_id', courseIds);
+
+                const groupIds = courseGroups ? courseGroups.map(g => g.id) : [];
+
+                if (groupIds.length > 0) {
+                    // 1a. Delete Group Members
+                    await supabase.from('group_members').delete().in('group_id', groupIds);
+
+                    // 1b. Delete Group Sessions (Schedule)
+                    await supabase.from('group_sessions').delete().in('group_id', groupIds);
+
+                    // 1c. Delete Messages in these Groups
+                    await supabase.from('messages').delete().in('group_id', groupIds);
+
+                    // 1d. Delete the Groups themselves
+                    await supabase.from('course_groups').delete().in('course_id', courseIds);
+                }
+
+                // 1e. Delete Messages in these Courses (if any, legacy)
+                await supabase.from('messages').delete().in('course_id', courseIds);
+
+                // 1f. Delete Enrollments in these courses
                 await supabase.from('enrollments').delete().in('course_id', courseIds);
 
-                // 4b. Delete Sessions in these courses
-                // Note: Sessions usually cascade on course delete, but doing it explicitly is safer
+                // 1g. Delete Syllabus Sessions in these courses
                 await supabase.from('sessions').delete().in('course_id', courseIds);
 
-                // 4c. Delete Groups in these courses (if table exists)
-                // Check schema: table is 'course_groups' or similar? We saw 'course_groups' in admin.js L571
-                await supabase.from('course_groups').delete().in('course_id', courseIds);
+                // 1h. Delete Payments linked to these courses (Optional: keep for records? User asked to delete user, so standard practice is full wipe or anonymize)
+                // Let's delete payments for these courses to be safe against FKs
+                await supabase.from('payments').delete().in('course_id', courseIds);
 
-                // 4d. Delete the Courses themselves
+                // 1i. Delete the Courses themselves
                 await supabase.from('courses').delete().in('id', courseIds);
             }
         }
 
-        // 5. Finally, delete the user
+        // 2. Delete user's personal messages (sender/receiver)
+        await supabase.from('messages').delete().eq('sender_id', id);
+        await supabase.from('messages').delete().eq('receiver_id', id);
+
+        // 3. Delete user's personal enrollments (as a student)
+        await supabase.from('enrollments').delete().eq('user_id', id);
+
+        // 4. Delete user's payments
+        await supabase.from('payments').delete().eq('user_id', id);
+
+        // 5. Delete from group_members (if they were a member of any group)
+        await supabase.from('group_members').delete().eq('user_id', id);
+
+        // 5b. Delete any sessions where this user is the HOST (e.g. 1-on-1s or extra sessions)
+        // This fixes the "sessions_host_id_fkey" violation
+        await supabase.from('sessions').delete().eq('host_id', id);
+
+        // 6. Finally, delete the user
         const { error } = await supabase
             .from('users')
             .delete()
@@ -261,7 +293,6 @@ router.delete('/users/:id', requireAdmin, async (req, res) => {
 
         if (error) {
             console.error('Delete error:', error);
-            // Check for FK violation
             if (error.code === '23503') {
                 return res.status(400).json({ error: 'عذراً، لا يمكن حذف المستخدم لوجود بيانات مرتبطة به لم يتم تنظيفها.' });
             }

@@ -26,8 +26,7 @@ export default function UsersManagement() {
     const [searchQuery, setSearchQuery] = useState('');
 
     const filteredUsers = users.filter(user =>
-        user.nickname.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchQuery.toLowerCase())
+        user.nickname.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     useEffect(() => {
@@ -139,7 +138,7 @@ export default function UsersManagement() {
                             <input
                                 type="text"
                                 className="block w-full pr-10 pl-3 py-2 border border-border rounded-lg leading-5 bg-background placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary sm:text-sm transition-all shadow-sm"
-                                placeholder="بحث باسم المستخدم أو البريد الإلكتروني..."
+                                placeholder="بحث باسم المستخدم..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                             />
@@ -159,7 +158,6 @@ export default function UsersManagement() {
                                 <thead className="bg-primary/5 border-b border-border">
                                     <tr>
                                         <th className="text-right p-4 font-medium text-muted-foreground">المستخدم</th>
-                                        <th className="text-right p-4 font-medium text-muted-foreground">البريد</th>
                                         <th className="text-right p-4 font-medium text-muted-foreground">الرتبة</th>
                                         <th className="text-right p-4 font-medium text-muted-foreground">إجراءات</th>
                                     </tr>
@@ -198,7 +196,6 @@ export default function UsersManagement() {
                                                         <span className="font-medium text-foreground">{user.nickname}</span>
                                                     </div>
                                                 </td>
-                                                <td className="p-4 text-muted-foreground">{user.email}</td>
                                                 <td className="p-4">
                                                     <span className={`px-2 py-1 rounded-full text-xs font-bold ${user.role === 'owner' ? 'bg-yellow-100 text-yellow-800' :
                                                         user.role === 'specialist' ? 'bg-primary/10 text-primary' :
@@ -278,7 +275,6 @@ export default function UsersManagement() {
                                                 )}
                                                 <div className="flex flex-col">
                                                     <span className="font-bold text-foreground leading-none mb-1">{user.nickname}</span>
-                                                    <span className="text-[10px] text-muted-foreground opacity-60 truncate max-w-[150px]">{user.email}</span>
                                                 </div>
                                             </div>
                                             <span className={`px-2 py-1 rounded-lg text-[10px] font-black ${user.role === 'owner' ? 'bg-yellow-100 text-yellow-800' :
