@@ -423,131 +423,132 @@ return (
                                         </div>
                                     ))
                             ) : (
-                                    // Default notes fallback
-                                    <div className="space-y-4">
-                                        <div className="flex items-start gap-4">
-                                            <div className="w-2 h-2 rounded-full bg-primary mt-2.5 shrink-0" />
-                                            <p className="text-foreground leading-relaxed">افتح تطبيق <span className="font-bold text-primary">{paymentMethods.find(m => m.id === selectedMethod)?.name}</span></p>
-                                        </div>
-                                            <div className="w-2 h-2 rounded-full bg-primary mt-2.5 shrink-0" />
-                                            <p className="text-foreground leading-relaxed">حوّل مبلغ <span className="font-bold">{getFinalPrice()} ج.م</span> للرقم/الحساب المذكور أعلاه</p>
-                                        </div>
-                                        <div className="flex items-start gap-4">
-                                            <div className="w-2 h-2 rounded-full bg-primary mt-2.5 shrink-0" />
-                                            <p className="text-foreground leading-relaxed">اضغط "أكدت الدفع" بالأسفل بعد إتمام التحويل</p>
-                                        </div>
+                                // Default notes fallback
+                                <div className="space-y-4">
+                                    <div className="flex items-start gap-4">
+                                        <div className="w-2 h-2 rounded-full bg-primary mt-2.5 shrink-0" />
+                                        <p className="text-foreground leading-relaxed">افتح تطبيق <span className="font-bold text-primary">{paymentMethods.find(m => m.id === selectedMethod)?.name}</span></p>
                                     </div>
-                                )}
+                                    <div className="flex items-start gap-4">
+                                        <div className="w-2 h-2 rounded-full bg-primary mt-2.5 shrink-0" />
+                                        <p className="text-foreground leading-relaxed">حوّل مبلغ <span className="font-bold">{getFinalPrice()} ج.م</span> للرقم/الحساب المذكور أعلاه</p>
+                                    </div>
+                                    <div className="flex items-start gap-4">
+                                        <div className="w-2 h-2 rounded-full bg-primary mt-2.5 shrink-0" />
+                                        <p className="text-foreground leading-relaxed">اضغط "أكدت الدفع" بالأسفل بعد إتمام التحويل</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                        </div>
-                    )}
+                )}
 
-            {/* Sender Number Input (Vodafone Cash Only) */}
-            {selectedMethod === 'vodafone_cash' && (
-                <div className="card-love p-8 mb-8 animate-in fade-in slide-in-from-bottom-2">
-                    <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
-                        <Smartphone className="w-5 h-5 text-primary" />
-                        رقم المحفظة المحول منها
-                    </h2>
-                    <p className="text-sm text-muted-foreground mb-4">
-                        يرجى كتابة الرقم الذي قمت بالتحويل منه لتسهيل مراجعة العملية.
-                    </p>
-                    <input
-                        type="tel"
-                        value={senderNumber}
-                        onChange={(e) => setSenderNumber(e.target.value)}
-                        placeholder="01xxxxxxxxx"
-                        className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:border-primary outline-none font-mono text-left"
-                    />
-                </div>
-            )}
-
-            {/* Screenshot Upload */}
-            {selectedMethod && (
-                <div className="card-love p-8 mb-8 animate-in fade-in slide-in-from-bottom-2">
-                    <h2 className="text-lg font-bold text-foreground mb-4">
-                        📸 إثبات الدفع (اختياري)
-                    </h2>
-                    <p className="text-sm text-muted-foreground mb-4">
-                        ارفع لقطة شاشة (سكرين شوت) لإيصال الدفع لتسريع عملية التفعيل
-                    </p>
-
-                    <input
-                        type="file"
-                        id="screenshot"
-                        accept="image/*"
-                        onChange={handleScreenshotChange}
-                        className="hidden"
-                    />
-
-                    {screenshotPreview ? (
-                        <div className="space-y-4">
-                            <div className="relative w-full max-w-md mx-auto rounded-xl overflow-hidden border-2 border-primary/20">
-                                <img src={screenshotPreview} alt="Screenshot" className="w-full h-auto" />
-                                <button
-                                    onClick={() => {
-                                        setScreenshot(null);
-                                        setScreenshotPreview(null);
-                                    }}
-                                    className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors shadow-md"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-                            <label htmlFor="screenshot" className="btn-outline w-full py-3 justify-center cursor-pointer">
-                                تغيير الصورة
-                            </label>
-                        </div>
-                    ) : (
-                        <label htmlFor="screenshot" className="border-2 border-dashed border-border rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all">
-                            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-                                <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                </svg>
-                            </div>
-                            <p className="font-medium text-foreground mb-1">اضغط لاختيار الصورة</p>
-                            <p className="text-xs text-muted-foreground">PNG, JPG حتى 5MB</p>
-                        </label>
-                    )}
-                </div>
-            )}
-
-            {/* Confirm Button */}
-            <button
-                onClick={handleConfirmPayment}
-                disabled={!selectedMethod || submitting}
-                className={`btn-primary w-full text-lg py-4 justify-center shadow-lg shadow-primary/25 mb-8 ${!selectedMethod || submitting ? "opacity-50 cursor-not-allowed shadow-none" : ""
-                    }`}
-            >
-                {submitting ? <><Loader2 className="w-5 h-5 animate-spin ml-2" /> جاري التسجيل...</> : "✅ أكدت الدفع"}
-            </button>
-
-            {/* Confirmation Message */}
-            {confirmed && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-300">
-                    <div className="card-love p-8 text-center max-w-md w-full shadow-2xl scale-100 animate-in zoom-in-95 duration-300 border-green-500/20">
-                        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce">
-                            <Check className="w-10 h-10 text-green-600" />
-                        </div>
-                        <h3 className="text-2xl font-bold text-foreground mb-3 font-serif">
-                            شكراً لك!
-                        </h3>
-                        <p className="text-muted-foreground mb-8 leading-relaxed">
-                            تم استلام طلبك بنجاح. سيتم تفعيل اشتراكك خلال ساعات قليلة بعد التحقق من عملية الدفع.
-                            <br />
-                            ستصلك رسالة تأكيد على بريدك الإلكتروني.
+                {/* Sender Number Input (Vodafone Cash Only) */}
+                {selectedMethod === 'vodafone_cash' && (
+                    <div className="card-love p-8 mb-8 animate-in fade-in slide-in-from-bottom-2">
+                        <h2 className="text-lg font-bold text-foreground mb-4 flex items-center gap-2">
+                            <Smartphone className="w-5 h-5 text-primary" />
+                            رقم المحفظة المحول منها
+                        </h2>
+                        <p className="text-sm text-muted-foreground mb-4">
+                            يرجى كتابة الرقم الذي قمت بالتحويل منه لتسهيل مراجعة العملية.
                         </p>
-                        <Link href="/dashboard" className="btn-primary w-full justify-center">
-                            الذهاب للوحة التحكم
-                            <ArrowLeft className="w-5 h-5 mr-2" />
-                        </Link>
+                        <input
+                            type="tel"
+                            value={senderNumber}
+                            onChange={(e) => setSenderNumber(e.target.value)}
+                            placeholder="01xxxxxxxxx"
+                            className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:border-primary outline-none font-mono text-left"
+                        />
                     </div>
-                </div>
-            )}
-    </div>
-            </main >
+                )}
 
-    <Footer />
-        </div >
-    );
+                {/* Screenshot Upload */}
+                {selectedMethod && (
+                    <div className="card-love p-8 mb-8 animate-in fade-in slide-in-from-bottom-2">
+                        <h2 className="text-lg font-bold text-foreground mb-4">
+                            📸 إثبات الدفع (اختياري)
+                        </h2>
+                        <p className="text-sm text-muted-foreground mb-4">
+                            ارفع لقطة شاشة (سكرين شوت) لإيصال الدفع لتسريع عملية التفعيل
+                        </p>
+
+                        <input
+                            type="file"
+                            id="screenshot"
+                            accept="image/*"
+                            onChange={handleScreenshotChange}
+                            className="hidden"
+                        />
+
+                        {screenshotPreview ? (
+                            <div className="space-y-4">
+                                <div className="relative w-full max-w-md mx-auto rounded-xl overflow-hidden border-2 border-primary/20">
+                                    <img src={screenshotPreview} alt="Screenshot" className="w-full h-auto" />
+                                    <button
+                                        onClick={() => {
+                                            setScreenshot(null);
+                                            setScreenshotPreview(null);
+                                        }}
+                                        className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors shadow-md"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                                <label htmlFor="screenshot" className="btn-outline w-full py-3 justify-center cursor-pointer">
+                                    تغيير الصورة
+                                </label>
+                            </div>
+                        ) : (
+                            <label htmlFor="screenshot" className="border-2 border-dashed border-border rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all">
+                                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                                    <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                    </svg>
+                                </div>
+                                <p className="font-medium text-foreground mb-1">اضغط لاختيار الصورة</p>
+                                <p className="text-xs text-muted-foreground">PNG, JPG حتى 5MB</p>
+                            </label>
+                        )}
+                    </div>
+                )}
+
+                {/* Confirm Button */}
+                <button
+                    onClick={handleConfirmPayment}
+                    disabled={!selectedMethod || submitting}
+                    className={`btn-primary w-full text-lg py-4 justify-center shadow-lg shadow-primary/25 mb-8 ${!selectedMethod || submitting ? "opacity-50 cursor-not-allowed shadow-none" : ""
+                        }`}
+                >
+                    {submitting ? <><Loader2 className="w-5 h-5 animate-spin ml-2" /> جاري التسجيل...</> : "✅ أكدت الدفع"}
+                </button>
+
+                {/* Confirmation Message */}
+                {confirmed && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-300">
+                        <div className="card-love p-8 text-center max-w-md w-full shadow-2xl scale-100 animate-in zoom-in-95 duration-300 border-green-500/20">
+                            <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce">
+                                <Check className="w-10 h-10 text-green-600" />
+                            </div>
+                            <h3 className="text-2xl font-bold text-foreground mb-3 font-serif">
+                                شكراً لك!
+                            </h3>
+                            <p className="text-muted-foreground mb-8 leading-relaxed">
+                                تم استلام طلبك بنجاح. سيتم تفعيل اشتراكك خلال ساعات قليلة بعد التحقق من عملية الدفع.
+                                <br />
+                                ستصلك رسالة تأكيد على بريدك الإلكتروني.
+                            </p>
+                            <Link href="/dashboard" className="btn-primary w-full justify-center">
+                                الذهاب للوحة التحكم
+                                <ArrowLeft className="w-5 h-5 mr-2" />
+                            </Link>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </main >
+
+        <Footer />
+    </div >
+);
 }
