@@ -991,7 +991,7 @@ export default function MessagesPage() {
                             </div>
                         </div>
 
-                        <div className={`flex-1 flex flex-col bg-[#f0f2f5] ${!showMobileChat ? 'hidden md:flex' : 'fixed inset-0 pb-[env(safe-area-inset-bottom,0px)] z-[10000] flex md:relative md:inset-auto md:z-auto md:pb-0'}`}>
+                        <div className={`flex-1 flex flex-col bg-[#f0f2f5] ${!showMobileChat ? 'hidden md:flex' : 'fixed top-0 left-0 right-0 bottom-4 z-[10000] flex md:relative md:inset-auto md:z-auto md:bottom-auto'}`}>
                             {selectedConversation ? (
                                 <>
                                     <div className="px-3 py-2.5 bg-white border-b border-gray-200 flex items-center gap-2 shadow-sm">
@@ -1227,7 +1227,7 @@ export default function MessagesPage() {
                                                 value={newMessage}
                                                 onChange={(e) => setNewMessage(e.target.value)}
                                                 placeholder={replyingTo ? "اكتب ردك..." : "اكتب رسالة..."}
-                                                className="flex-1 min-w-0 px-4 py-3 rounded-full bg-gray-100 border-0 outline-none text-sm"
+                                                className="flex-1 min-w-0 px-4 py-3 rounded-full bg-gray-100 border-0 outline-none text-base"
                                                 disabled={!!selectedImage}
                                             />
                                             <button
