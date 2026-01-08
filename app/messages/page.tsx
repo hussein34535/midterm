@@ -290,14 +290,15 @@ export default function MessagesPage() {
             let courseMap = new Map<string, any>();
 
             // Fetch System User ID for shared inbox (if owner)
-            let systemUserId: string | null = null;
-            if (currentUser.role === 'owner') {
+            let systemUserId: string | null = CACHED_SYSTEM_ID;
+            if (currentUser.role === 'owner' && !systemUserId) {
                 const { data: systemUser } = await supabase
                     .from('users')
                     .select('id')
                     .eq('email', 'system@sakina.com')
                     .single();
                 systemUserId = systemUser?.id || null;
+                if (systemUserId) CACHED_SYSTEM_ID = systemUserId;
             }
 
             if (currentUser.role === 'owner') {

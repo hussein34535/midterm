@@ -48,7 +48,7 @@ export default function MobileBottomNav() {
         };
 
         fetchUnread();
-        const unreadInterval = setInterval(fetchUnread, 1500);
+        const unreadInterval = setInterval(fetchUnread, 5000);
 
         const handleUnreadUpdate = (e: CustomEvent) => {
             setUnreadCount(e.detail?.count || 0);
