@@ -13,7 +13,6 @@ import {
     Smartphone,
     Building2,
     Wallet,
-    Wallet,
     Loader2,
     Ticket
 } from "lucide-react";
