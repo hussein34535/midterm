@@ -111,6 +111,8 @@ export default function MessagesPage() {
     useEffect(() => {
         if (!currentUser) return;
 
+        console.log('🔌 Setting up Realtime subscription for user:', currentUser.id);
+
         const channel = supabase
             .channel('public:messages')
             .on(
@@ -121,6 +123,7 @@ export default function MessagesPage() {
                     table: 'messages'
                 },
                 (payload) => {
+                    console.log('📨 Realtime message received:', payload);
                     const newMessage = payload.new as any;
 
                     const systemId = '23886de5-16da-49b0-9d6d-85ac55d2ba12';
@@ -137,6 +140,8 @@ export default function MessagesPage() {
                             newMessage.receiver_id === systemId || newMessage.sender_id === systemId ||
                             newMessage.receiver_id === legacyId || newMessage.sender_id === legacyId;
                     }
+
+                    console.log('📨 isRelevantToMe:', isRelevantToMe);
 
                     if (!isRelevantToMe) return;
 
@@ -162,6 +167,8 @@ export default function MessagesPage() {
                             (selectedConversation.type === 'group' && newMessage.group_id === selectedConversation.id) ||
                             (selectedConversation.type === 'group' && newMessage.course_id === selectedConversation.id && !newMessage.group_id);
 
+                        console.log('📨 isRelevantToSelected:', isRelevantToSelected, 'selectedConv:', selectedConversation.id);
+
                         if (isRelevantToSelected) {
                             setMessages(prev => {
                                 if (prev.some(m => m.id === newMessage.id)) return prev;
@@ -169,6 +176,11 @@ export default function MessagesPage() {
                                 let sender = newMessage.sender; // Usually null in payload
                                 if (!sender && newMessage.sender_id === selectedConversation.user.id) {
                                     sender = selectedConversation.user;
+                                }
+
+                                // If sender is current user, use currentUser info
+                                if (!sender && newMessage.sender_id === currentUser.id) {
+                                    sender = { id: currentUser.id, nickname: currentUser.nickname, avatar: currentUser.avatar };
                                 }
 
                                 const msgObj: Message = {
@@ -184,6 +196,7 @@ export default function MessagesPage() {
                                     senderAvatar: sender?.avatar
                                 };
 
+                                console.log('📨 Adding message to state:', msgObj.id);
                                 return [...prev, msgObj];
                             });
                         }
@@ -193,9 +206,31 @@ export default function MessagesPage() {
                     fetchConversationsQuiet();
                 }
             )
-            .subscribe();
+            // Listen for UPDATE events (read status changes)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'messages'
+                },
+                (payload) => {
+                    const updatedMessage = payload.new as any;
+
+                    // Update read status for messages in current view
+                    setMessages(prev => prev.map(msg =>
+                        msg.id === updatedMessage.id
+                            ? { ...msg, read: updatedMessage.read }
+                            : msg
+                    ));
+                }
+            )
+            .subscribe((status) => {
+                console.log('🔌 Realtime subscription status:', status);
+            });
 
         return () => {
+            console.log('🔌 Removing Realtime channel');
             supabase.removeChannel(channel);
         };
     }, [currentUser, selectedConversation]);
@@ -240,6 +275,17 @@ export default function MessagesPage() {
         try {
             let myCourseIds: string[] = [];
             let courseMap = new Map<string, any>();
+
+            // Fetch System User ID for shared inbox (if owner)
+            let systemUserId: string | null = null;
+            if (currentUser.role === 'owner') {
+                const { data: systemUser } = await supabase
+                    .from('users')
+                    .select('id')
+                    .eq('email', 'system@sakina.com')
+                    .single();
+                systemUserId = systemUser?.id || null;
+            }
 
             if (currentUser.role === 'owner') {
                 const { data: courses } = await supabase.from('courses').select('id, title');
@@ -312,10 +358,41 @@ export default function MessagesPage() {
                     };
                 } else {
                     type = 'direct';
-                    if (msg.sender_id !== currentUser.id && msg.receiver_id !== currentUser.id && currentUser.role !== 'owner') return;
 
-                    const partnerId = msg.sender_id === currentUser.id ? msg.receiver_id : msg.sender_id;
-                    const partner = msg.sender_id === currentUser.id ? msg.receiver : msg.sender;
+                    // System User IDs for shared inbox (use fetched systemUserId if available)
+                    const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
+                    const ownerManagedIds = [currentUser.id, legacyId];
+                    if (systemUserId) ownerManagedIds.push(systemUserId);
+
+                    // For owner: check if this is a message involving system/legacy (shared inbox)
+                    let partnerId: string;
+                    let partner: any;
+
+                    if (currentUser.role === 'owner') {
+                        // Owner shared inbox logic:
+                        // If message involves system/legacy, partner is the OTHER person (real user)
+                        const senderIsManaged = ownerManagedIds.includes(msg.sender_id);
+                        const receiverIsManaged = ownerManagedIds.includes(msg.receiver_id);
+
+                        if (senderIsManaged && !receiverIsManaged) {
+                            // Sent by system/owner/legacy TO a user - partner is receiver (real user)
+                            partnerId = msg.receiver_id;
+                            partner = msg.receiver;
+                        } else if (!senderIsManaged && receiverIsManaged) {
+                            // Sent by user TO system/owner/legacy - partner is sender (real user)
+                            partnerId = msg.sender_id;
+                            partner = msg.sender;
+                        } else {
+                            // Both managed or both not managed - standard logic
+                            partnerId = msg.sender_id === currentUser.id ? msg.receiver_id : msg.sender_id;
+                            partner = msg.sender_id === currentUser.id ? msg.receiver : msg.sender;
+                        }
+                    } else {
+                        // Non-owner: standard logic
+                        if (msg.sender_id !== currentUser.id && msg.receiver_id !== currentUser.id) return;
+                        partnerId = msg.sender_id === currentUser.id ? msg.receiver_id : msg.sender_id;
+                        partner = msg.sender_id === currentUser.id ? msg.receiver : msg.sender;
+                    }
 
                     if (!partner) return;
 
@@ -327,6 +404,8 @@ export default function MessagesPage() {
                         role: partner.role,
                         email: partner.email
                     };
+
+                    // Only mask owner name for non-owners
                     if (partner.role === 'owner' && currentUser.role !== 'owner') {
                         otherUser.nickname = 'دعم إيواء';
                         otherUser.avatar = '/logo.png';
@@ -347,7 +426,16 @@ export default function MessagesPage() {
                         course_id: msg.course_id
                     });
                 }
-                if (msg.sender_id !== currentUser.id && !msg.read) {
+                // Unread Count Logic: Messages received (not sent by me/system/legacy) that are unread
+                const systemId = '23886de5-16da-49b0-9d6d-85ac55d2ba12';
+                const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
+
+                let isSentByMe = msg.sender_id === currentUser.id;
+                if (currentUser.role === 'owner') {
+                    isSentByMe = isSentByMe || msg.sender_id === systemId || msg.sender_id === legacyId;
+                }
+
+                if (!isSentByMe && !msg.read) {
                     const c = convMap.get(convId)!;
                     c.unreadCount++;
                 }
@@ -479,40 +567,28 @@ export default function MessagesPage() {
         setShowMobileChat(true);
         window.dispatchEvent(new Event('chatOpened'));
 
-        // Mark as Read in Backend
+        // Mark as Read in Backend (uses Service Role Key for proper permissions)
         const markAsRead = async () => {
             if (!currentUser) return;
-            const partnerId = conv.user.id;
 
-            let query = supabase
-                .from('messages')
-                .update({ read: true })
-                .eq('read', false);
+            console.log('📖 markAsRead called:', { convType: conv.type, convId: conv.id });
 
-            if (conv.type === 'direct') {
-                if (currentUser.role === 'owner') {
-                    // Owner marks messages sent by Partner to Me OR System OR Legacy
-                    const systemId = '23886de5-16da-49b0-9d6d-85ac55d2ba12';
-                    const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/messages/mark-read/${conv.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ type: conv.type })
+                });
 
-                    query = query
-                        .eq('sender_id', partnerId)
-                        .in('receiver_id', [currentUser.id, systemId, legacyId]);
-                } else {
-                    query = query
-                        .eq('sender_id', partnerId)
-                        .eq('receiver_id', currentUser.id);
-                }
-            } else {
-                // Group logic - tougher because checking 'read' flag on a group message is boolean.
-                // In a real system, we need a 'message_reads' table. 
-                // For now, assuming group messages are 'read' if viewed (simplified/legacy behavior).
-                // Actually, schema shows 'read' boolean on message. This only works for 1-on-1 or if 'read' means 'read by anyone'.
-                // Leaving group read logic as-is (client-side only) or simplified if needed, focusing on User request (Direct Chat).
-                return;
+                const data = await response.json();
+                console.log('📖 markAsRead result:', data);
+            } catch (error) {
+                console.error('markAsRead error:', error);
             }
-
-            await query;
         };
         markAsRead();
     };
@@ -527,9 +603,16 @@ export default function MessagesPage() {
 
         setSending(true);
         try {
+            // For Owner: Use System User ID for direct messages to maintain single conversation
+            // (Shared Inbox - all replies go from System account, not Owner's personal account)
+            const SYSTEM_USER_ID = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648'; // system@sakina.com
+            const senderId = (currentUser.role === 'owner' && selectedConversation.type === 'direct')
+                ? SYSTEM_USER_ID
+                : currentUser.id;
+
             const { data, error } = await supabase.from('messages').insert({
                 content: newMessage,
-                sender_id: currentUser.id,
+                sender_id: senderId,
                 receiver_id: selectedConversation.type === 'direct' ? selectedConversation.user.id : null,
                 course_id: selectedConversation.type === 'group' && selectedConversation.id === selectedConversation.course_id ? selectedConversation.id : null,
                 group_id: selectedConversation.type === 'group' && selectedConversation.id !== selectedConversation.course_id ? selectedConversation.id : null,
@@ -600,10 +683,17 @@ export default function MessagesPage() {
 
             const { data: { publicUrl } } = supabase.storage.from('chat-images').getPublicUrl(fileName);
 
+
+            // For Owner: Use System User ID for direct messages (Shared Inbox)
+            const SYSTEM_USER_ID = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
+            const senderId = (currentUser.role === 'owner' && selectedConversation.type === 'direct')
+                ? SYSTEM_USER_ID
+                : currentUser.id;
+
             const { error: insertError } = await supabase.from('messages').insert({
                 content: publicUrl,
                 type: 'image',
-                sender_id: currentUser.id,
+                sender_id: senderId,
                 receiver_id: selectedConversation.type === 'direct' ? selectedConversation.user.id : null,
                 course_id: selectedConversation.type === 'group' && selectedConversation.id === selectedConversation.course_id ? selectedConversation.id : null,
                 group_id: selectedConversation.type === 'group' && selectedConversation.id !== selectedConversation.course_id ? selectedConversation.id : null,
@@ -627,11 +717,17 @@ export default function MessagesPage() {
         setUploadingImage(true);
         setShowStickerPicker(false);
         try {
+            // For Owner: Use System User ID for direct messages (Shared Inbox)
+            const SYSTEM_USER_ID = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
+            const senderId = (currentUser.role === 'owner' && selectedConversation.type === 'direct')
+                ? SYSTEM_USER_ID
+                : currentUser.id;
+
             const { error } = await supabase.from('messages').insert({
                 content: stickerUrl,
                 type: 'image', // Stickers as images
                 metadata: { isSticker: true },
-                sender_id: currentUser.id,
+                sender_id: senderId,
                 receiver_id: selectedConversation.type === 'direct' ? selectedConversation.user.id : null,
                 course_id: selectedConversation.type === 'group' && selectedConversation.id === selectedConversation.course_id ? selectedConversation.id : null,
                 group_id: selectedConversation.type === 'group' && selectedConversation.id !== selectedConversation.course_id ? selectedConversation.id : null,
@@ -914,7 +1010,7 @@ export default function MessagesPage() {
 
                                         <div className="flex-1 min-w-0">
                                             <p className="font-semibold text-gray-900">
-                                                {selectedConversation.user.role === 'owner' ? 'دعم إيواء' : selectedConversation.user.nickname}
+                                                {selectedConversation.user.nickname}
                                             </p>
                                             {(currentUser?.role === 'owner' || currentUser?.role === 'specialist') && (
                                                 <p className="text-[10px] text-gray-400 font-mono select-all cursor-pointer hover:text-primary" onClick={() => { navigator.clipboard.writeText(selectedConversation.user.id); toast.success('تم نسخ ID'); }}>
@@ -1311,7 +1407,7 @@ function ChatItem({ conv, selected, onSelect }: { conv: Conversation, selected: 
             <div className="flex-1 min-w-0 text-right">
                 <div className="flex items-center justify-between mb-0.5">
                     <p className="font-semibold text-gray-900 text-sm truncate">
-                        {conv.user.role === 'owner' ? 'دعم إيواء' : conv.user.nickname}
+                        {conv.user.nickname}
                     </p>
                     <span className="text-xs text-gray-400">{timeAgo}</span>
                 </div>

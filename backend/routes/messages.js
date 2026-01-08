@@ -285,6 +285,135 @@ router.get('/unread-count', authMiddleware, async (req, res) => {
 });
 
 /**
+ * PUT /api/messages/mark-read/:id
+ * Mark messages as read for a specific conversation
+ * Supports owner impersonation (System/Legacy accounts)
+ * IMPORTANT: This route MUST be before /:id routes!
+ */
+router.put('/mark-read/:id', authMiddleware, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { type } = req.body; // 'direct' or 'group'
+
+        console.log(`📖 markAsRead API called: userId=${req.userId}, partnerId=${id}, type=${type}, role=${req.userRole}`);
+
+        if (type === 'direct') {
+            // For Owner: Also mark messages sent to System/Legacy as read
+            if (req.userRole === 'owner') {
+                // Get System User ID
+                const { data: systemUser } = await supabase
+                    .from('users')
+                    .select('id')
+                    .eq('email', 'system@sakina.com')
+                    .single();
+
+                // Legacy Guest ID (hardcoded for now)
+                const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
+
+                const receiverIds = [req.userId];
+                if (systemUser) receiverIds.push(systemUser.id);
+                receiverIds.push(legacyId);
+
+                // For Owner: Mark ALL unread messages SENT BY the partner as read
+                // (Owner sees all conversations, so we mark all messages from this partner)
+                const { data, error } = await supabase
+                    .from('messages')
+                    .update({ read: true })
+                    .eq('sender_id', id)
+                    .eq('read', false)
+                    .select('id');
+
+                if (error) {
+                    console.error('markAsRead owner error:', error);
+                    return res.status(500).json({ error: 'فشل في تحديث حالة القراءة' });
+                }
+
+                console.log(`📖 markAsRead owner result: ${data?.length || 0} messages updated`);
+                res.json({ success: true, updated: data?.length || 0 });
+            } else {
+                // Normal user: Only mark messages sent by partner to me
+                const { data, error } = await supabase
+                    .from('messages')
+                    .update({ read: true })
+                    .eq('sender_id', id)
+                    .eq('receiver_id', req.userId)
+                    .eq('read', false)
+                    .select('id');
+
+                if (error) {
+                    console.error('markAsRead user error:', error);
+                    return res.status(500).json({ error: 'فشل في تحديث حالة القراءة' });
+                }
+
+                console.log(`📖 markAsRead user result: ${data?.length || 0} messages updated`);
+                res.json({ success: true, updated: data?.length || 0 });
+            }
+        } else {
+            // Group/Course messages
+            // First, check if 'id' is a group_id or course_id
+            // If it's a group_id, resolve to course_id
+
+            let targetCourseId = id;
+
+            // Check if this is a course
+            const { data: course } = await supabase
+                .from('courses')
+                .select('id')
+                .eq('id', id)
+                .single();
+
+            if (!course) {
+                // Not a course, might be a group_id
+                const { data: group } = await supabase
+                    .from('course_groups')
+                    .select('course_id')
+                    .eq('id', id)
+                    .single();
+
+                if (group) {
+                    targetCourseId = group.course_id;
+                    console.log(`📖 markAsRead: Resolved group_id ${id} to course_id ${targetCourseId}`);
+                }
+            }
+
+            // Mark all unread messages in this course as read (excluding my own)
+            const excludeSenderIds = [req.userId];
+
+            if (req.userRole === 'owner') {
+                // Also exclude System and Legacy from count (they are "me")
+                const { data: systemUser } = await supabase
+                    .from('users')
+                    .select('id')
+                    .eq('email', 'system@sakina.com')
+                    .single();
+
+                if (systemUser) excludeSenderIds.push(systemUser.id);
+                excludeSenderIds.push('b1cb10e6-002e-4377-850e-2c3bcbdfb648');
+            }
+
+            const { data, error } = await supabase
+                .from('messages')
+                .update({ read: true })
+                .eq('course_id', targetCourseId)
+                .eq('read', false)
+                .not('sender_id', 'in', `(${excludeSenderIds.join(',')})`)
+                .select('id');
+
+            if (error) {
+                console.error('markAsRead group error:', error);
+                return res.status(500).json({ error: 'فشل في تحديث حالة القراءة' });
+            }
+
+            console.log(`📖 markAsRead group result: ${data?.length || 0} messages updated (targetCourseId: ${targetCourseId})`);
+            res.json({ success: true, updated: data?.length || 0 });
+        }
+    } catch (error) {
+        console.error('markAsRead error:', error);
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+/**
  * POST /api/messages/support
  * Initiate chat with support (Owner)
  * IMPORTANT: This route MUST be before /:id routes!
