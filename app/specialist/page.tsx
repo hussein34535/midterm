@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Calendar, Clock, ArrowLeft, Video, Mic, Sparkles, Loader2, BookOpen, Users, Play, AlertCircle, MessageSquare } from "lucide-react";
 import StatCard from "@/components/specialist/StatCard";
 import Header from "@/components/layout/Header";
+import { toast } from "sonner";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
