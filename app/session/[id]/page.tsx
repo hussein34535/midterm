@@ -85,7 +85,7 @@ export default function SessionPage() {
                             </div>
                         ) : (
                             <VoiceCall
-                                channelName={`sakina-session-${sessionId}`}
+                                channelName={`iwaa-session-${sessionId}`}
                                 userName={user.nickname || "مستخدم"}
                                 userAvatar={user.avatar}
                                 userRole={user.role}

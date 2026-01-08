@@ -29,14 +29,13 @@ export default function MobileBottomNav() {
             } catch (e) { }
         }
 
-        // Fetch unread count
+        // Fetch unread count from local API route (faster than Render)
         const fetchUnread = async () => {
             const token = localStorage.getItem('token');
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
             if (token) {
                 try {
-                    const res = await fetch(`${API_URL}/api/messages/unread-count`, {
+                    const res = await fetch('/api/messages/unread-count', {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
                     if (res.ok) {

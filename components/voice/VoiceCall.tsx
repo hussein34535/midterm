@@ -115,7 +115,7 @@ export default function VoiceCall({
             setSocketConnected(true);
             // Send user info when joining room
             socket.emit("join-room", {
-                roomId: `sakina-mod-${channelName}`,
+                roomId: `iwaa-mod-${channelName}`,
                 name: userName,
                 avatar: userAvatar || null,
                 agoraUid: myUidRef.current || null
@@ -210,7 +210,7 @@ export default function VoiceCall({
         if (!socketRef.current) {
             const SOCKET_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
             socketRef.current = io(SOCKET_URL);
-            socketRef.current.emit("join-room", `sakina-mod-${channelName}`);
+            socketRef.current.emit("join-room", `iwaa-mod-${channelName}`);
         }
 
         const data = {
@@ -218,7 +218,7 @@ export default function VoiceCall({
             targetUid: String(targetUid),
             fromUid: myUidRef.current,
             fromName: userName,
-            channelName: `sakina-mod-${channelName}`
+            channelName: `iwaa-mod-${channelName}`
         };
 
         // Emit to backend
@@ -237,7 +237,7 @@ export default function VoiceCall({
         if (!socketRef.current || !message.trim()) return;
 
         socketRef.current.emit("chat-message", {
-            roomId: `sakina-mod-${channelName}`,
+            roomId: `iwaa-mod-${channelName}`,
             message: message.trim(),
             sender: {
                 name: userName,
@@ -306,10 +306,10 @@ export default function VoiceCall({
 
             setIsJoined(true);
             setCallDuration(0);
-            sessionStorage.setItem(`sakina_call_active_${channelName}`, 'true');
+            sessionStorage.setItem(`iwaa_call_active_${channelName}`, 'true');
 
             // Restore mute state if exists
-            const wasMuted = sessionStorage.getItem(`sakina_is_muted_${channelName}`) === 'true';
+            const wasMuted = sessionStorage.getItem(`iwaa_is_muted_${channelName}`) === 'true';
             if (wasMuted) {
                 audioTrack.setEnabled(false);
                 setIsMuted(true);
@@ -348,8 +348,8 @@ export default function VoiceCall({
         if (timerRef.current) clearInterval(timerRef.current);
 
         if (userInitiated) {
-            sessionStorage.removeItem(`sakina_call_active_${channelName}`);
-            sessionStorage.removeItem(`sakina_is_muted_${channelName}`);
+            sessionStorage.removeItem(`iwaa_call_active_${channelName}`);
+            sessionStorage.removeItem(`iwaa_is_muted_${channelName}`);
             onEndCall?.();
         }
     };
@@ -357,7 +357,7 @@ export default function VoiceCall({
     // Auto-rejoin on refresh
     useEffect(() => {
         if (agoraLoaded && !isJoined && !isConnecting) {
-            const wasConnected = sessionStorage.getItem(`sakina_call_active_${channelName}`);
+            const wasConnected = sessionStorage.getItem(`iwaa_call_active_${channelName}`);
             if (wasConnected === 'true') {
                 console.log("Found active session flag, auto-rejoining...");
                 // Set connecting true immediately to prevent button flash
@@ -376,7 +376,7 @@ export default function VoiceCall({
             const newMuteState = !isMuted;
             audioTrackRef.current.setEnabled(!newMuteState); // enabled = !muted
             setIsMuted(newMuteState);
-            sessionStorage.setItem(`sakina_is_muted_${channelName}`, String(newMuteState));
+            sessionStorage.setItem(`iwaa_is_muted_${channelName}`, String(newMuteState));
         }
     };
 

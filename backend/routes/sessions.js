@@ -36,7 +36,7 @@ router.post('/create', authMiddleware, async (req, res) => {
 
         const sessionData = {
             id: uuidv4(),
-            channel_name: `sakina-${uuidv4().substring(0, 8)}`,
+            channel_name: `iwaa-${uuidv4().substring(0, 8)}`,
             title: title || 'جلسة دعم نفسي',
             type: type || 'individual',
             host_id: req.userId,

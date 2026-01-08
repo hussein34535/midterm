@@ -121,7 +121,7 @@ router.post('/register', async (req, res) => {
 
         // 🎯 AUTO-CREATE SUPPORT CHAT: Send Welcome Message from SYSTEM (Shared Inbox)
         try {
-            const SYSTEM_EMAIL = 'system@sakina.com';
+            const SYSTEM_EMAIL = 'system@iwaa.com';
             let { data: systemUser } = await supabase
                 .from('users')
                 .select('id')
@@ -583,7 +583,7 @@ router.post('/guest', async (req, res) => {
 
         const guestId = uuidv4();
         // Generate unique dummy credentials
-        const email = `guest_${Date.now()}_${Math.floor(Math.random() * 1000)}@sakina.guest`;
+        const email = `guest_${Date.now()}_${Math.floor(Math.random() * 1000)}@iwaa.guest`;
         const password = uuidv4(); // Random secure password
         const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -668,7 +668,7 @@ router.post('/guest-message', async (req, res) => {
         // Create new guest account if none exists
         if (!guestUser) {
             const uniqueId = crypto.randomBytes(4).toString('hex');
-            const guestEmail = `guest_${uniqueId}@sakina.guest`;
+            const guestEmail = `guest_${uniqueId}@iwaa.guest`;
             const guestHash = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
 
             const { data: newGuest, error: createError } = await supabase

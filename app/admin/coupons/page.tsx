@@ -58,7 +58,7 @@ export default function AdminCouponsPage() {
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm('هل أنت متأكد من تعطيل هذا الكوبون؟')) return;
+        if (!confirm('هل أنت متأكد من حذف هذا الكوبون نهائياً؟')) return;
 
         try {
             const token = localStorage.getItem('token');
@@ -68,7 +68,7 @@ export default function AdminCouponsPage() {
             });
 
             if (res.ok) {
-                toast.success('تم تعطيل الكوبون');
+                toast.success('تم حذف الكوبون');
                 fetchCoupons();
             } else {
                 toast.error('حدث خطأ');
@@ -168,7 +168,7 @@ export default function AdminCouponsPage() {
                                             value={formData.code}
                                             onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                                             className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:border-primary outline-none font-mono uppercase"
-                                            placeholder="SAKINA10"
+                                            placeholder="IWAA10"
                                             required
                                         />
                                     </div>

@@ -1,6 +1,6 @@
 /**
  * Supabase Client Configuration
- * Database connection for Sakina Backend
+ * Database connection for Iwaa Backend
  */
 
 const { createClient } = require('@supabase/supabase-js');

@@ -14,7 +14,7 @@ async function checkAllUnread() {
     const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
 
     // Fetch System User ID
-    const { data: systemUser } = await supabase.from('users').select('id').eq('email', 'system@sakina.com').single();
+    const { data: systemUser } = await supabase.from('users').select('id').eq('email', 'system@iwaa.com').single();
     const systemId = systemUser?.id;
 
     console.log('IDs:', { ownerId, systemId, legacyId });

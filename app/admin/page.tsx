@@ -155,6 +155,7 @@ export default function AdminDashboard() {
                             { name: "الفواتير", href: "/admin/invoices", icon: ScrollText, desc: "إصدار وطباعة الفواتير الرسمية", color: "text-pink-600", bg: "bg-pink-50/80" },
                             { name: "التقارير", href: "/admin/reports", icon: BarChart3, desc: "التقارير الإحصائية والنمو", color: "text-cyan-600", bg: "bg-cyan-50/80" },
                             { name: "الإعدادات", href: "/admin/settings", icon: Settings2, desc: "خيارات النظام والتحكم العام", color: "text-slate-600", bg: "bg-slate-50/80" },
+                            { name: "الكوبونات", href: "/admin/coupons", icon: Sparkles, desc: "إنشاء وإدارة أكواد الخصم", color: "text-orange-600", bg: "bg-orange-50/80" },
                         ].map((item) => (
                             <Link
                                 key={item.name}

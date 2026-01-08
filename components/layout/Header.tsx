@@ -38,12 +38,12 @@ export default function Header() {
         window.addEventListener('storage', checkUser);
         window.addEventListener('user-login', checkUser);
 
-        // Fetch unread count
+        // Fetch unread count from local API route (faster)
         const fetchUnread = async () => {
             const token = localStorage.getItem('token');
             if (token) {
                 try {
-                    const res = await fetch(`${API_URL}/api/messages/unread-count`, {
+                    const res = await fetch('/api/messages/unread-count', {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
                     if (res.ok) {

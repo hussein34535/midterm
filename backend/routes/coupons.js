@@ -70,15 +70,15 @@ router.post('/', authMiddleware, requireOwner, async (req, res) => {
  */
 router.delete('/:id', authMiddleware, requireOwner, async (req, res) => {
     try {
-        // Soft delete (set is_active = false)
+        // Hard delete (actually remove from database)
         const { error } = await supabase
             .from('coupons')
-            .update({ is_active: false })
+            .delete()
             .eq('id', req.params.id);
 
         if (error) throw error;
 
-        res.json({ message: 'تم تعطيل الكوبون' });
+        res.json({ message: 'تم حذف الكوبون' });
     } catch (error) {
         res.status(500).json({ error: 'حدث خطأ في حذف الكوبون' });
     }

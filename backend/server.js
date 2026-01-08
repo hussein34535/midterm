@@ -1,5 +1,5 @@
 /**
- * Sakina Backend Server
+ * Iwaa Backend Server
  * Main entry point for the API
  */
 
@@ -48,7 +48,7 @@ app.use('/api/agora', agoraRoutes);
 app.get('/api/health', (req, res) => {
     res.json({
         status: 'ok',
-        message: 'Sakina API is running',
+        message: 'Iwaa API is running',
         timestamp: new Date().toISOString()
     });
 });
@@ -160,7 +160,7 @@ io.on('connection', (socket) => {
 
 // Start Server
 server.listen(PORT, () => {
-    console.log(`🚀 Sakina Backend running on http://localhost:${PORT}`);
+    console.log(`🚀 Iwaa Backend running on http://localhost:${PORT}`);
     console.log(`gw API Health: http://localhost:${PORT}/api/health`);
     console.log(`🔌 Socket.io ready`);
 });

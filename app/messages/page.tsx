@@ -101,7 +101,7 @@ export default function MessagesPage() {
 
             // Prefetch System ID
             if (!CACHED_SYSTEM_ID) {
-                const { data } = await supabase.from('users').select('id').eq('email', 'system@sakina.com').single();
+                const { data } = await supabase.from('users').select('id').eq('email', 'system@iwaa.com').single();
                 if (data) CACHED_SYSTEM_ID = data.id;
             }
         };
@@ -135,7 +135,7 @@ export default function MessagesPage() {
                     const newMessage = payload.new as any;
 
                     // System/Legacy Check Helpers
-                    const isSystem = (id: string, email?: string) => email === 'system@sakina.com'; // We rely on email check or fetch
+                    const isSystem = (id: string, email?: string) => email === 'system@iwaa.com'; // We rely on email check or fetch
                     const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
 
                     let isRelevantToMe =
@@ -146,8 +146,8 @@ export default function MessagesPage() {
 
                     if (currentUser.role === 'owner') {
                         // Owner sees messages involving System or Legacy
-                        const senderIsSystem = newMessage.sender?.email === 'system@sakina.com';
-                        const receiverIsSystem = newMessage.receiver?.email === 'system@sakina.com';
+                        const senderIsSystem = newMessage.sender?.email === 'system@iwaa.com';
+                        const receiverIsSystem = newMessage.receiver?.email === 'system@iwaa.com';
 
                         isRelevantToMe = isRelevantToMe ||
                             senderIsSystem || receiverIsSystem ||
@@ -173,8 +173,8 @@ export default function MessagesPage() {
 
                                 // Owner: System <-> Target User (Based on Email)
                                 (currentUser.role === 'owner' && (
-                                    (newMessage.sender_id === selectedConversation.user.id && newMessage.receiver?.email === 'system@sakina.com') ||
-                                    (newMessage.sender?.email === 'system@sakina.com' && newMessage.receiver_id === selectedConversation.user.id)
+                                    (newMessage.sender_id === selectedConversation.user.id && newMessage.receiver?.email === 'system@iwaa.com') ||
+                                    (newMessage.sender?.email === 'system@iwaa.com' && newMessage.receiver_id === selectedConversation.user.id)
                                 ))
                             )) ||
                             (selectedConversation.type === 'group' && newMessage.group_id === selectedConversation.id) ||
@@ -295,7 +295,7 @@ export default function MessagesPage() {
                 const { data: systemUser } = await supabase
                     .from('users')
                     .select('id')
-                    .eq('email', 'system@sakina.com')
+                    .eq('email', 'system@iwaa.com')
                     .single();
                 systemUserId = systemUser?.id || null;
                 if (systemUserId) CACHED_SYSTEM_ID = systemUserId;
@@ -354,7 +354,7 @@ export default function MessagesPage() {
                     receiver:receiver_id (id, nickname, avatar, role, email)
                 `)
                 .order('created_at', { ascending: false })
-                .limit(500);
+                .limit(50);
 
             const { data: rawMessages } = await query;
             const fetchedMessages = rawMessages || [];
@@ -368,7 +368,7 @@ export default function MessagesPage() {
 
                 // Helpers
                 const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
-                const isSystem = (u: any) => u?.email === 'system@sakina.com';
+                const isSystem = (u: any) => u?.email === 'system@iwaa.com';
                 const isLegacy = (id: string) => id === legacyId;
 
                 if (msg.course_id || msg.group_id) {
@@ -459,7 +459,7 @@ export default function MessagesPage() {
                 let isSentByMe = msg.sender_id === currentUser.id;
                 if (currentUser.role === 'owner') {
                     // Check if sender is System or Legacy (managed by me)
-                    const senderIsSystem = msg.sender?.email === 'system@sakina.com';
+                    const senderIsSystem = msg.sender?.email === 'system@iwaa.com';
                     const senderIsLegacy = msg.sender_id === legacyId;
 
                     isSentByMe = isSentByMe || senderIsSystem || senderIsLegacy;
@@ -643,7 +643,7 @@ export default function MessagesPage() {
         try {
             // For Owner: Use System User ID for direct messages to maintain single conversation
             // (Shared Inbox - all replies go from System account, not Owner's personal account)
-            const SYSTEM_USER_ID = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648'; // system@sakina.com
+            const SYSTEM_USER_ID = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648'; // system@iwaa.com
             const senderId = (currentUser.role === 'owner' && selectedConversation.type === 'direct')
                 ? SYSTEM_USER_ID
                 : currentUser.id;
@@ -787,7 +787,7 @@ export default function MessagesPage() {
         try {
             // Find admin/support user (Role owner or email system)
             // Simplified: just search by email
-            const { data: supportUser } = await supabase.from('users').select('*').eq('email', 'system@sakina.com').single();
+            const { data: supportUser } = await supabase.from('users').select('*').eq('email', 'system@iwaa.com').single();
             if (!supportUser) {
                 toast.error('خدمة الدعم غير متاحة حالياً');
                 return;
@@ -1106,7 +1106,7 @@ export default function MessagesPage() {
                                         ) : (
                                             messages.map((msg) => {
                                                 const senderId = msg.sender_id || msg.senderId;
-                                                const isSystem = msg.sender?.role === 'admin' || msg.sender?.email === 'system@sakina.com';
+                                                const isSystem = msg.sender?.role === 'admin' || msg.sender?.email === 'system@iwaa.com';
                                                 const isOwner = currentUser?.role === 'owner';
 
                                                 // Owner Impersonation Check

@@ -1,5 +1,5 @@
 -- ============================================
--- Sakina Platform - Database Schema
+-- Iwaa Platform - Database Schema
 -- Run this in Supabase SQL Editor
 -- ============================================
 

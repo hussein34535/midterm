@@ -204,7 +204,7 @@ router.post('/courses/:courseId/sessions', async (req, res) => {
 
         const sessionData = {
             id: uuidv4(),
-            channel_name: `sakina-${uuidv4().substring(0, 8)}`,
+            channel_name: `iwaa-${uuidv4().substring(0, 8)}`,
             title: title || `${course.title} - الجلسة ${session_number || 1}`,
             type: type || 'group',
             course_id: courseId,

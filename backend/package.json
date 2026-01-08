@@ -1,7 +1,7 @@
 {
-    "name": "sakina-backend",
+    "name": "iwaa-backend",
     "version": "1.0.0",
-    "description": "Backend API for Sakina Mental Health Platform",
+    "description": "Backend API for Iwaa Mental Health Platform",
     "main": "server.js",
     "scripts": {
         "start": "node server.js",

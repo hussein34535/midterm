@@ -39,7 +39,7 @@ router.get('/conversations', authMiddleware, async (req, res) => {
             const { data: systemUser } = await supabase
                 .from('users')
                 .select('id')
-                .eq('email', 'system@sakina.com')
+                .eq('email', 'system@iwaa.com')
                 .single();
 
             const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
@@ -79,7 +79,7 @@ router.get('/conversations', authMiddleware, async (req, res) => {
         // console.log(`Conversations for User ${req.userId}: found ${messages?.length} messages`);
 
         // Helper to check if ID is System
-        const SYSTEM_EMAIL = 'system@sakina.com';
+        const SYSTEM_EMAIL = 'system@iwaa.com';
         // (Optimally this ID should be fetched once and cached, but for now we rely on the query above having worked
         //  or we can deduce it from the message if one participant is System).
         // Actually, we need to know WHICH ID is System to map correctly. 
@@ -294,7 +294,7 @@ router.get('/unread-count', authMiddleware, async (req, res) => {
         let receiverIds = [req.userId];
 
         if (req.userRole === 'owner') {
-            const { data: systemUser } = await supabase.from('users').select('id').eq('email', 'system@sakina.com').single();
+            const { data: systemUser } = await supabase.from('users').select('id').eq('email', 'system@iwaa.com').single();
             if (systemUser) receiverIds.push(systemUser.id);
             receiverIds.push('b1cb10e6-002e-4377-850e-2c3bcbdfb648');
         }
@@ -332,7 +332,7 @@ router.put('/mark-read/:id', authMiddleware, async (req, res) => {
                 const { data: systemUser } = await supabase
                     .from('users')
                     .select('id')
-                    .eq('email', 'system@sakina.com')
+                    .eq('email', 'system@iwaa.com')
                     .single();
 
                 // Legacy Guest ID (hardcoded for now)
@@ -414,7 +414,7 @@ router.put('/mark-read/:id', authMiddleware, async (req, res) => {
                 const { data: systemUser } = await supabase
                     .from('users')
                     .select('id')
-                    .eq('email', 'system@sakina.com')
+                    .eq('email', 'system@iwaa.com')
                     .single();
 
                 if (systemUser) excludeSenderIds.push(systemUser.id);
@@ -576,7 +576,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
             // If Owner, also fetch messages between System and the Partner (id)
             if (currentUser?.role === 'owner') {
                 // Get System User ID (Optimized: hardcoded or fetched. Let's fetch to be safe/clean)
-                const { data: systemUser } = await supabase.from('users').select('id').eq('email', 'system@sakina.com').single();
+                const { data: systemUser } = await supabase.from('users').select('id').eq('email', 'system@iwaa.com').single();
                 if (systemUser) {
                     orQuery += `,and(sender_id.eq.${systemUser.id},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${systemUser.id})`;
                 }
@@ -591,7 +591,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
                 let ownerOrQuery = `and(sender_id.eq.${req.userId},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${req.userId})`;
 
                 // Add System
-                const { data: systemUser } = await supabase.from('users').select('id').eq('email', 'system@sakina.com').single();
+                const { data: systemUser } = await supabase.from('users').select('id').eq('email', 'system@iwaa.com').single();
                 if (systemUser) {
                     ownerOrQuery += `,and(sender_id.eq.${systemUser.id},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${systemUser.id})`;
                 }
@@ -622,7 +622,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
         if (type !== 'group') {
             let receiverIds = [req.userId];
             if (currentUser?.role === 'owner') {
-                const { data: systemUser } = await supabase.from('users').select('id').eq('email', 'system@sakina.com').single();
+                const { data: systemUser } = await supabase.from('users').select('id').eq('email', 'system@iwaa.com').single();
                 if (systemUser) receiverIds.push(systemUser.id);
                 receiverIds.push('b1cb10e6-002e-4377-850e-2c3bcbdfb648');
             }
@@ -780,7 +780,7 @@ router.post('/:id', authMiddleware, async (req, res) => {
                 const { data: receiverUser } = await supabase.from('users').select('role').eq('id', id).single();
                 if (receiverUser && receiverUser.role === 'user') {
                     // Get System User ID
-                    const { data: systemUser } = await supabase.from('users').select('id').eq('email', 'system@sakina.com').single();
+                    const { data: systemUser } = await supabase.from('users').select('id').eq('email', 'system@iwaa.com').single();
                     if (systemUser) {
                         messageData.sender_id = systemUser.id; // Impersonate System
                     }
