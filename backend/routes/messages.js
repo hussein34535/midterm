@@ -34,7 +34,7 @@ router.get('/conversations', authMiddleware, async (req, res) => {
         // 1. Get Direct Messages (users)
         let orQuery = `sender_id.eq.${req.userId},receiver_id.eq.${req.userId}`;
 
-        // If Owner, also fetch messages interacting with SYSTEM USER (Shared Inbox)
+        // If Owner, also fetch messages interacting with SYSTEM USER (Shared Inbox) or Legacy Guest
         if (req.userRole === 'owner') {
             const { data: systemUser } = await supabase
                 .from('users')
@@ -42,9 +42,13 @@ router.get('/conversations', authMiddleware, async (req, res) => {
                 .eq('email', 'system@sakina.com')
                 .single();
 
+            const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
+
             if (systemUser) {
                 orQuery += `,sender_id.eq.${systemUser.id},receiver_id.eq.${systemUser.id}`;
             }
+            // Add Legacy ID
+            orQuery += `,sender_id.eq.${legacyId},receiver_id.eq.${legacyId}`;
         }
 
         const { data: messages, error } = await supabase
@@ -132,9 +136,24 @@ router.get('/conversations', authMiddleware, async (req, res) => {
                 });
             }
 
-            if (msg.receiver_id === req.userId && !msg.read) {
+            // Check unread status
+            let isUnreadToMe = false;
+
+            if (msg.receiver_id === req.userId) {
+                isUnreadToMe = !msg.read;
+            } else if (req.userRole === 'owner') {
+                // Owner also checks System and Legacy
+                const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
+                // System user check: if msg.receiver_id matches systemUserId (fetched above) or hardcoded known system ID?
+                // We fetched systemUserId above inside the loop. Let's rely on that variable being available in scope.
+
+                if (systemUserId && msg.receiver_id === systemUserId) isUnreadToMe = !msg.read;
+                if (msg.receiver_id === legacyId) isUnreadToMe = !msg.read;
+            }
+
+            if (isUnreadToMe) {
                 const conv = conversationsMap.get(partnerId);
-                conv.unreadCount++;
+                if (conv) conv.unreadCount++;
             }
         });
 
@@ -271,10 +290,19 @@ router.get('/conversations', authMiddleware, async (req, res) => {
 router.get('/unread-count', authMiddleware, async (req, res) => {
     try {
         // Count unread direct messages
+        // For Owner: Include System and Legacy
+        let receiverIds = [req.userId];
+
+        if (req.userRole === 'owner') {
+            const { data: systemUser } = await supabase.from('users').select('id').eq('email', 'system@sakina.com').single();
+            if (systemUser) receiverIds.push(systemUser.id);
+            receiverIds.push('b1cb10e6-002e-4377-850e-2c3bcbdfb648');
+        }
+
         const { count: directUnread } = await supabase
             .from('messages')
             .select('*', { count: 'exact', head: true })
-            .eq('receiver_id', req.userId)
+            .in('receiver_id', receiverIds)
             .eq('read', false);
 
         res.json({ unreadCount: directUnread || 0 });
@@ -316,10 +344,12 @@ router.put('/mark-read/:id', authMiddleware, async (req, res) => {
 
                 // For Owner: Mark ALL unread messages SENT BY the partner as read
                 // (Owner sees all conversations, so we mark all messages from this partner)
+                // Filter by receiver to be safe (me, system, or legacy)
                 const { data, error } = await supabase
                     .from('messages')
                     .update({ read: true })
                     .eq('sender_id', id)
+                    .in('receiver_id', receiverIds) // Strict: only mark if received by one of my managed accounts
                     .eq('read', false)
                     .select('id');
 
@@ -553,6 +583,32 @@ router.get('/:id', authMiddleware, async (req, res) => {
             }
 
             query = query.or(orQuery);
+
+            // OWNER FIX: Explicitly include Legacy ID messages manually if not covered by orQuery logic or if logic is complex
+            // Simpler approach: If Owner, just construct the full OR query with all IDs
+            if (currentUser?.role === 'owner') {
+                const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
+                let ownerOrQuery = `and(sender_id.eq.${req.userId},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${req.userId})`;
+
+                // Add System
+                const { data: systemUser } = await supabase.from('users').select('id').eq('email', 'system@sakina.com').single();
+                if (systemUser) {
+                    ownerOrQuery += `,and(sender_id.eq.${systemUser.id},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${systemUser.id})`;
+                }
+
+                // Add Legacy
+                ownerOrQuery += `,and(sender_id.eq.${legacyId},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${legacyId})`;
+
+                // Replace query with new comprehensive OR
+                query = supabase
+                    .from('messages')
+                    .select(`
+                        id, content, sender_id, receiver_id, course_id, created_at, read, type, metadata, reply_to_id, hidden,
+                        sender:users!messages_sender_id_fkey(id, nickname, avatar, role, email)
+                    `)
+                    .order('created_at', { ascending: true })
+                    .or(ownerOrQuery);
+            }
         }
 
         const { data: messages, error } = await query;
@@ -564,11 +620,18 @@ router.get('/:id', authMiddleware, async (req, res) => {
 
         // Mark messages as read (if direct)
         if (type !== 'group') {
+            let receiverIds = [req.userId];
+            if (currentUser?.role === 'owner') {
+                const { data: systemUser } = await supabase.from('users').select('id').eq('email', 'system@sakina.com').single();
+                if (systemUser) receiverIds.push(systemUser.id);
+                receiverIds.push('b1cb10e6-002e-4377-850e-2c3bcbdfb648');
+            }
+
             await supabase
                 .from('messages')
                 .update({ read: true })
                 .eq('sender_id', id)
-                .eq('receiver_id', req.userId);
+                .in('receiver_id', receiverIds);
         }
 
         // Build a map for quick reply lookups

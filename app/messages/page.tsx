@@ -59,6 +59,9 @@ interface Message {
     } | null;
 }
 
+// Cached System ID
+let CACHED_SYSTEM_ID: string | null = null;
+
 export default function MessagesPage() {
     const router = useRouter();
     const [currentUser, setCurrentUser] = useState<any>(null);
@@ -95,6 +98,12 @@ export default function MessagesPage() {
                 return;
             }
             setCurrentUser(JSON.parse(userStr));
+
+            // Prefetch System ID
+            if (!CACHED_SYSTEM_ID) {
+                const { data } = await supabase.from('users').select('id').eq('email', 'system@sakina.com').single();
+                if (data) CACHED_SYSTEM_ID = data.id;
+            }
         };
         checkUser();
     }, [router]);
@@ -125,7 +134,8 @@ export default function MessagesPage() {
                     console.log('📨 Realtime message received:', payload);
                     const newMessage = payload.new as any;
 
-                    const systemId = '23886de5-16da-49b0-9d6d-85ac55d2ba12';
+                    // System/Legacy Check Helpers
+                    const isSystem = (id: string, email?: string) => email === 'system@sakina.com'; // We rely on email check or fetch
                     const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
 
                     let isRelevantToMe =
@@ -135,8 +145,12 @@ export default function MessagesPage() {
                         newMessage.group_id !== null;
 
                     if (currentUser.role === 'owner') {
+                        // Owner sees messages involving System or Legacy
+                        const senderIsSystem = newMessage.sender?.email === 'system@sakina.com';
+                        const receiverIsSystem = newMessage.receiver?.email === 'system@sakina.com';
+
                         isRelevantToMe = isRelevantToMe ||
-                            newMessage.receiver_id === systemId || newMessage.sender_id === systemId ||
+                            senderIsSystem || receiverIsSystem ||
                             newMessage.receiver_id === legacyId || newMessage.sender_id === legacyId;
                     }
 
@@ -151,16 +165,16 @@ export default function MessagesPage() {
                                 (newMessage.sender_id === selectedConversation.user.id && newMessage.receiver_id === currentUser.id) ||
                                 (newMessage.sender_id === currentUser.id && newMessage.receiver_id === selectedConversation.user.id) ||
 
-                                // Owner: System <-> Target User
-                                (currentUser.role === 'owner' && (
-                                    (newMessage.sender_id === selectedConversation.user.id && newMessage.receiver_id === systemId) ||
-                                    (newMessage.sender_id === systemId && newMessage.receiver_id === selectedConversation.user.id)
-                                )) ||
-
                                 // Owner: Legacy <-> Target User
                                 (currentUser.role === 'owner' && (
                                     (newMessage.sender_id === selectedConversation.user.id && newMessage.receiver_id === legacyId) ||
                                     (newMessage.sender_id === legacyId && newMessage.receiver_id === selectedConversation.user.id)
+                                )) ||
+
+                                // Owner: System <-> Target User (Based on Email)
+                                (currentUser.role === 'owner' && (
+                                    (newMessage.sender_id === selectedConversation.user.id && newMessage.receiver?.email === 'system@sakina.com') ||
+                                    (newMessage.sender?.email === 'system@sakina.com' && newMessage.receiver_id === selectedConversation.user.id)
                                 ))
                             )) ||
                             (selectedConversation.type === 'group' && newMessage.group_id === selectedConversation.id) ||
@@ -335,8 +349,8 @@ export default function MessagesPage() {
                 .from('messages')
                 .select(`
                     id, content, created_at, read, type, sender_id, receiver_id, course_id, group_id,
-                    sender:sender_id (id, nickname, avatar, role),
-                    receiver:receiver_id (id, nickname, avatar, role)
+                    sender:sender_id (id, nickname, avatar, role, email),
+                    receiver:receiver_id (id, nickname, avatar, role, email)
                 `)
                 .order('created_at', { ascending: false })
                 .limit(500);
@@ -350,6 +364,11 @@ export default function MessagesPage() {
                 let convId = '';
                 let type: 'direct' | 'group' = 'direct';
                 let otherUser: User | undefined;
+
+                // Helpers
+                const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
+                const isSystem = (u: any) => u?.email === 'system@sakina.com';
+                const isLegacy = (id: string) => id === legacyId;
 
                 if (msg.course_id || msg.group_id) {
                     type = 'group';
@@ -367,8 +386,6 @@ export default function MessagesPage() {
                 } else {
                     type = 'direct';
 
-                    // System User IDs for shared inbox (use fetched systemUserId if available)
-                    const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
                     const ownerManagedIds = [currentUser.id, legacyId];
                     if (systemUserId) ownerManagedIds.push(systemUserId);
 
@@ -377,21 +394,24 @@ export default function MessagesPage() {
                     let partner: any;
 
                     if (currentUser.role === 'owner') {
-                        // Owner shared inbox logic:
-                        // If message involves system/legacy, partner is the OTHER person (real user)
-                        const senderIsManaged = ownerManagedIds.includes(msg.sender_id);
-                        const receiverIsManaged = ownerManagedIds.includes(msg.receiver_id);
+                        // Robust owner partner logic
+                        // If I am sender OR System is sender OR Legacy is sender -> Partner is Receiver
+                        const senderIsMe = msg.sender_id === currentUser.id;
+                        const senderIsSystem = isSystem(msg.sender);
+                        const senderIsLegacy = isLegacy(msg.sender_id);
 
-                        if (senderIsManaged && !receiverIsManaged) {
-                            // Sent by system/owner/legacy TO a user - partner is receiver (real user)
+                        const receiverIsMe = msg.receiver_id === currentUser.id;
+                        const receiverIsSystem = isSystem(msg.receiver);
+                        const receiverIsLegacy = isLegacy(msg.receiver_id);
+
+                        if (senderIsMe || senderIsSystem || senderIsLegacy) {
                             partnerId = msg.receiver_id;
                             partner = msg.receiver;
-                        } else if (!senderIsManaged && receiverIsManaged) {
-                            // Sent by user TO system/owner/legacy - partner is sender (real user)
+                        } else if (receiverIsMe || receiverIsSystem || receiverIsLegacy) {
                             partnerId = msg.sender_id;
                             partner = msg.sender;
                         } else {
-                            // Both managed or both not managed - standard logic
+                            // Fallback
                             partnerId = msg.sender_id === currentUser.id ? msg.receiver_id : msg.sender_id;
                             partner = msg.sender_id === currentUser.id ? msg.receiver : msg.sender;
                         }
@@ -435,12 +455,13 @@ export default function MessagesPage() {
                     });
                 }
                 // Unread Count Logic: Messages received (not sent by me/system/legacy) that are unread
-                const systemId = '23886de5-16da-49b0-9d6d-85ac55d2ba12';
-                const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
-
                 let isSentByMe = msg.sender_id === currentUser.id;
                 if (currentUser.role === 'owner') {
-                    isSentByMe = isSentByMe || msg.sender_id === systemId || msg.sender_id === legacyId;
+                    // Check if sender is System or Legacy (managed by me)
+                    const senderIsSystem = msg.sender?.email === 'system@sakina.com';
+                    const senderIsLegacy = msg.sender_id === legacyId;
+
+                    isSentByMe = isSentByMe || senderIsSystem || senderIsLegacy;
                 }
 
                 if (!isSentByMe && !msg.read) {
@@ -509,23 +530,31 @@ export default function MessagesPage() {
 
             if (type === 'direct') {
                 if (currentUser.role === 'owner') {
-                    // Owner logic: See messages between Me <-> User OR System <-> User OR LegacyGuest <-> User
-                    // We need to fetch interactions involving the target user 'id'
-                    // IDs managed by owner: Me, System Admin, Legacy Guest (b1c...)
-                    const systemId = '23886de5-16da-49b0-9d6d-85ac55d2ba12';
-                    const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
+                    // Clean Owner Logic: Fetch all messages involving ME, SYSTEM, or LEGACY <-> TARGET USER
 
-                    query = query.or(`and(sender_id.eq.${id},receiver_id.eq.${currentUser.id}),and(sender_id.eq.${currentUser.id},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${systemId}),and(sender_id.eq.${systemId},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${legacyId}),and(sender_id.eq.${legacyId},receiver_id.eq.${id})`);
+                    // IDs helper
+                    const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
+                    const realSystemId = CACHED_SYSTEM_ID || '23886de5-16da-49b0-9d6d-85ac55d2ba12'; // Use cached or fallback
+
+                    const targetId = id;
+                    const myId = currentUser.id;
+
+                    const conditions = [
+                        `and(sender_id.eq.${targetId},receiver_id.eq.${myId})`,
+                        `and(sender_id.eq.${myId},receiver_id.eq.${targetId})`,
+                        `and(sender_id.eq.${targetId},receiver_id.eq.${realSystemId})`,
+                        `and(sender_id.eq.${realSystemId},receiver_id.eq.${targetId})`,
+                        `and(sender_id.eq.${targetId},receiver_id.eq.${legacyId})`,
+                        `and(sender_id.eq.${legacyId},receiver_id.eq.${targetId})`
+                    ];
+
+                    query = query.or(conditions.join(','));
                 } else {
                     // Normal logic
                     query = query
                         .or(`sender_id.eq.${currentUser.id},sender_id.eq.${id}`)
                         .or(`receiver_id.eq.${currentUser.id},receiver_id.eq.${id}`);
                 }
-
-                // query = query
-                //    .is('group_id', null)
-                //    .is('course_id', null);
             } else {
                 query = query.or(`group_id.eq.${id},course_id.eq.${id}`);
             }
