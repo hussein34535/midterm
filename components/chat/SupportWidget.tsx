@@ -18,6 +18,7 @@ export default function SupportWidget() {
     const [loading, setLoading] = useState(false);
     const [pendingMessage, setPendingMessage] = useState("");
     const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [isAuthLoaded, setIsAuthLoaded] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -38,6 +39,7 @@ export default function SupportWidget() {
                 setMessages([]);
                 setStep('chat');
             }
+            setIsAuthLoaded(true);
         };
 
         checkUser();
@@ -198,8 +200,8 @@ export default function SupportWidget() {
         }
     };
 
-    // Hide widget if user is logged in with a real account
-    if (isLoggedIn) {
+    // Hide widget if auth not loaded yet or if user is logged in
+    if (!isAuthLoaded || isLoggedIn) {
         return null;
     }
 
