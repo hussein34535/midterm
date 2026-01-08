@@ -140,7 +140,7 @@ router.get('/:id/my-sessions', authMiddleware, async (req, res) => {
  */
 router.post('/', authMiddleware, requireOwner, async (req, res) => {
     try {
-        const { title, description, specialist_id, total_sessions, group_capacity, price, image_url } = req.body;
+        const { title, description, specialist_id, total_sessions, group_capacity, price, session_price, image_url } = req.body;
 
         const courseData = {
             id: uuidv4(),
@@ -150,6 +150,7 @@ router.post('/', authMiddleware, requireOwner, async (req, res) => {
             total_sessions: total_sessions || 4,
             group_capacity: group_capacity || 4,
             price: price || 0,
+            session_price: session_price || 0,
             image_url,
             is_active: true,
             created_at: new Date().toISOString()
@@ -424,12 +425,13 @@ router.patch('/:id/assign', authMiddleware, requireOwner, async (req, res) => {
  */
 router.put('/:id', authMiddleware, requireOwner, async (req, res) => {
     try {
-        const { title, description, price, total_sessions, group_capacity, specialist_id, is_active } = req.body;
+        const { title, description, price, session_price, total_sessions, group_capacity, specialist_id, is_active } = req.body;
 
         const updateData = {};
         if (title !== undefined) updateData.title = title;
         if (description !== undefined) updateData.description = description;
         if (price !== undefined) updateData.price = Number(price);
+        if (session_price !== undefined) updateData.session_price = Number(session_price);
         if (total_sessions !== undefined) updateData.total_sessions = Number(total_sessions);
         if (group_capacity !== undefined) updateData.group_capacity = Number(group_capacity);
         // Handle empty string as null for specialist_id
@@ -491,18 +493,32 @@ router.post('/:id/payment', authMiddleware, async (req, res) => {
     try {
         const courseId = req.params.id;
         const userId = req.userId;
-        const { payment_method, payment_code, amount } = req.body;
+        const { payment_method, payment_code, amount, payment_type } = req.body;
 
         // Get course to verify price
         const { data: course, error: courseError } = await supabase
             .from('courses')
-            .select('id, title, price')
+            .select('id, title, price, session_price')
             .eq('id', courseId)
             .single();
 
         if (courseError || !course) {
             return res.status(404).json({ error: 'الكورس غير موجود' });
         }
+
+        // Validate Amount
+        let expectedAmount = course.price;
+        if (payment_type === 'session') {
+            expectedAmount = course.session_price || 0;
+        }
+
+        // Allow some flexibility or strict check? Strict for now.
+        // If client sends amount, it must match expected.
+        if (amount && Number(amount) !== Number(expectedAmount)) {
+            return res.status(400).json({ error: 'المبلغ المدفوع غير صحيح' });
+        }
+
+        const finalAmount = amount || expectedAmount;
 
         // Check if already enrolled
         const { data: existing } = await supabase
@@ -525,11 +541,13 @@ router.post('/:id/payment', authMiddleware, async (req, res) => {
                 id: uuidv4(),
                 user_id: userId,
                 course_id: courseId,
-                amount: amount || course.price,
+                amount: finalAmount,
+                original_amount: expectedAmount, // Track original price
                 payment_method: payment_method || 'unknown',
                 payment_code: payment_code,
                 sender_number: sender_number || null,
                 screenshot: payment_screenshot || null,
+                coupon_id: couponId, // Link to coupon
                 status: 'pending',
                 created_at: new Date().toISOString()
             })

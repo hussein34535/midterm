@@ -19,6 +19,7 @@ interface Course {
     title: string;
     description: string;
     price: number;
+    session_price?: number;
     total_sessions: number;
     group_capacity?: number;
     specialist?: { id: string; nickname: string };
@@ -39,6 +40,7 @@ export default function AdminCoursesPage() {
         title: string;
         description: string;
         price: number | string;
+        session_price: number | string;
         total_sessions: number | string;
         group_capacity: number | string;
         specialist_id: string;
@@ -46,6 +48,7 @@ export default function AdminCoursesPage() {
         title: '',
         description: '',
         price: 0,
+        session_price: 0,
         total_sessions: 4,
         group_capacity: 4,
         specialist_id: ''
@@ -129,6 +132,7 @@ export default function AdminCoursesPage() {
             title: course.title,
             description: course.description || '',
             price: course.price,
+            session_price: course.session_price || 0,
             total_sessions: course.total_sessions,
             group_capacity: course.group_capacity || 4,
             specialist_id: course.specialist_id || ''
@@ -142,6 +146,7 @@ export default function AdminCoursesPage() {
             title: '',
             description: '',
             price: 0,
+            session_price: 0,
             total_sessions: 4,
             group_capacity: 4,
             specialist_id: ''
@@ -166,6 +171,7 @@ export default function AdminCoursesPage() {
             const payload = {
                 ...formData,
                 price: Number(formData.price),
+                session_price: Number(formData.session_price),
                 total_sessions: Number(formData.total_sessions),
                 group_capacity: Number(formData.group_capacity),
                 specialist_id: formData.specialist_id || null // Send null if empty
@@ -284,6 +290,16 @@ export default function AdminCoursesPage() {
                                                 type="number"
                                                 value={formData.price}
                                                 onChange={(e) => setFormData({ ...formData, price: e.target.value === '' ? '' : Number(e.target.value) })}
+                                                className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:border-primary outline-none"
+                                                min="0"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold text-foreground mb-2">سعر الجلسة (ج.م)</label>
+                                            <input
+                                                type="number"
+                                                value={formData.session_price}
+                                                onChange={(e) => setFormData({ ...formData, session_price: e.target.value === '' ? '' : Number(e.target.value) })}
                                                 className="w-full px-4 py-3 rounded-xl bg-secondary/50 border border-border focus:border-primary outline-none"
                                                 min="0"
                                             />

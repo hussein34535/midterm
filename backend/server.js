@@ -16,6 +16,7 @@ const specialistRoutes = require('./routes/specialist');
 const courseRoutes = require('./routes/courses');
 const messageRoutes = require('./routes/messages');
 const settingsRoutes = require('./routes/settings');
+const couponRoutes = require('./routes/coupons');
 const agoraRoutes = require('./routes/agora');
 
 const app = express();
@@ -39,6 +40,7 @@ app.use('/api/specialist', specialistRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/coupons', couponRoutes);
 app.use('/api/groups', require('./routes/groups')); // Groups Management
 app.use('/api/agora', agoraRoutes);
 
