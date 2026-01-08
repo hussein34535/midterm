@@ -991,7 +991,7 @@ export default function MessagesPage() {
                             </div>
                         </div>
 
-                        <div className={`flex-1 flex flex-col bg-[#f0f2f5] ${!showMobileChat ? 'hidden md:flex' : 'fixed inset-0 z-[10000] flex md:relative md:inset-auto md:z-auto'}`}>
+                        <div className={`flex-1 flex flex-col bg-[#f0f2f5] ${!showMobileChat ? 'hidden md:flex' : 'fixed inset-0 pb-[env(safe-area-inset-bottom,0px)] z-[10000] flex md:relative md:inset-auto md:z-auto md:pb-0'}`}>
                             {selectedConversation ? (
                                 <>
                                     <div className="px-3 py-2.5 bg-white border-b border-gray-200 flex items-center gap-2 shadow-sm">
