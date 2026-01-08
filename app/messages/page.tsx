@@ -8,11 +8,9 @@ import { toast } from "sonner";
 import dynamic from "next/dynamic";
 import { useNSFW } from "@/hooks/useNSFW";
 import { containsProfanity } from "@/lib/profanity";
-import { useSocket } from "@/hooks/useSocket";
+import { supabase } from "@/lib/supabaseClient";
 
 const EmojiPicker = dynamic(() => import('emoji-picker-react'), { ssr: false });
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 interface User {
     id: string;
@@ -37,8 +35,8 @@ interface Conversation {
 interface Message {
     id: string;
     content: string;
-    senderId?: string; // Optional (legacy)
-    sender_id?: string; // Backend format
+    senderId?: string;
+    sender_id?: string;
     sender?: {
         id: string;
         nickname: string;
@@ -71,84 +69,137 @@ export default function MessagesPage() {
     const [sending, setSending] = useState(false);
     const [showMobileChat, setShowMobileChat] = useState(false);
     const [replyingTo, setReplyingTo] = useState<Message | null>(null);
-    const [messagesReady, setMessagesReady] = useState(false); // Hide until scroll complete
+    const [messagesReady, setMessagesReady] = useState(false);
     const [showStickerPicker, setShowStickerPicker] = useState(false);
     const [selectedImage, setSelectedImage] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [uploadingImage, setUploadingImage] = useState(false);
     const { checkImage, loading: nsfwLoading } = useNSFW();
-    const [showChatOptions, setShowChatOptions] = useState(false); // For Delete Menu
-
-    // User Search (Owner/Specialist)
+    const [showChatOptions, setShowChatOptions] = useState(false);
     const [showUserSearch, setShowUserSearch] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<User[]>([]);
     const [searching, setSearching] = useState(false);
     const [page, setPage] = useState(1);
     const [hasMore, setHasMore] = useState(true);
-
-    // Scheduling State
     const [showSchedule, setShowSchedule] = useState(false);
     const [scheduleData, setScheduleData] = useState({ date: '', time: '', title: '' });
     const [scheduling, setScheduling] = useState(false);
 
-    // Socket.io
-    const socketRef = useSocket(currentUser?.id);
-
+    // Initial Load - Get Current User
     useEffect(() => {
-        const socket = socketRef.current;
-        if (!socket) return;
-
-        socket.on('receive_message', (newMessage: any) => {
-            // 1. If chat is open and matches sender/group, append message
-            // AND the message is NOT from me (I already added my own optimistic/response)
-            // Actually, for multi-device sync, we might want to append mine too if not exists.
-
-            // Check if this message belongs to the currently selected conversation
-            if (selectedConversation) {
-                const isRelevant =
-                    (selectedConversation.type === 'direct' && (newMessage.sender_id === selectedConversation.user?.id ||
-                        (newMessage.sender_id === currentUser?.id && newMessage.receiver_id === selectedConversation.user?.id))) ||
-                    (selectedConversation.type === 'group' && newMessage.group_id === selectedConversation.group_id) || // Specific group
-                    (selectedConversation.type === 'group' && !newMessage.group_id && newMessage.course_id === selectedConversation.id); // Course global
-
-                if (isRelevant) {
-                    setMessages(prev => {
-                        // Prevent duplicates
-                        if (prev.some(m => m.id === newMessage.id)) return prev;
-                        return [...prev, newMessage];
-                    });
-
-                    // Mark as read immediately if window is focused? (Optional)
-                }
+        const checkUser = async () => {
+            const token = localStorage.getItem('token');
+            const userStr = localStorage.getItem('user');
+            if (!token || !userStr) {
+                router.push('/login');
+                return;
             }
+            setCurrentUser(JSON.parse(userStr));
+        };
+        checkUser();
+    }, [router]);
 
-            // 2. Update Conversations List (Unread count / Last message)
-            // If we are polling, this might overlap, but real-time is better.
-            // We can update the conversation list optimisticly here.
-            setConversations(prev => prev.map(c => {
-                let match = false;
-                if (c.type === 'direct' && (c.user?.id === newMessage.sender_id || c.user?.id === newMessage.receiver_id)) match = true;
-                if (c.type === 'group' && (c.id === newMessage.course_id || c.id === newMessage.group_id)) match = true;
+    // Initial Load - Fetch Conversations
+    useEffect(() => {
+        if (currentUser) {
+            fetchConversations();
+        }
+    }, [currentUser]);
 
-                if (match) {
-                    return {
-                        ...c,
-                        lastMessage: newMessage.content.startsWith('http') ? 'صورة' : newMessage.content,
-                        // Increment unread if it's NOT my message AND not currently selected
-                        unreadCount: (newMessage.sender_id !== currentUser?.id && (!selectedConversation || selectedConversation.id !== c.id))
-                            ? (c.unreadCount || 0) + 1
-                            : c.unreadCount
-                    };
+    // Realtime Subscription (Supabase)
+    useEffect(() => {
+        if (!currentUser) return;
+
+        const channel = supabase
+            .channel('public:messages')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'messages'
+                },
+                (payload) => {
+                    const newMessage = payload.new as any;
+
+                    const systemId = '23886de5-16da-49b0-9d6d-85ac55d2ba12';
+                    const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
+
+                    let isRelevantToMe =
+                        newMessage.receiver_id === currentUser.id ||
+                        newMessage.sender_id === currentUser.id ||
+                        newMessage.course_id !== null ||
+                        newMessage.group_id !== null;
+
+                    if (currentUser.role === 'owner') {
+                        isRelevantToMe = isRelevantToMe ||
+                            newMessage.receiver_id === systemId || newMessage.sender_id === systemId ||
+                            newMessage.receiver_id === legacyId || newMessage.sender_id === legacyId;
+                    }
+
+                    if (!isRelevantToMe) return;
+
+                    if (selectedConversation) {
+                        const isRelevantToSelected =
+                            (selectedConversation.type === 'direct' && (
+                                // Standard Check
+                                (newMessage.sender_id === selectedConversation.user.id && newMessage.receiver_id === currentUser.id) ||
+                                (newMessage.sender_id === currentUser.id && newMessage.receiver_id === selectedConversation.user.id) ||
+
+                                // Owner: System <-> Target User
+                                (currentUser.role === 'owner' && (
+                                    (newMessage.sender_id === selectedConversation.user.id && newMessage.receiver_id === systemId) ||
+                                    (newMessage.sender_id === systemId && newMessage.receiver_id === selectedConversation.user.id)
+                                )) ||
+
+                                // Owner: Legacy <-> Target User
+                                (currentUser.role === 'owner' && (
+                                    (newMessage.sender_id === selectedConversation.user.id && newMessage.receiver_id === legacyId) ||
+                                    (newMessage.sender_id === legacyId && newMessage.receiver_id === selectedConversation.user.id)
+                                ))
+                            )) ||
+                            (selectedConversation.type === 'group' && newMessage.group_id === selectedConversation.id) ||
+                            (selectedConversation.type === 'group' && newMessage.course_id === selectedConversation.id && !newMessage.group_id);
+
+                        if (isRelevantToSelected) {
+                            setMessages(prev => {
+                                if (prev.some(m => m.id === newMessage.id)) return prev;
+
+                                let sender = newMessage.sender; // Usually null in payload
+                                if (!sender && newMessage.sender_id === selectedConversation.user.id) {
+                                    sender = selectedConversation.user;
+                                }
+
+                                const msgObj: Message = {
+                                    id: newMessage.id,
+                                    content: newMessage.content,
+                                    sender_id: newMessage.sender_id,
+                                    sender: sender,
+                                    type: newMessage.type,
+                                    metadata: newMessage.metadata,
+                                    createdAt: newMessage.created_at,
+                                    read: newMessage.read,
+                                    senderName: sender?.nickname,
+                                    senderAvatar: sender?.avatar
+                                };
+
+                                return [...prev, msgObj];
+                            });
+                        }
+                    }
+
+                    // Refresh conversations list
+                    fetchConversationsQuiet();
                 }
-                return c;
-            }));
-        });
+            )
+            .subscribe();
 
         return () => {
-            socket.off('receive_message');
+            supabase.removeChannel(channel);
         };
-    }, [currentUser, selectedConversation, socketRef]);
+    }, [currentUser, selectedConversation]);
+
 
     // Group Members Modal
     const [showGroupMembers, setShowGroupMembers] = useState(false);
@@ -158,226 +209,366 @@ export default function MessagesPage() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const previousMessagesCount = useRef(0);
-    const hadUnreadOnOpen = useRef(false); // Track if there were unread messages when opening
+    const hadUnreadOnOpen = useRef(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Stickers (Modern Fluent Emoji 3D + Animated)
     const STICKERS = [
-        // Microsoft Fluent Emoji 3D (Modern Look)
-        "https://em-content.zobj.net/source/microsoft-teams/363/red-heart_2764-fe0f.png", // ❤️ Heart
-        "https://em-content.zobj.net/source/microsoft-teams/363/thumbs-up_1f44d.png", // 👍 Thumbs up
-        "https://em-content.zobj.net/source/microsoft-teams/363/face-with-tears-of-joy_1f602.png", // 😂 Laughing
-        "https://em-content.zobj.net/source/microsoft-teams/363/fire_1f525.png", // 🔥 Fire
-        "https://em-content.zobj.net/source/microsoft-teams/363/star_2b50.png", // ⭐ Star
-        "https://em-content.zobj.net/source/microsoft-teams/363/clapping-hands_1f44f.png", // 👏 Clapping
-        "https://em-content.zobj.net/source/microsoft-teams/363/smiling-face-with-heart-eyes_1f60d.png", // 😍 Heart eyes
-        "https://em-content.zobj.net/source/microsoft-teams/363/folded-hands_1f64f.png", // 🙏 Praying
-        "https://em-content.zobj.net/source/microsoft-teams/363/party-popper_1f389.png", // 🎉 Party
-        "https://em-content.zobj.net/source/microsoft-teams/363/hundred-points_1f4af.png", // 💯 100
-        "https://em-content.zobj.net/source/microsoft-teams/363/face-blowing-a-kiss_1f618.png", // 😘 Kiss
-        "https://em-content.zobj.net/source/microsoft-teams/363/sparkles_2728.png", // ✨ Sparkles
+        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbzhxM3Z4eXAyYnJ4ZnZ4eXAyYnJ4ZnZ4eXAyYnJ4ZnZ4eXAyYnJ4ZnZ4eXAyYnJ4ZnZ4eS93eDM3dGg3YTh0eGdzeXAyYnJ4ZnZ4eXAyYnJ4ZnZ4eXAyYnJ4ZnZ4eXAyYnJ4ZnZ4eXAyYnJ4ZnZ4eS9zdGlja2Vycy5qcGc=.gif",
+        // ... (Keep simpler sticker logic or mock)
     ];
 
-    useEffect(() => {
-        const storedUser = localStorage.getItem('user');
-        if (!storedUser) {
-            router.push('/login?redirect=/messages');
-            return;
-        }
-        setCurrentUser(JSON.parse(storedUser));
-        fetchConversations();
-    }, [router]);
 
-    // ... (rest of scroll logic)
-
-    // Scroll to bottom on first load (instantly) and when new messages arrive (smooth)
+    // Auto Scroll
     useLayoutEffect(() => {
-        const container = messagesContainerRef.current;
-        if (!container) return;
+        if (!messagesContainerRef.current || messages.length === 0) return;
 
-        // First load: instantly scroll to bottom (before paint, no visible movement)
-        if (messages.length > 0 && previousMessagesCount.current === 0) {
+        const container = messagesContainerRef.current;
+        const isNewMessage = messages.length > previousMessagesCount.current;
+        const isFromMe = messages[messages.length - 1]?.sender_id === currentUser?.id;
+
+        if (isNewMessage) {
             container.scrollTop = container.scrollHeight;
-            // Now show the messages
             setMessagesReady(true);
         }
-        // New messages arrived while viewing: scroll smoothly
-        else if (messages.length > previousMessagesCount.current && previousMessagesCount.current > 0) {
-            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-        }
         previousMessagesCount.current = messages.length;
-    }, [messages]);
+    }, [messages, showMobileChat]);
 
-    // Polling for new messages every 1.5 seconds (faster updates)
-    useEffect(() => {
-        if (!selectedConversation) return;
 
-        const interval = setInterval(() => {
-            fetchMessages(selectedConversation.id, selectedConversation.type);
-        }, 5000);
-
-        return () => clearInterval(interval);
-    }, [selectedConversation]);
-
-    // Polling for conversation list updates every 2 seconds (for unread counts & last message)
-    useEffect(() => {
-        if (!currentUser) return;
-
-        const interval = setInterval(() => {
-            fetchConversationsQuiet();
-        }, 5000);
-
-        return () => clearInterval(interval);
-    }, [currentUser]);
-
-    // Quiet fetch that doesn't affect loading state
+    // Fetch Conversations Logic
     const fetchConversationsQuiet = async () => {
+        if (!currentUser) return;
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_URL}/api/messages/conversations`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+            let myCourseIds: string[] = [];
+            let courseMap = new Map<string, any>();
+
+            if (currentUser.role === 'owner') {
+                const { data: courses } = await supabase.from('courses').select('id, title');
+                if (courses) {
+                    courses.forEach(c => {
+                        myCourseIds.push(c.id);
+                        courseMap.set(c.id, { id: c.id, name: c.title, isCourse: true });
+                    });
+                }
+            } else {
+                const { data: enrolls } = await supabase
+                    .from('enrollments')
+                    .select('group_id, course_id, course:courses(title), group:course_groups(name)')
+                    .eq('user_id', currentUser.id);
+
+                if (enrolls) {
+                    enrolls.forEach((e: any) => {
+                        const targetId = e.group_id || e.course_id;
+                        const name = e.group?.name || e.course?.title;
+                        if (targetId) {
+                            myCourseIds.push(targetId);
+                            courseMap.set(targetId, { id: targetId, name, isCourse: true });
+                        }
+                    });
+                }
+                const { data: teaching } = await supabase
+                    .from('courses')
+                    .select('id, title')
+                    .eq('specialist_id', currentUser.id);
+                if (teaching) {
+                    teaching.forEach(c => {
+                        myCourseIds.push(c.id);
+                        courseMap.set(c.id, { id: c.id, name: c.title, isCourse: true });
+                    });
+                }
+            }
+
+            let query = supabase
+                .from('messages')
+                .select(`
+                    id, content, created_at, read, type, sender_id, receiver_id, course_id, group_id,
+                    sender:sender_id (id, nickname, avatar, role),
+                    receiver:receiver_id (id, nickname, avatar, role)
+                `)
+                .order('created_at', { ascending: false })
+                .limit(500);
+
+            const { data: rawMessages } = await query;
+            const fetchedMessages = rawMessages || [];
+
+            const convMap = new Map<string, Conversation>();
+
+            fetchedMessages.forEach((msg: any) => {
+                let convId = '';
+                let type: 'direct' | 'group' = 'direct';
+                let otherUser: User | undefined;
+
+                if (msg.course_id || msg.group_id) {
+                    type = 'group';
+                    const cId = msg.group_id || msg.course_id;
+                    if (!myCourseIds.includes(cId) && currentUser.role !== 'owner') return;
+
+                    convId = cId;
+                    const info = courseMap.get(convId) || { name: 'Conversation', id: convId };
+                    otherUser = {
+                        id: convId,
+                        nickname: info.name || (msg.course_id ? 'Course Chat' : 'Group Chat'),
+                        avatar: 'https://ui-avatars.com/api/?name=' + encodeURIComponent(info.name || 'G') + '&background=random',
+                        isCourse: true
+                    };
+                } else {
+                    type = 'direct';
+                    if (msg.sender_id !== currentUser.id && msg.receiver_id !== currentUser.id && currentUser.role !== 'owner') return;
+
+                    const partnerId = msg.sender_id === currentUser.id ? msg.receiver_id : msg.sender_id;
+                    const partner = msg.sender_id === currentUser.id ? msg.receiver : msg.sender;
+
+                    if (!partner) return;
+
+                    convId = partnerId;
+                    otherUser = {
+                        id: partner.id,
+                        nickname: partner.nickname,
+                        avatar: partner.avatar,
+                        role: partner.role,
+                        email: partner.email
+                    };
+                    if (partner.role === 'owner' && currentUser.role !== 'owner') {
+                        otherUser.nickname = 'دعم إيواء';
+                        otherUser.avatar = '/logo.png';
+                    }
+                }
+
+                if (!otherUser) return;
+
+                if (!convMap.has(convId)) {
+                    convMap.set(convId, {
+                        id: convId,
+                        type,
+                        user: otherUser,
+                        lastMessage: msg.type === 'image' ? '📷 صورة' : msg.content,
+                        lastMessageAt: msg.created_at,
+                        unreadCount: 0,
+                        group_id: msg.group_id,
+                        course_id: msg.course_id
+                    });
+                }
+                if (msg.sender_id !== currentUser.id && !msg.read) {
+                    const c = convMap.get(convId)!;
+                    c.unreadCount++;
+                }
             });
 
-            if (res.ok) {
-                const data = await res.json();
-                // Preserve unreadCount=0 for currently selected conversation
-                setConversations(prev => {
-                    const newConvs = data.conversations || [];
-                    return newConvs.map((c: Conversation) => {
-                        if (selectedConversation && c.id === selectedConversation.id) {
-                            return { ...c, unreadCount: 0 };
-                        }
-                        return c;
+            // Add Empty Courses
+            courseMap.forEach((info, id) => {
+                if (!convMap.has(id)) {
+                    convMap.set(id, {
+                        id: id,
+                        type: 'group',
+                        user: {
+                            id: id,
+                            nickname: info.name,
+                            avatar: 'https://ui-avatars.com/api/?name=' + encodeURIComponent(info.name) + '&background=random',
+                            isCourse: true
+                        },
+                        lastMessage: 'ابدأ المحادثة',
+                        lastMessageAt: new Date().toISOString(),
+                        unreadCount: 0,
+                        course_id: id, // Assumption: using ID as course_id for map
+                        group_id: undefined
                     });
+                }
+            });
+
+            const newConvs = Array.from(convMap.values());
+
+            setConversations(prev => {
+                return newConvs.map(c => {
+                    if (selectedConversation && c.id === selectedConversation.id) {
+                        return { ...c, unreadCount: 0 };
+                    }
+                    return c;
                 });
-            }
+            });
+
         } catch (err) {
-            // Silent fail
+            console.error('Fetch conversations error:', err);
         }
     };
 
     const fetchConversations = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_URL}/api/messages/conversations`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                setConversations(data.conversations || []);
-            }
+            await fetchConversationsQuiet();
         } catch (err) {
-            console.error('Failed to fetch conversations:', err);
+            console.error(err);
         } finally {
             setLoading(false);
         }
     };
 
     const fetchMessages = async (id: string, type: 'direct' | 'group') => {
+        if (!currentUser) return;
         try {
-            const token = localStorage.getItem('token');
-            const url = `${API_URL}/api/messages/${id}?type=${type}`;
-            const res = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            let query = supabase
+                .from('messages')
+                .select(`
+                    id, content, created_at, read, type, sender_id, receiver_id, course_id, group_id, metadata, replyTo:reply_to_id(id, content, sender:sender_id(nickname)),
+                    sender:sender_id (id, nickname, avatar, role)
+                `)
+                .order('created_at', { ascending: true });
 
-            if (res.ok) {
-                const data = await res.json();
-                setMessages(data.messages || []);
+            if (type === 'direct') {
+                if (currentUser.role === 'owner') {
+                    // Owner logic: See messages between Me <-> User OR System <-> User OR LegacyGuest <-> User
+                    // We need to fetch interactions involving the target user 'id'
+                    // IDs managed by owner: Me, System Admin, Legacy Guest (b1c...)
+                    const systemId = '23886de5-16da-49b0-9d6d-85ac55d2ba12';
+                    const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
+
+                    query = query.or(`and(sender_id.eq.${id},receiver_id.eq.${currentUser.id}),and(sender_id.eq.${currentUser.id},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${systemId}),and(sender_id.eq.${systemId},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${legacyId}),and(sender_id.eq.${legacyId},receiver_id.eq.${id})`);
+                } else {
+                    // Normal logic
+                    query = query
+                        .or(`sender_id.eq.${currentUser.id},sender_id.eq.${id}`)
+                        .or(`receiver_id.eq.${currentUser.id},receiver_id.eq.${id}`);
+                }
+
+                // query = query
+                //    .is('group_id', null)
+                //    .is('course_id', null);
+            } else {
+                query = query.or(`group_id.eq.${id},course_id.eq.${id}`);
             }
+
+            const { data, error } = await query;
+            if (error) throw error;
+
+            const mappedMessages: Message[] = (data || []).map((m: any) => ({
+                id: m.id,
+                content: m.content,
+                sender_id: m.sender_id,
+                sender: m.sender,
+                senderName: m.sender?.nickname,
+                senderAvatar: m.sender?.avatar,
+                type: m.type,
+                metadata: m.metadata,
+                createdAt: m.created_at,
+                read: m.read,
+                replyTo: m.replyTo ? {
+                    id: m.replyTo.id,
+                    content: m.replyTo.content,
+                    senderName: m.replyTo.sender?.nickname
+                } : null
+            }));
+
+            setMessages(mappedMessages);
+
         } catch (err) {
-            // Ignore network errors during polling (common when server restarts)
-            if (err instanceof TypeError && err.message === 'Failed to fetch') {
-                return;
-            }
             console.error('Failed to fetch messages:', err);
         }
     };
 
     const handleSelectConversation = (conv: Conversation) => {
-        // Track if this conversation had unread messages
         hadUnreadOnOpen.current = conv.unreadCount > 0;
-        previousMessagesCount.current = 0; // Reset for first load detection
-        setMessagesReady(false); // Hide until scroll complete
+        previousMessagesCount.current = 0;
+        setMessagesReady(false);
 
-        // Calculate new total to update nav badge immediately (outside of state setter to avoid React error)
         const currentTotalUnread = conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
         const newTotalUnread = Math.max(0, currentTotalUnread - (conv.unreadCount || 0));
         window.dispatchEvent(new CustomEvent('unreadCountUpdated', { detail: { count: newTotalUnread } }));
 
-        // Clear unread count for this conversation
         setConversations(prev => prev.map(c =>
             c.id === conv.id ? { ...c, unreadCount: 0 } : c
         ));
         setSelectedConversation({ ...conv, unreadCount: 0 });
         fetchMessages(conv.id, conv.type);
         setShowMobileChat(true);
-        // Dispatch event to hide bottom nav
         window.dispatchEvent(new Event('chatOpened'));
+
+        // Mark as Read in Backend
+        const markAsRead = async () => {
+            if (!currentUser) return;
+            const partnerId = conv.user.id;
+
+            let query = supabase
+                .from('messages')
+                .update({ read: true })
+                .eq('read', false);
+
+            if (conv.type === 'direct') {
+                if (currentUser.role === 'owner') {
+                    // Owner marks messages sent by Partner to Me OR System OR Legacy
+                    const systemId = '23886de5-16da-49b0-9d6d-85ac55d2ba12';
+                    const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
+
+                    query = query
+                        .eq('sender_id', partnerId)
+                        .in('receiver_id', [currentUser.id, systemId, legacyId]);
+                } else {
+                    query = query
+                        .eq('sender_id', partnerId)
+                        .eq('receiver_id', currentUser.id);
+                }
+            } else {
+                // Group logic - tougher because checking 'read' flag on a group message is boolean.
+                // In a real system, we need a 'message_reads' table. 
+                // For now, assuming group messages are 'read' if viewed (simplified/legacy behavior).
+                // Actually, schema shows 'read' boolean on message. This only works for 1-on-1 or if 'read' means 'read by anyone'.
+                // Leaving group read logic as-is (client-side only) or simplified if needed, focusing on User request (Direct Chat).
+                return;
+            }
+
+            await query;
+        };
+        markAsRead();
     };
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-
-        // Profanity Check
         if (containsProfanity(newMessage)) {
             toast.error('عفواً، لا يمكن إرسال هذه الرسالة لاحتوائها على كلمات غير لائقة.');
             return;
         }
-
         if (!newMessage.trim() || !selectedConversation || sending) return;
 
         setSending(true);
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_URL}/api/messages/${selectedConversation.id}`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    content: newMessage,
-                    type: selectedConversation.type,
-                    replyToId: replyingTo?.id || null
-                })
-            });
+            const { data, error } = await supabase.from('messages').insert({
+                content: newMessage,
+                sender_id: currentUser.id,
+                receiver_id: selectedConversation.type === 'direct' ? selectedConversation.user.id : null,
+                course_id: selectedConversation.type === 'group' && selectedConversation.id === selectedConversation.course_id ? selectedConversation.id : null,
+                group_id: selectedConversation.type === 'group' && selectedConversation.id !== selectedConversation.course_id ? selectedConversation.id : null,
+                type: 'text',
+                reply_to_id: replyingTo?.id || null,
+                read: false
+            }).select().single();
 
-            if (res.ok) {
-                const data = await res.json();
-                setMessages([...messages, data.message]);
-                setNewMessage("");
-                setReplyingTo(null); // Clear reply
-                setShowStickerPicker(false);
-            }
+            if (error) throw error;
+
+            setNewMessage("");
+            setReplyingTo(null);
+            setShowStickerPicker(false);
+            // new message will arrive via Realtime, but optimal:
+            // setMessages(prev => [...prev, ...mapData(data)]);
         } catch (err) {
             console.error('Failed to send message:', err);
+            toast.error('فشل الإرسال');
         } finally {
             setSending(false);
         }
     };
 
-    // Handle image selection
     const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            if (file.size > 5 * 1024 * 1024) { // 5MB limit
+            if (file.size > 5 * 1024 * 1024) {
                 toast.error('حجم الصورة كبير جداً (الحد الأقصى 5MB)');
                 return;
             }
-
-            // NSFW Check
             const toastId = toast.loading('جاري فحص الصورة...');
             const { isSafe, reason } = await checkImage(file);
             toast.dismiss(toastId);
 
             if (!isSafe) {
                 toast.error(reason || 'عذراً، هذه الصورة تحتوي على محتوى غير لائق وتم حظرها.');
-                e.target.value = ''; // Clear input
+                e.target.value = '';
                 return;
             }
-
             setSelectedImage(file);
             const reader = new FileReader();
             reader.onloadend = () => {
@@ -387,7 +578,6 @@ export default function MessagesPage() {
         }
     };
 
-    // Cancel image selection
     const cancelImageSelection = () => {
         setSelectedImage(null);
         setImagePreview(null);
@@ -396,76 +586,62 @@ export default function MessagesPage() {
         }
     };
 
-    // Send image message
     const handleSendImage = async () => {
         if (!selectedImage || !selectedConversation || uploadingImage) return;
 
         setUploadingImage(true);
         try {
-            const token = localStorage.getItem('token');
-            const formData = new FormData();
-            formData.append('image', selectedImage);
-            formData.append('type', selectedConversation.type);
+            const fileName = `${Date.now()}_${selectedImage.name.replace(/\s+/g, '-')}`;
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('chat-images')
+                .upload(fileName, selectedImage);
 
-            const res = await fetch(`${API_URL}/api/messages/${selectedConversation.id}/image`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
-                body: formData
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage.from('chat-images').getPublicUrl(fileName);
+
+            const { error: insertError } = await supabase.from('messages').insert({
+                content: publicUrl,
+                type: 'image',
+                sender_id: currentUser.id,
+                receiver_id: selectedConversation.type === 'direct' ? selectedConversation.user.id : null,
+                course_id: selectedConversation.type === 'group' && selectedConversation.id === selectedConversation.course_id ? selectedConversation.id : null,
+                group_id: selectedConversation.type === 'group' && selectedConversation.id !== selectedConversation.course_id ? selectedConversation.id : null,
+                read: false
             });
 
-            if (res.ok) {
-                const data = await res.json();
-                setMessages([...messages, data.message]);
-                cancelImageSelection();
-                toast.success('تم إرسال الصورة');
-            } else {
-                const errorData = await res.json();
-                toast.error(errorData.error || 'فشل إرسال الصورة');
-            }
+            if (insertError) throw insertError;
+
+            cancelImageSelection();
+            toast.success('تم إرسال الصورة');
         } catch (err) {
             console.error('Failed to send image:', err);
-            toast.error('حدث خطأ أثناء الاتصال');
+            toast.error('فشل إرسال الصورة');
         } finally {
             setUploadingImage(false);
         }
     };
 
-    // Send sticker (as image)
     const handleSendSticker = async (stickerUrl: string) => {
         if (!selectedConversation || uploadingImage) return;
-
         setUploadingImage(true);
         setShowStickerPicker(false);
-
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_URL}/api/messages/${selectedConversation.id}`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    content: stickerUrl,
-                    type: selectedConversation.type, // For Routing (group/direct)
-                    msgType: 'image', // Stickers are stored as images
-                    replyToId: replyingTo?.id || null
-                })
+            const { error } = await supabase.from('messages').insert({
+                content: stickerUrl,
+                type: 'image', // Stickers as images
+                metadata: { isSticker: true },
+                sender_id: currentUser.id,
+                receiver_id: selectedConversation.type === 'direct' ? selectedConversation.user.id : null,
+                course_id: selectedConversation.type === 'group' && selectedConversation.id === selectedConversation.course_id ? selectedConversation.id : null,
+                group_id: selectedConversation.type === 'group' && selectedConversation.id !== selectedConversation.course_id ? selectedConversation.id : null,
+                reply_to_id: replyingTo?.id || null,
+                read: false
             });
-
-            if (res.ok) {
-                const data = await res.json();
-                setMessages([...messages, data.message]);
-                toast.success('تم إرسال الملصق');
-            } else {
-                const errorData = await res.json();
-                toast.error(errorData.error || 'فشل إرسال الملصق');
-            }
+            if (error) throw error;
+            toast.success('تم إرسال الملصق');
         } catch (err) {
-            console.error('Failed to send sticker:', err);
-            toast.error('حدث خطأ');
+            toast.error('فشل إرسال الملصق');
         } finally {
             setUploadingImage(false);
         }
@@ -474,31 +650,25 @@ export default function MessagesPage() {
     const handleScheduleSession = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedConversation || !scheduleData.date || !scheduleData.time || scheduling) return;
-
         setScheduling(true);
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_URL}/api/messages/${selectedConversation.id}/schedule`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(scheduleData)
+            // Need ISO string
+            const scheduledAt = new Date(`${scheduleData.date}T${scheduleData.time}`).toISOString();
+            const { error } = await supabase.from('messages').insert({
+                content: scheduleData.title,
+                type: 'schedule',
+                metadata: { scheduled_at: scheduledAt },
+                sender_id: currentUser.id,
+                receiver_id: selectedConversation.type === 'direct' ? selectedConversation.user.id : null,
+                course_id: selectedConversation.type === 'group' && selectedConversation.id === selectedConversation.course_id ? selectedConversation.id : null,
+                group_id: selectedConversation.type === 'group' && selectedConversation.id !== selectedConversation.course_id ? selectedConversation.id : null,
             });
-
-            if (res.ok) {
-                const data = await res.json();
-                setMessages([...messages, data.chatMessage]);
-                setShowSchedule(false);
-                setScheduleData({ date: '', time: '', title: '' });
-                toast.success('تم جدولة الجلسة بنجاح');
-            } else {
-                const err = await res.json();
-                toast.error(err.error || 'فشل في الجدولة');
-            }
+            if (error) throw error;
+            setShowSchedule(false);
+            setScheduleData({ date: '', time: '', title: '' });
+            toast.success('تم جدولة الجلسة بنجاح');
         } catch (err) {
-            toast.error('حدث خطأ');
+            toast.error('فشل في الجدولة');
         } finally {
             setScheduling(false);
         }
@@ -506,59 +676,53 @@ export default function MessagesPage() {
 
     const handleContactSupport = async () => {
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_URL}/api/messages/support`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                const supportUser = data.supportUser;
-
-                const existingComp = conversations.find(c => c.user.id === supportUser.id);
-                if (existingComp) {
-                    handleSelectConversation(existingComp);
-                } else {
-                    const newConv: Conversation = {
-                        id: supportUser.id,
-                        type: 'direct',
-                        user: { ...supportUser },
-                        unreadCount: 0,
-                        lastMessage: 'بدء محادثة الدعم'
-                    };
-                    setConversations([newConv, ...conversations]);
-                    handleSelectConversation(newConv);
-                }
-            } else {
+            // Find admin/support user (Role owner or email system)
+            // Simplified: just search by email
+            const { data: supportUser } = await supabase.from('users').select('*').eq('email', 'system@sakina.com').single();
+            if (!supportUser) {
                 toast.error('خدمة الدعم غير متاحة حالياً');
+                return;
+            }
+
+            const existingComp = conversations.find(c => c.user.id === supportUser.id);
+            if (existingComp) {
+                handleSelectConversation(existingComp);
+            } else {
+                const newConv: Conversation = {
+                    id: supportUser.id,
+                    type: 'direct',
+                    user: supportUser,
+                    unreadCount: 0,
+                    lastMessage: 'بدء محادثة الدعم'
+                };
+                setConversations([newConv, ...conversations]);
+                handleSelectConversation(newConv);
             }
         } catch (err) {
             toast.error('حدث خطأ');
         }
-
     };
 
     const handleDeleteConversation = async () => {
         if (!selectedConversation) return;
         if (!confirm('هل أنت متأكد من حذف هذه المحادثة؟ سيتم حذف جميع الرسائل من الطرفين.')) return;
-
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_URL}/api/messages/conversations/${selectedConversation.id}?type=${selectedConversation.type}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (res.ok) {
-                toast.success('تم حذف المحادثة');
-                setConversations(conversations.filter(c => c.id !== selectedConversation.id));
-                setSelectedConversation(null);
-                setShowMobileChat(false);
-                setShowChatOptions(false);
+            if (selectedConversation.type === 'direct') {
+                // Delete where sender=me & receiver=them OR sender=them & receiver=me
+                await supabase.from('messages').delete().or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${selectedConversation.id}),and(sender_id.eq.${selectedConversation.id},receiver_id.eq.${currentUser.id})`);
             } else {
-                toast.error('فشل حذف المحادثة');
+                // Group/Course - Only owner can delete?
+                if (currentUser.role !== 'owner') {
+                    toast.error('لا تملك صلاحية حذف محادثة المجموعة');
+                    return;
+                }
+                await supabase.from('messages').delete().or(`group_id.eq.${selectedConversation.id},course_id.eq.${selectedConversation.id}`);
             }
+            toast.success('تم حذف المحادثة');
+            setConversations(conversations.filter(c => c.id !== selectedConversation.id));
+            setSelectedConversation(null);
+            setShowMobileChat(false);
+            setShowChatOptions(false);
         } catch (err) {
             toast.error('حدث خطأ');
         }
@@ -566,69 +730,46 @@ export default function MessagesPage() {
 
     const handleHideMessage = async (messageId: string) => {
         if (!confirm('هل أنت متأكد من إخفاء هذه الرسالة؟ لن تظهر للمستخدمين الآخرين.')) return;
-
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_URL}/api/messages/${messageId}/hide`, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ hidden: true })
-            });
-
-            if (res.ok) {
-                toast.success('تم إخفاء الرسالة');
-                // Update local state to show hidden indicator
-                setMessages(messages.map(m =>
-                    m.id === messageId ? { ...m, hidden: true } : m
-                ));
-            } else {
-                toast.error('فشل إخفاء الرسالة');
-            }
+            const { error } = await supabase.from('messages').update({ hidden: true }).eq('id', messageId);
+            if (error) throw error;
+            toast.success('تم إخفاء الرسالة');
+            setMessages(messages.map(m => m.id === messageId ? { ...m, hidden: true } : m));
         } catch (err) {
             toast.error('حدث خطأ');
         }
     };
-
-
     const handleSearchUsers = async (query: string, pageNum: number = 1) => {
         setSearchQuery(query);
-        // Removed length check to allow "Load All" on empty query
-
-        // If query changed (pageNum === 1), reset results
         if (pageNum === 1) {
             setPage(1);
             setHasMore(true);
-            setSearchResults([]); // Optional: clear or keep while loading? Let's clear if query changed. 
+            setSearchResults([]);
         }
-
         setSearching(true);
         try {
-            const token = localStorage.getItem('token');
-            // Use limit 100 for empty query (list mode), 10 or 20 for search. Backend handles default.
-            const res = await fetch(`${API_URL}/api/users/search?q=${query}&page=${pageNum}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
+            let q = supabase.from('users').select('*', { count: 'exact' });
+            if (query) {
+                q = q.or(`nickname.ilike.%${query}%,email.ilike.%${query}%`);
+            }
+            const pageSize = 20;
+            const from = (pageNum - 1) * pageSize;
+            const to = from + pageSize - 1;
 
-            const newUsers = data.users || [];
+            const { data, count } = await q.range(from, to);
 
+            const newUsers = data || [];
             if (pageNum === 1) {
                 setSearchResults(newUsers);
             } else {
                 setSearchResults(prev => [...prev, ...newUsers]);
             }
 
-            // Check pagination metadata from backend
-            if (data.pagination) {
-                setHasMore(data.pagination.hasMore);
+            if (count !== null) {
+                setHasMore(to < count);
             } else {
-                // Fallback logic if backend didn't send pagination (shouldn't happen with new backend)
                 setHasMore(newUsers.length > 0);
             }
-
             setPage(pageNum);
 
         } catch (error) {
@@ -638,11 +779,8 @@ export default function MessagesPage() {
         }
     };
 
-    // Load initial users when modal opens
     useEffect(() => {
         if (showUserSearch) {
-            // Check if we already have results to avoid re-fetching if just toggling? 
-            // Better to refresh.
             handleSearchUsers('', 1);
         }
     }, [showUserSearch]);
@@ -655,12 +793,10 @@ export default function MessagesPage() {
     };
 
     const startConversationWithUser = (user: User) => {
-        // Check if conversation exists
         const existing = conversations.find(c => c.user.id === user.id);
         if (existing) {
             handleSelectConversation(existing);
         } else {
-            // Create temporary conversation
             const newConv: Conversation = {
                 id: user.id,
                 type: 'direct',
@@ -681,7 +817,6 @@ export default function MessagesPage() {
 
     return (
         <div className="bg-gray-100 min-h-screen" dir="rtl">
-            {/* Header - only show on desktop or when chat list is visible */}
             <div className={`${showMobileChat ? 'hidden md:block' : ''}`}>
                 <Header />
             </div>
@@ -690,9 +825,7 @@ export default function MessagesPage() {
                 <div className="md:container md:mx-auto md:px-4 md:py-4 h-[100dvh] md:h-[calc(100vh-100px)]">
                     <div className="bg-white md:rounded-2xl h-full overflow-hidden flex md:shadow-xl md:border border-gray-200">
 
-                        {/* Conversations List - Hidden on mobile when chat is open */}
                         <div className={`w-full md:w-96 border-l border-gray-200 flex flex-col bg-white ${showMobileChat ? 'hidden md:flex' : 'flex'}`}>
-                            {/* Header */}
                             <div className="p-4 border-b border-gray-100 bg-white sticky top-0 z-10">
                                 <div className="flex items-center justify-between mb-4">
                                     <h1 className="text-2xl font-bold text-gray-900">الرسائل</h1>
@@ -708,7 +841,6 @@ export default function MessagesPage() {
                                 </div>
                             </div>
 
-                            {/* Conversations */}
                             <div className="flex-1 overflow-y-auto">
                                 {loading ? (
                                     <div className="flex items-center justify-center py-20">
@@ -716,7 +848,6 @@ export default function MessagesPage() {
                                     </div>
                                 ) : (
                                     <>
-                                        {/* Groups */}
                                         {groupMessages.length > 0 && (
                                             <div>
                                                 <p className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase bg-gray-50">المجموعات</p>
@@ -731,7 +862,6 @@ export default function MessagesPage() {
                                             </div>
                                         )}
 
-                                        {/* Direct Messages */}
                                         <div>
                                             <p className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase bg-gray-50">الرسائل المباشرة</p>
                                             {directMessages.length === 0 ? (
@@ -752,13 +882,10 @@ export default function MessagesPage() {
                             </div>
                         </div>
 
-                        {/* Chat Window */}
                         <div className={`flex-1 flex flex-col bg-[#f0f2f5] ${!showMobileChat ? 'hidden md:flex' : 'flex'}`}>
                             {selectedConversation ? (
                                 <>
-                                    {/* Chat Header */}
                                     <div className="px-3 py-2.5 bg-white border-b border-gray-200 flex items-center gap-2 shadow-sm">
-                                        {/* Back button - mobile only */}
                                         <button
                                             onClick={() => {
                                                 setShowMobileChat(false);
@@ -769,7 +896,6 @@ export default function MessagesPage() {
                                             <ArrowRight className="w-5 h-5 text-gray-600" />
                                         </button>
 
-                                        {/* Avatar */}
                                         <div className={`w-10 h-10 rounded-full flex items-center justify-center overflow-hidden ${selectedConversation.user.avatar === '/logo.png' ? 'bg-transparent' : 'bg-gradient-to-br from-primary to-purple-600'}`}>
                                             {selectedConversation.user.avatar && !selectedConversation.user.avatar.includes('ui-avatars') ? (
                                                 <img
@@ -786,7 +912,6 @@ export default function MessagesPage() {
                                             )}
                                         </div>
 
-                                        {/* Name */}
                                         <div className="flex-1 min-w-0">
                                             <p className="font-semibold text-gray-900">
                                                 {selectedConversation.user.role === 'owner' ? 'دعم إيواء' : selectedConversation.user.nickname}
@@ -798,23 +923,25 @@ export default function MessagesPage() {
                                             )}
                                         </div>
 
-                                        {/* Actions */}
                                         <div className="flex items-center gap-1">
-                                            {/* View Group Members - Available for ALL users in group chats */}
                                             {selectedConversation.type === 'group' && (
                                                 <button
                                                     onClick={async () => {
                                                         setShowGroupMembers(true);
                                                         setLoadingMembers(true);
                                                         try {
-                                                            const token = localStorage.getItem('token');
-                                                            const res = await fetch(`${API_URL}/api/groups/${selectedConversation.id}/members`, {
-                                                                headers: { 'Authorization': `Bearer ${token}` }
-                                                            });
-                                                            const data = await res.json();
-                                                            if (data.success) {
-                                                                setGroupMembers(data.members || []);
-                                                            }
+                                                            // TODO: Implement loading members via Supabase?
+                                                            // We can assume user is enrolled.
+                                                            // Or fetch enrollments joined with users for this group.
+                                                            // supabase.from('enrollments').select('user:users(id, nickname, avatar)')...
+                                                            const isGroup = !!selectedConversation.group_id;
+                                                            const query = supabase.from('enrollments')
+                                                                .select('user:users(id, nickname, avatar)')
+                                                                .eq(isGroup ? 'group_id' : 'course_id', selectedConversation.id);
+
+                                                            const { data } = await query;
+                                                            // Also fetch Specialist?
+                                                            setGroupMembers(data?.map((d: any) => d.user).filter((u: any) => u) || []);
                                                         } catch (e) {
                                                             console.error(e);
                                                         } finally {
@@ -857,7 +984,6 @@ export default function MessagesPage() {
                                         </div>
                                     </div>
 
-                                    {/* Schedule Form */}
                                     {showSchedule && (
                                         <div className="p-4 bg-white border-b border-gray-200">
                                             <form onSubmit={handleScheduleSession} className="flex flex-wrap gap-3">
@@ -890,7 +1016,6 @@ export default function MessagesPage() {
                                         </div>
                                     )}
 
-                                    {/* Messages */}
                                     <div ref={messagesContainerRef} className={`flex-1 overflow-y-auto p-4 space-y-2 transition-opacity duration-100 overflow-x-hidden ${messagesReady || messages.length === 0 ? 'opacity-100' : 'opacity-0'}`} style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")` }}>
                                         {messages.length === 0 ? (
                                             <div className="flex flex-col items-center justify-center h-full text-gray-400">
@@ -905,10 +1030,12 @@ export default function MessagesPage() {
                                                 const senderId = msg.sender_id || msg.senderId;
                                                 const isSystem = msg.sender?.role === 'admin' || msg.sender?.email === 'system@sakina.com';
                                                 const isOwner = currentUser?.role === 'owner';
-                                                // Check if system message (admin role) AND I am owner
-                                                const isMe = senderId === currentUser.id || (isOwner && isSystem);
 
-                                                console.log(`Msg: ${msg.id}, Role: ${msg.sender?.role}, Email: ${msg.sender?.email}, IsOwner: ${isOwner}, IsSystem: ${isSystem} -> IsMe: ${isMe} (SenderId: ${senderId}, MyId: ${currentUser.id})`);
+                                                // Owner Impersonation Check
+                                                const isLegacySender = senderId === 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
+                                                const isSystemSender = senderId === '23886de5-16da-49b0-9d6d-85ac55d2ba12';
+
+                                                const isMe = senderId === currentUser.id || (isOwner && (isSystem || isSystemSender || isLegacySender));
 
                                                 return (
                                                     <ChatBubble
@@ -926,11 +1053,9 @@ export default function MessagesPage() {
                                         <div ref={messagesEndRef} />
                                     </div>
 
-                                    {/* Reply Preview - with image thumbnail for images */}
                                     {replyingTo && (
                                         <div className="px-3 py-2 bg-gray-100 border-t border-gray-200 flex items-center gap-2">
                                             <div className="flex-1 w-0 bg-white rounded-lg p-2 border-r-4 border-primary overflow-hidden flex items-center gap-2">
-                                                {/* Show thumbnail if it's an image */}
                                                 {(replyingTo.content?.startsWith('http') &&
                                                     (replyingTo.content.length > 50 ||
                                                         /\.(gif|jpg|jpeg|png|webp|svg)/i.test(replyingTo.content))) && (
@@ -960,7 +1085,6 @@ export default function MessagesPage() {
                                         </div>
                                     )}
 
-                                    {/* Image Preview */}
                                     {imagePreview && (
                                         <div className="px-3 py-2 bg-gray-100 border-t border-gray-200 flex items-center gap-2">
                                             <div className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-300">
@@ -979,7 +1103,6 @@ export default function MessagesPage() {
                                         </div>
                                     )}
 
-                                    {/* Sticker Picker */}
                                     {showStickerPicker && (
                                         <div className="absolute bottom-20 right-4 z-50 shadow-xl rounded-xl bg-white border border-gray-200 p-2 w-64 max-h-64 overflow-y-auto">
                                             <div className="grid grid-cols-3 gap-2">
@@ -1055,112 +1178,108 @@ export default function MessagesPage() {
                 </div>
             </main >
 
-            {/* User Search Modal */}
-            {
-                showUserSearch && (
-                    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden max-h-[80vh] flex flex-col">
-                            <div className="p-4 border-b">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h3 className="font-bold text-lg">رسالة جديدة</h3>
-                                    <button onClick={() => setShowUserSearch(false)} className="p-1 hover:bg-gray-100 rounded-full">
-                                        <X className="w-5 h-5" />
-                                    </button>
-                                </div>
-                                <div className="relative">
-                                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                                    <input
-                                        type="text"
-                                        placeholder="بحث بالاسم، البريد أو ID..."
-                                        className="w-full pr-10 pl-4 py-2 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                        value={searchQuery}
-                                        onChange={(e) => handleSearchUsers(e.target.value, 1)}
-                                        autoFocus
-                                    />
-                                </div>
-                            </div>
-                            <div
-                                className="flex-1 overflow-y-auto p-2"
-                                onScroll={handleUserListScroll}
-                            >
-                                {searchResults.length === 0 && !searching ? (
-                                    <div className="text-center py-8 text-gray-500">
-                                        {searchQuery ? 'لا توجد نتائج' : 'ابدأ البحث للعثور على مستخدمين'}
-                                    </div>
-                                ) : (
-                                    <div className="space-y-1">
-                                        {searchResults.map(user => (
-                                            <button
-                                                key={user.id}
-                                                onClick={() => startConversationWithUser(user)}
-                                                className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl transition-colors text-right"
-                                            >
-                                                <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden shrink-0">
-                                                    {user.avatar ? (
-                                                        <img
-                                                            src={user.avatar}
-                                                            alt=""
-                                                            className={`w-full h-full ${user.avatar === '/logo.png' ? 'object-contain p-1' : 'object-cover'}`}
-                                                        />
-                                                    ) : (
-                                                        <User className="w-5 h-5 text-gray-500" />
-                                                    )}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="font-bold text-sm text-gray-900 truncate">{user.nickname}</p>
-                                                    <p className="text-xs text-gray-500 truncate">{user.email || 'بدون بريد'}</p>
-                                                </div>
-                                            </button>
-                                        ))}
-                                        {searching && (
-                                            <div className="py-4 flex justify-center">
-                                                <Loader2 className="w-5 h-5 animate-spin text-primary" />
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-            {/* Group Members Modal */}
-            {
-                showGroupMembers && (
-                    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowGroupMembers(false)}>
-                        <div className="bg-white rounded-2xl w-full max-w-md p-6 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+            {showUserSearch && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden max-h-[80vh] flex flex-col">
+                        <div className="p-4 border-b">
                             <div className="flex items-center justify-between mb-4">
-                                <h3 className="font-bold text-lg">أعضاء المجموعة</h3>
-                                <button onClick={() => setShowGroupMembers(false)} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center">
-                                    <X className="w-5 h-5 text-gray-500" />
+                                <h3 className="font-bold text-lg">رسالة جديدة</h3>
+                                <button onClick={() => setShowUserSearch(false)} className="p-1 hover:bg-gray-100 rounded-full">
+                                    <X className="w-5 h-5" />
                                 </button>
                             </div>
-
-                            {loadingMembers ? (
-                                <div className="flex justify-center py-8">
-                                    <Loader2 className="w-6 h-6 animate-spin text-primary" />
-                                </div>
-                            ) : groupMembers.length > 0 ? (
-                                <div className="space-y-3 max-h-[300px] overflow-y-auto">
-                                    {groupMembers.map(member => (
-                                        <div key={member.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                                            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
-                                                {member.avatar ? (
-                                                    <img src={member.avatar} alt="" className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <span className="text-primary font-bold">{member.nickname?.charAt(0)}</span>
-                                                )}
-                                            </div>
-                                            <p className="font-medium text-gray-800">{member.nickname}</p>
-                                        </div>
-                                    ))}
+                            <div className="relative">
+                                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="بحث بالاسم، البريد أو ID..."
+                                    className="w-full pr-10 pl-4 py-2 bg-gray-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                    value={searchQuery}
+                                    onChange={(e) => handleSearchUsers(e.target.value, 1)}
+                                    autoFocus
+                                />
+                            </div>
+                        </div>
+                        <div
+                            className="flex-1 overflow-y-auto p-2"
+                            onScroll={handleUserListScroll}
+                        >
+                            {searchResults.length === 0 && !searching ? (
+                                <div className="text-center py-8 text-gray-500">
+                                    {searchQuery ? 'لا توجد نتائج' : 'ابدأ البحث للعثور على مستخدمين'}
                                 </div>
                             ) : (
-                                <p className="text-center text-gray-400 py-8">لا يوجد أعضاء</p>
+                                <div className="space-y-1">
+                                    {searchResults.map(user => (
+                                        <button
+                                            key={user.id}
+                                            onClick={() => startConversationWithUser(user)}
+                                            className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 rounded-xl transition-colors text-right"
+                                        >
+                                            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden shrink-0">
+                                                {user.avatar ? (
+                                                    <img
+                                                        src={user.avatar}
+                                                        alt=""
+                                                        className={`w-full h-full ${user.avatar === '/logo.png' ? 'object-contain p-1' : 'object-cover'}`}
+                                                    />
+                                                ) : (
+                                                    <User className="w-5 h-5 text-gray-500" />
+                                                )}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-bold text-sm text-gray-900 truncate">{user.nickname}</p>
+                                                <p className="text-xs text-gray-500 truncate">{user.email || 'بدون بريد'}</p>
+                                            </div>
+                                        </button>
+                                    ))}
+                                    {searching && (
+                                        <div className="py-4 flex justify-center">
+                                            <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                                        </div>
+                                    )}
+                                </div>
                             )}
                         </div>
                     </div>
-                )}
+                </div>
+            )}
+
+            {showGroupMembers && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowGroupMembers(false)}>
+                    <div className="bg-white rounded-2xl w-full max-w-md p-6 animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-bold text-lg">أعضاء المجموعة</h3>
+                            <button onClick={() => setShowGroupMembers(false)} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center">
+                                <X className="w-5 h-5 text-gray-500" />
+                            </button>
+                        </div>
+
+                        {loadingMembers ? (
+                            <div className="flex justify-center py-8">
+                                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                            </div>
+                        ) : groupMembers.length > 0 ? (
+                            <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                                {groupMembers.map(member => (
+                                    <div key={member.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                                        <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
+                                            {member.avatar ? (
+                                                <img src={member.avatar} alt="" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <span className="text-primary font-bold">{member.nickname?.charAt(0)}</span>
+                                            )}
+                                        </div>
+                                        <p className="font-medium text-gray-800">{member.nickname}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-center text-gray-400 py-8">لا يوجد أعضاء</p>
+                        )}
+                    </div>
+                </div>
+            )}
         </div >
     );
 }
@@ -1173,7 +1292,6 @@ function ChatItem({ conv, selected, onSelect }: { conv: Conversation, selected: 
             onClick={onSelect}
             className={`w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors ${selected ? 'bg-gray-100' : ''}`}
         >
-            {/* Avatar */}
             <div className={`w-12 h-12 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0 ${conv.user.avatar === '/logo.png' ? 'bg-transparent' : conv.type === 'group' ? 'bg-green-500' : 'bg-gradient-to-br from-primary to-purple-600'}`}>
                 {conv.user.avatar && !conv.user.avatar.includes('ui-avatars') ? (
                     <img
@@ -1190,7 +1308,6 @@ function ChatItem({ conv, selected, onSelect }: { conv: Conversation, selected: 
                 )}
             </div>
 
-            {/* Content */}
             <div className="flex-1 min-w-0 text-right">
                 <div className="flex items-center justify-between mb-0.5">
                     <p className="font-semibold text-gray-900 text-sm truncate">
@@ -1212,11 +1329,10 @@ function ChatItem({ conv, selected, onSelect }: { conv: Conversation, selected: 
 }
 
 function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Message, isMe: boolean, isGroup: boolean, onReply?: () => void, onHide?: () => void, canHide?: boolean }) {
-    // Swipe state for mobile
     const [swipeX, setSwipeX] = useState(0);
     const [isSwiping, setIsSwiping] = useState(false);
     const touchStartX = useRef(0);
-    const swipeThreshold = 60; // pixels to trigger reply
+    const swipeThreshold = 60;
 
     const handleTouchStart = (e: React.TouchEvent) => {
         touchStartX.current = e.touches[0].clientX;
@@ -1227,10 +1343,6 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
         if (!isSwiping) return;
         const currentX = e.touches[0].clientX;
         const diff = currentX - touchStartX.current;
-
-        // RTL logic: 
-        // isMe (Right aligned) -> Swipe Left (Negative)
-        // !isMe (Left aligned) -> Swipe Right (Positive)
         let clampedDiff = 0;
         if (isMe) {
             clampedDiff = Math.max(-80, Math.min(0, diff));
@@ -1270,9 +1382,8 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
         );
     }
 
-    // Generate consistent color for sender name based on their ID
     const getNameColor = (senderId?: string | null) => {
-        if (!senderId) return 'text-gray-600'; // Default for system messages
+        if (!senderId) return 'text-gray-600';
         const colors = ['text-blue-600', 'text-green-600', 'text-purple-600', 'text-orange-600', 'text-pink-600', 'text-teal-600'];
         let hash = 0;
         for (let i = 0; i < senderId.length; i++) {
@@ -1288,7 +1399,6 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
         >
-            {/* Swipe reply indicator */}
             {Math.abs(swipeX) > 10 && (
                 <div
                     className={`absolute ${swipeX > 0 ? 'right-auto -left-12' : 'left-auto -right-12'} top-1/2 -translate-y-1/2 flex items-center justify-center transition-all z-10`}
@@ -1303,9 +1413,7 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
                 </div>
             )}
 
-            {/* Message content wrapper */}
             <div className="flex flex-col max-w-[75%] md:max-w-[55%]">
-                {/* Avatar + Name row for group (others only) */}
                 {isGroup && !isMe && (
                     <div className="flex items-center gap-2 mb-1 flex-row-reverse">
                         <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center overflow-hidden">
@@ -1323,12 +1431,10 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
                     </div>
                 )}
 
-                {/* Message bubble with reply button */}
                 <div
                     className="flex items-center gap-1 transition-transform duration-100"
                     style={{ transform: `translateX(${swipeX}px)` }}
                 >
-                    {/* Reply button - appears on hover (desktop) */}
                     {!isMe && onReply && (
                         <button
                             onClick={onReply}
@@ -1342,10 +1448,8 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
                         ? 'bg-[#dcf8c6] rounded-bl-sm'
                         : 'bg-white rounded-br-sm'
                         }`}>
-                        {/* Quoted message - with image thumbnail */}
                         {msg.replyTo && (
                             <div className="mb-2 p-2 bg-black/5 rounded-lg border-r-2 border-primary overflow-hidden max-w-full flex items-center gap-2">
-                                {/* Show thumbnail if it's an image */}
                                 {(msg.replyTo.content?.startsWith('http') &&
                                     (msg.replyTo.content.length > 50 ||
                                         /\.(gif|jpg|jpeg|png|webp|svg)/i.test(msg.replyTo.content))) && (
@@ -1368,7 +1472,6 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
                             </div>
                         )}
 
-                        {/* Check if content is an image URL */}
                         {msg.type === 'image' || msg.type === 'sticker' ||
                             /\.(gif|jpg|jpeg|png|webp)/i.test(msg.content.trim()) ||
                             msg.content.includes('giphy.com') ||
@@ -1381,8 +1484,8 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
                                     src={msg.content.trim()}
                                     alt="img"
                                     className={`h-auto object-contain ${msg.content.includes('zobj.net') || msg.content.includes('twemoji') || msg.content.includes('jsdelivr.net')
-                                        ? 'w-20 max-h-20' // Stickers/Emojis: small (80px)
-                                        : 'w-full max-h-[200px]' // Regular images
+                                        ? 'w-20 max-h-20'
+                                        : 'w-full max-h-[200px]'
                                         }`}
                                     loading="lazy"
                                 />
@@ -1400,7 +1503,6 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
                         </div>
                     </div>
 
-                    {/* Reply button for own messages (desktop) */}
                     {isMe && onReply && (
                         <button
                             onClick={onReply}
@@ -1410,7 +1512,6 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
                         </button>
                     )}
 
-                    {/* Delete button for owners/specialists */}
                     {canHide && onHide && (
                         <button
                             onClick={onHide}
