@@ -210,7 +210,15 @@ export default function MessagesPage() {
 
                         if (isRelevantToSelected) {
                             setMessages(prev => {
+                                // Skip if exact ID already exists
                                 if (prev.some(m => m.id === newMessage.id)) return prev;
+
+                                // Check for optimistic message to replace
+                                const optimisticIndex = prev.findIndex(m =>
+                                    m.id.startsWith('optimistic_') &&
+                                    m.content === newMessage.content &&
+                                    m.sender_id === newMessage.sender_id
+                                );
 
                                 let sender = newMessage.sender; // Usually null in payload
                                 if (!sender && newMessage.sender_id === selectedConversation.user.id) {
@@ -220,6 +228,19 @@ export default function MessagesPage() {
                                 // If sender is current user, use currentUser info
                                 if (!sender && newMessage.sender_id === currentUser.id) {
                                     sender = { id: currentUser.id, nickname: currentUser.nickname, avatar: currentUser.avatar };
+                                }
+
+                                // Build replyTo from existing messages if reply_to_id exists
+                                let replyTo = null;
+                                if (newMessage.reply_to_id) {
+                                    const originalMsg = prev.find(m => m.id === newMessage.reply_to_id);
+                                    if (originalMsg) {
+                                        replyTo = {
+                                            id: originalMsg.id,
+                                            content: originalMsg.content,
+                                            senderName: originalMsg.senderName || originalMsg.sender?.nickname || 'مستخدم'
+                                        };
+                                    }
                                 }
 
                                 const msgObj: Message = {
@@ -232,8 +253,17 @@ export default function MessagesPage() {
                                     createdAt: newMessage.created_at,
                                     read: newMessage.read,
                                     senderName: sender?.nickname,
-                                    senderAvatar: sender?.avatar
+                                    senderAvatar: sender?.avatar,
+                                    replyTo: replyTo
                                 };
+
+                                // Replace optimistic message if found
+                                if (optimisticIndex !== -1) {
+                                    console.log('📨 Replacing optimistic message with real:', msgObj.id);
+                                    const updated = [...prev];
+                                    updated[optimisticIndex] = msgObj;
+                                    return updated;
+                                }
 
                                 console.log('📨 Adding message to state:', msgObj.id);
                                 return [...prev, msgObj];
@@ -691,22 +721,7 @@ export default function MessagesPage() {
                 throw new Error(errorData.error || 'فشل الإرسال');
             }
 
-            // Optimistic Update
-            const newMsgObj: Message = {
-                id: 'optimistic_' + Date.now(),
-                content: newMessage,
-                sender_id: currentUser.id, // Ensure sender is me
-                createdAt: new Date().toISOString(),
-                read: false,
-                type: 'text',
-                sender: currentUser,
-                replyTo: replyingTo ? {
-                    id: replyingTo.id,
-                    content: replyingTo.content,
-                    senderName: replyingTo.senderName || replyingTo.sender?.nickname || 'مستخدم'
-                } : undefined
-            };
-            setMessages(prev => [newMsgObj, ...prev]);
+            // Message will arrive via Realtime subscription
 
             setNewMessage("");
             setReplyingTo(null);
@@ -1191,7 +1206,7 @@ export default function MessagesPage() {
             </div>
 
             <main className={`${showMobileChat ? '' : 'pt-20'} md:pt-20`}>
-                <div className="md:container md:mx-auto md:px-4 md:py-4 h-[100dvh] md:h-[calc(100vh-100px)]">
+                <div className="md:container md:mx-auto md:px-4 md:py-4 h-[100dvh] md:h-[calc(100vh-80px)]">
                     <div className="bg-white md:rounded-2xl h-full overflow-hidden flex md:shadow-xl md:border border-gray-200">
 
                         <div className={`w-full md:w-96 border-l border-gray-200 flex flex-col bg-white ${showMobileChat ? 'hidden md:flex' : 'flex'}`}>
@@ -1210,7 +1225,7 @@ export default function MessagesPage() {
                                 </div>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+                            <div className="flex-1 overflow-y-auto overscroll-contain pb-24" style={{ WebkitOverflowScrolling: 'touch' }}>
                                 {loading ? (
                                     <div className="flex items-center justify-center py-20">
                                         <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -1503,7 +1518,7 @@ export default function MessagesPage() {
                                         </div>
                                     )}
 
-                                    <div className="p-3 pb-2 bg-white border-t border-gray-200 relative shrink-0 safe-area-bottom">
+                                    <div className="px-3 pt-3 pb-1 bg-white border-t border-gray-200 relative shrink-0 safe-area-bottom">
                                         <form onSubmit={selectedImage ? (e) => { e.preventDefault(); handleSendImage(); } : handleSendMessage} className="flex items-center gap-2 overflow-hidden">
                                             <button
                                                 type="button"
@@ -1778,6 +1793,7 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
 
     return (
         <div
+            id={`message-${msg.id}`}
             className={`flex w-full group relative mb-2 ${isMe ? 'justify-start' : 'justify-end'}`}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
@@ -1899,7 +1915,17 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
                                     <div className="px-3 py-1.5">
                                         {/* Reply Section - Compact Professional */}
                                         {msg.replyTo && (
-                                            <div className={`mb-1 p-1.5 rounded-lg ${isMe ? 'bg-white/10' : 'bg-gray-50'} border-r-[2.5px] ${isMe ? 'border-white/40' : 'border-[#3478F6]'}`}>
+                                            <div
+                                                onClick={() => {
+                                                    const target = document.getElementById(`message-${msg.replyTo?.id}`);
+                                                    if (target) {
+                                                        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                        target.classList.add('bg-blue-50/50');
+                                                        setTimeout(() => target.classList.remove('bg-blue-50/50'), 1000);
+                                                    }
+                                                }}
+                                                className={`mb-1 p-1.5 rounded-lg ${isMe ? 'bg-white/10' : 'bg-gray-50'} border-r-[2.5px] ${isMe ? 'border-white/40' : 'border-[#3478F6]'} cursor-pointer active:scale-95 transition-transform`}
+                                            >
                                                 <div className="flex items-center gap-1.5">
                                                     <div className={`w-6 h-6 rounded-md ${isMe ? 'bg-white/20' : 'bg-[#3478F6]/10'} flex items-center justify-center shrink-0`}>
                                                         <Reply className={`w-3 h-3 ${isMe ? 'text-white/70' : 'text-[#3478F6]'}`} />

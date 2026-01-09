@@ -96,6 +96,33 @@ router.post('/register', async (req, res) => {
 
         // ... (Guest & Welcome Message logic remains) ...
 
+
+        // Send Welcome Message from System
+        try {
+            const { data: systemUser } = await supabase
+                .from('users')
+                .select('id')
+                .eq('email', 'system@iwaa.com')
+                .single();
+
+            if (systemUser) {
+                const welcomeMessage = "مرحباً بك في منصة إيواء! 🌟\nنحن هنا لدعمك ومساعدتك. يمكنك بدء محادثة مع الأخصائيين أو الانضمام للمجموعات الداعمة.\nلا تتردد في طرح أي سؤال.";
+
+                await supabase.from('messages').insert({
+                    id: uuidv4(),
+                    sender_id: systemUser.id,
+                    receiver_id: newUser.id,
+                    content: welcomeMessage,
+                    type: 'text',
+                    created_at: new Date().toISOString(),
+                    read: false
+                });
+            }
+        } catch (msgError) {
+            console.error('Welcome message error:', msgError);
+            // Don't fail registration if welcome message fails
+        }
+
         // Generate JWT for Auto-Login (Restored)
         const token = jwt.sign(
             { userId: newUser.id, email: newUser.email, role: newUser.role || 'user' },
