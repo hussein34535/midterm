@@ -141,7 +141,7 @@ export default function RegisterPage() {
                                 <input
                                     type="text"
                                     placeholder="مثال: نجمة الصباح"
-                                    className="input-mobile pr-14"
+                                    className="input-mobile pr-16"
                                     value={formData.nickname}
                                     onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
                                     required
