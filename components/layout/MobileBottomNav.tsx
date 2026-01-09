@@ -101,7 +101,7 @@ export default function MobileBottomNav() {
         window.addEventListener('chatClosed', handleChatClose);
 
         return () => {
-            realtimeCleanup?.();
+            socket?.disconnect();
             window.removeEventListener('unreadCountUpdated', handleUnreadUpdate as EventListener);
             window.removeEventListener('user-login', handleLogin);
             window.removeEventListener('user-logout', handleLogout);
