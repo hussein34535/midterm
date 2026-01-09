@@ -696,8 +696,7 @@ export default function MessagesPage() {
                 id: 'optimistic_' + Date.now(),
                 content: newMessage,
                 sender_id: currentUser.id, // Ensure sender is me
-                receiver_id: selectedConversation.user.id,
-                created_at: new Date().toISOString(),
+                createdAt: new Date().toISOString(),
                 read: false,
                 type: 'text',
                 sender: currentUser,
