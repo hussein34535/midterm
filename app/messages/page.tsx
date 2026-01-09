@@ -760,12 +760,7 @@ export default function MessagesPage() {
             }
         }
 
-        console.log('🔍 Fetch Stickers - Resolved User ID:', userId);
-
-        if (!userId) {
-            console.warn('⚠️ No User ID found for fetching stickers.');
-            return;
-        }
+        if (!userId) return;
 
         const { data, error } = await supabase
             .from('user_stickers')
@@ -774,9 +769,8 @@ export default function MessagesPage() {
             .order('created_at', { ascending: false });
 
         if (error) {
-            console.error('❌ Error fetching stickers from DB:', error);
+            console.error('Error fetching stickers:', error);
         } else {
-            console.log('✅ Fetched Stickers Data:', data);
             setUserStickers(data || []);
         }
     };
@@ -1004,7 +998,8 @@ export default function MessagesPage() {
                     content: stickerUrl,
                     type: selectedConversation.type,
                     msgType: 'sticker',
-                    replyToId: replyingTo?.id || null
+                    replyToId: replyingTo?.id || null,
+                    metadata: { isSticker: true } // Mark as sticker for frontend rendering
                 })
             });
 
@@ -1160,11 +1155,20 @@ export default function MessagesPage() {
         setSearchResults([]);
     };
 
+    // Scroll to bottom when messages change
+    useEffect(() => {
+        // Use setTimeout to ensure DOM is ready and layout is calculated
+        const timeoutId = setTimeout(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' });
+        }, 100);
+        return () => clearTimeout(timeoutId);
+    }, [messages, selectedConversation]);
+
     const directMessages = conversations.filter(c => c.type === 'direct');
     const groupMessages = conversations.filter(c => c.type === 'group');
 
     return (
-        <div className="bg-gray-100 min-h-screen" dir="rtl">
+        <div className="bg-gray-100 min-h-screen" dir="rtl" suppressHydrationWarning>
             <div className={`${showMobileChat ? 'hidden md:block' : ''}`}>
                 <Header />
             </div>
@@ -1805,7 +1809,7 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
                             <img
                                 src={msg.content.trim()}
                                 alt="sticker"
-                                className="w-32 h-32 object-contain cursor-pointer hover:scale-105 transition-transform"
+                                className="w-24 h-24 object-contain cursor-pointer hover:scale-105 transition-transform"
                                 onClick={() => window.open(msg.content.trim(), '_blank')}
                             />
                             <div className="flex items-center gap-1 mt-1 px-1">

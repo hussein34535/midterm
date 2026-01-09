@@ -11,10 +11,28 @@ interface AvatarSelectorProps {
 
 const PRESET_AVATARS = [
     // Custom 3D Pixar-style avatars
-    "/avatars/avatar1.png",
-    "/avatars/avatar2.png",
-    "/avatars/avatar3.png",
-    "/avatars/avatar4.png"
+    '/avatars/avatar1.png',
+    '/avatars/avatar2.png',
+    '/avatars/avatar3.png',
+    '/avatars/avatar4.png',
+    '/avatars/avatar5.png',
+    '/avatars/avatar6.png',
+    '/avatars/avatar7.png',
+    '/avatars/avatar8.png',
+    '/avatars/avatar9.png',
+    '/avatars/avatar10.png',
+    '/avatars/avatar11.png',
+    '/avatars/avatar12.png',
+    '/avatars/avatar13.png',
+    '/avatars/avatar14.png',
+    '/avatars/avatar15.png',
+    '/avatars/avatar16.png',
+    '/avatars/avatar17.png',
+    '/avatars/avatar18.png',
+    '/avatars/avatar19.png',
+    '/avatars/avatar20.png',
+    '/avatars/avatar21.png',
+    '/avatars/avatar22.png',
 ];
 
 export default function AvatarSelector({ onSelect, selectedAvatar }: AvatarSelectorProps) {

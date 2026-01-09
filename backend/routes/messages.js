@@ -733,7 +733,9 @@ router.post('/:id', authMiddleware, async (req, res) => {
             content: content.trim(),
             read: false,
             created_at: new Date().toISOString(),
-            reply_to_id: replyToId || null
+            created_at: new Date().toISOString(),
+            reply_to_id: replyToId || null,
+            metadata: req.body.metadata || {} // Include metadata from request
             // type is handled by DB default
         };
 
