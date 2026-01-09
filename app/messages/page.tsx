@@ -691,6 +691,24 @@ export default function MessagesPage() {
                 throw new Error(errorData.error || 'فشل الإرسال');
             }
 
+            // Optimistic Update
+            const newMsgObj: Message = {
+                id: 'optimistic_' + Date.now(),
+                content: newMessage,
+                sender_id: currentUser.id, // Ensure sender is me
+                receiver_id: selectedConversation.user.id,
+                created_at: new Date().toISOString(),
+                read: false,
+                type: 'text',
+                sender: currentUser,
+                replyTo: replyingTo ? {
+                    id: replyingTo.id,
+                    content: replyingTo.content,
+                    senderName: replyingTo.senderName || replyingTo.sender?.nickname || 'مستخدم'
+                } : undefined
+            };
+            setMessages(prev => [newMsgObj, ...prev]);
+
             setNewMessage("");
             setReplyingTo(null);
             setShowStickerPicker(false);
@@ -1193,7 +1211,7 @@ export default function MessagesPage() {
                                 </div>
                             </div>
 
-                            <div className="flex-1 overflow-y-auto">
+                            <div className="flex-1 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
                                 {loading ? (
                                     <div className="flex items-center justify-center py-20">
                                         <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -1234,7 +1252,7 @@ export default function MessagesPage() {
                             </div>
                         </div>
 
-                        <div className={`flex-1 flex flex-col bg-[#F3F4F6] ${!showMobileChat ? 'hidden md:flex' : 'fixed top-0 left-0 right-0 bottom-4 z-[10000] flex md:relative md:inset-auto md:z-auto md:bottom-auto'}`}>
+                        <div className={`flex-1 flex flex-col bg-[#F3F4F6] ${!showMobileChat ? 'hidden md:flex' : 'fixed top-0 left-0 right-0 bottom-0 z-[10000] flex md:relative md:inset-auto md:z-auto md:bottom-auto'}`}>
                             {selectedConversation ? (
                                 <>
                                     <div className="px-3 py-2.5 bg-primary/10 border-b border-primary/20 flex items-center gap-2">
@@ -1486,7 +1504,7 @@ export default function MessagesPage() {
                                         </div>
                                     )}
 
-                                    <div className="p-3 pb-6 bg-white border-t border-gray-200 relative shrink-0 safe-area-bottom">
+                                    <div className="p-3 pb-2 bg-white border-t border-gray-200 relative shrink-0 safe-area-bottom">
                                         <form onSubmit={selectedImage ? (e) => { e.preventDefault(); handleSendImage(); } : handleSendMessage} className="flex items-center gap-2 overflow-hidden">
                                             <button
                                                 type="button"
