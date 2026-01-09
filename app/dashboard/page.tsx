@@ -88,19 +88,21 @@ export default function DashboardPage() {
                 <div className="container mx-auto px-5 max-w-2xl">
 
                     <div className="text-center mb-8 animate-in fade-in duration-500">
-                        <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-white flex items-center justify-center overflow-hidden border-4 border-white shadow-md">
+                        <div className="w-20 h-20 mx-auto mb-4 rounded-full overflow-hidden shadow-md">
                             {user.avatar ? (
                                 <img src={user.avatar} alt="" className="w-full h-full object-cover" />
                             ) : (
-                                <span className="text-primary font-black text-3xl">
-                                    {(user.nickname || "U").charAt(0).toUpperCase()}
-                                </span>
+                                <div className="w-full h-full bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center">
+                                    <span className="text-white font-black text-3xl">
+                                        {(user.nickname || "U").charAt(0).toUpperCase()}
+                                    </span>
+                                </div>
                             )}
                         </div>
                         <h1 className="text-2xl font-bold text-gray-800">
-                            أهلاً بك، <span className="text-primary">{user.nickname}</span> 👋
+                            مرحباً <span className="text-primary">{user.nickname}</span> 👋
                         </h1>
-                        <p className="text-gray-500 text-sm mt-1">نتمنى لك يوماً سعيداً</p>
+                        <p className="text-gray-500 text-sm mt-1">نتمنى لك يوماً جميلاً</p>
                     </div>
 
                     {loading ? (

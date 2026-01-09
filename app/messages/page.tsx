@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { MessageCircle, Send, Loader2, User, Users, Calendar, Clock, ArrowRight, Phone, Video, MoreVertical, Check, CheckCheck, Smile, X, Reply, Image as ImageIcon, Plus, Search, Trash2 } from "lucide-react";
+import { MessageCircle, Send, Loader2, User, Users, Calendar, Clock, ArrowRight, Phone, Video, MoreVertical, Check, CheckCheck, Smile, X, Reply, Image as ImageIcon, Plus, Search, Trash2, Link as LinkIcon } from "lucide-react";
 import Header from "@/components/layout/Header";
 import { toast } from "sonner";
 import dynamic from "next/dynamic";
@@ -285,10 +285,15 @@ export default function MessagesPage() {
     const previousMessagesCount = useRef(0);
     const hadUnreadOnOpen = useRef(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const customStickerInputRef = useRef<HTMLInputElement>(null);
 
     const STICKERS = [
-        "https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExbzhxM3Z4eXAyYnJ4ZnZ4eXAyYnJ4ZnZ4eXAyYnJ4ZnZ4eXAyYnJ4ZnZ4eXAyYnJ4ZnZ4eS93eDM3dGg3YTh0eGdzeXAyYnJ4ZnZ4eXAyYnJ4ZnZ4eXAyYnJ4ZnZ4eXAyYnJ4ZnZ4eXAyYnJ4ZnZ4eS9zdGlja2Vycy5qcGc=.gif",
-        // ... (Keep simpler sticker logic or mock)
+        "/stickers/sticker_heart_1767573383386.png",
+        "/stickers/sticker_thumbsup_1767573396624.png",
+        "/stickers/sticker_laughing_1767573408722.png",
+        "/stickers/sticker_fire_1767573421106.png",
+        "/stickers/sticker_star_1767573432800.png",
+        "/stickers/sticker_flower_1767573445383.png"
     ];
 
 
@@ -666,34 +671,33 @@ export default function MessagesPage() {
 
         setSending(true);
         try {
-            // For Owner: Use System User ID for direct messages to maintain single conversation
-            // (Shared Inbox - all replies go from System account, not Owner's personal account)
-            const SYSTEM_USER_ID = '87de5cca-9c37-465b-844f-4ef80ba95c7d'; // 'إدارة منصة إيواء' (system@iwaa.com)
-            const senderId = (currentUser.role === 'owner' && selectedConversation.type === 'direct')
-                ? SYSTEM_USER_ID
-                : currentUser.id;
+            // Use backend API for sending messages (handles RLS/FK properly)
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/messages/${selectedConversation.user.id}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    content: newMessage,
+                    type: selectedConversation.type,
+                    replyToId: replyingTo?.id || null
+                })
+            });
 
-            const { data, error } = await supabase.from('messages').insert({
-                content: newMessage,
-                sender_id: senderId,
-                receiver_id: selectedConversation.type === 'direct' ? selectedConversation.user.id : null,
-                course_id: selectedConversation.type === 'group' && selectedConversation.id === selectedConversation.course_id ? selectedConversation.id : null,
-                group_id: selectedConversation.type === 'group' && selectedConversation.id !== selectedConversation.course_id ? selectedConversation.id : null,
-                type: 'text',
-                reply_to_id: replyingTo?.id || null,
-                read: false
-            }).select().single();
-
-            if (error) throw error;
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'فشل الإرسال');
+            }
 
             setNewMessage("");
             setReplyingTo(null);
             setShowStickerPicker(false);
-            // new message will arrive via Realtime, but optimal:
-            // setMessages(prev => [...prev, ...mapData(data)]);
-        } catch (err) {
+            // new message will arrive via Realtime
+        } catch (err: any) {
             console.error('Failed to send message:', err);
-            toast.error('فشل الإرسال');
+            toast.error(err.message || 'فشل الإرسال');
         } finally {
             setSending(false);
         }
@@ -732,6 +736,213 @@ export default function MessagesPage() {
         }
     };
 
+    // User Stickers State
+    interface UserSticker {
+        id: string;
+        url: string;
+    }
+    const [userStickers, setUserStickers] = useState<UserSticker[]>([]);
+
+    const fetchUserStickers = async () => {
+        // Try getting user from session first, then localStorage
+        const { data: { session } } = await supabase.auth.getSession();
+        let userId = session?.user?.id;
+
+        if (!userId) {
+            try {
+                const userStr = localStorage.getItem('user');
+                if (userStr) {
+                    const user = JSON.parse(userStr);
+                    userId = user.id;
+                }
+            } catch (e) {
+                console.error('Error parsing user from local storage:', e);
+            }
+        }
+
+        console.log('🔍 Fetch Stickers - Resolved User ID:', userId);
+
+        if (!userId) {
+            console.warn('⚠️ No User ID found for fetching stickers.');
+            return;
+        }
+
+        const { data, error } = await supabase
+            .from('user_stickers')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('❌ Error fetching stickers from DB:', error);
+        } else {
+            console.log('✅ Fetched Stickers Data:', data);
+            setUserStickers(data || []);
+        }
+    };
+
+    useEffect(() => {
+        fetchUserStickers();
+    }, []);
+
+    const handleDeleteSticker = async (stickerId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!confirm('هل أنت متأكد من حذف هذا الاستيكر؟')) return;
+
+        const { error } = await supabase
+            .from('user_stickers')
+            .delete()
+            .eq('id', stickerId);
+
+        if (error) {
+            toast.error('فشل حذف الاستيكر');
+        } else {
+            toast.success('تم حذف الاستيكر');
+            setUserStickers(prev => prev.filter(s => s.id !== stickerId));
+        }
+    };
+
+    // ... existing code ...
+
+    const handleCustomStickerSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !selectedConversation) return;
+
+        if (file.size > 2 * 1024 * 1024) {
+            toast.error('حجم الاستيكر يجب أن لا يتعدى 2MB');
+            return;
+        }
+
+        const toastId = toast.loading('جاري إرسال الاستيكر...');
+        try {
+            // Debug: Check session
+            const { data: { session } } = await supabase.auth.getSession();
+            console.log('🔍 Upload Session Check:', session?.user?.id ? 'Authenticated' : 'No Session', session?.user?.id);
+
+            // Upload sticker image
+            const fileName = `custom_sticker_${Date.now()}_${file.name.replace(/\s+/g, '-')}`;
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('chat-images')
+                .upload(fileName, file);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage.from('chat-images').getPublicUrl(fileName);
+
+            // Save to user_stickers table
+            // Get User ID from session or localStorage
+            let userId = session?.user?.id;
+            if (!userId) {
+                try {
+                    const userStr = localStorage.getItem('user');
+                    if (userStr) {
+                        const user = JSON.parse(userStr);
+                        userId = user.id;
+                    }
+                } catch (e) { console.error(e); }
+            }
+
+            if (userId) {
+                const { data: savedSticker, error: dbError } = await supabase
+                    .from('user_stickers')
+                    .insert({ user_id: userId, url: publicUrl })
+                    .select()
+                    .single();
+
+                if (dbError) {
+                    console.error('Failed to save sticker to DB:', dbError);
+                } else if (savedSticker) {
+                    setUserStickers(prev => [savedSticker, ...prev]);
+                }
+            } else {
+                console.warn('⚠️ No User ID found to save sticker');
+            }
+
+            // Send as message with metadata
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/messages/${selectedConversation.user.id}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    content: publicUrl,
+                    type: selectedConversation.type,
+                    replyToId: replyingTo?.id || null,
+                    metadata: { isSticker: true } // Mark as sticker
+                })
+            });
+
+            if (!response.ok) throw new Error('فشل إرسال الاستيكر');
+
+            toast.success('تم إرسال الاستيكر!', { id: toastId });
+            setShowStickerPicker(false);
+        } catch (error: any) {
+            console.error('Sticker upload error:', error);
+            toast.error(error.message || 'فشل إرسال الاستيكر', { id: toastId });
+        } finally {
+            if (customStickerInputRef.current) customStickerInputRef.current.value = '';
+        }
+    };
+
+    // ... existing code ...
+
+    {/* Stickers Grid */ }
+    <div className="grid grid-cols-4 gap-2 overflow-y-auto max-h-60 p-1">
+        {/* Custom Upload Button */}
+        <button
+            onClick={() => customStickerInputRef.current?.click()}
+            className="aspect-square flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-500 hover:bg-blue-50 transition-colors gap-1 group"
+        >
+            <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+                <Plus className="w-5 h-5 text-gray-400 group-hover:text-blue-500" />
+            </div>
+            <span className="text-[10px] font-medium text-gray-500 group-hover:text-blue-600">جديد</span>
+        </button>
+
+        {/* User Saved Stickers */}
+        {userStickers.map((sticker) => (
+            <div key={sticker.id} className="relative group aspect-square">
+                <button
+                    onClick={() => handleSendSticker(sticker.url)}
+                    className="w-full h-full p-2 hover:bg-gray-100 rounded-xl transition-colors"
+                >
+                    <img
+                        src={sticker.url}
+                        alt="Sticker"
+                        className="w-full h-full object-contain drop-shadow-sm hover:scale-110 transition-transform duration-200"
+                        loading="lazy"
+                    />
+                </button>
+                {/* Delete Button */}
+                <button
+                    onClick={(e) => handleDeleteSticker(sticker.id, e)}
+                    className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:scale-110"
+                    title="حذف"
+                >
+                    <X className="w-3 h-3" />
+                </button>
+            </div>
+        ))}
+
+        {/* Default Stickers */}
+        {STICKERS.map((sticker, index) => (
+            <button
+                key={index}
+                onClick={() => handleSendSticker(sticker)}
+                className="aspect-square p-2 hover:bg-gray-100 rounded-xl transition-colors group"
+            >
+                <img
+                    src={sticker}
+                    alt={`Sticker ${index + 1}`}
+                    className="w-full h-full object-contain drop-shadow-sm group-hover:scale-110 transition-transform duration-200"
+                    loading="lazy"
+                />
+            </button>
+        ))}
+    </div>
+
     const handleSendImage = async () => {
         if (!selectedImage || !selectedConversation || uploadingImage) return;
 
@@ -746,30 +957,31 @@ export default function MessagesPage() {
 
             const { data: { publicUrl } } = supabase.storage.from('chat-images').getPublicUrl(fileName);
 
-
-            // For Owner: Use System User ID for direct messages (Shared Inbox)
-            const SYSTEM_USER_ID = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
-            const senderId = (currentUser.role === 'owner' && selectedConversation.type === 'direct')
-                ? SYSTEM_USER_ID
-                : currentUser.id;
-
-            const { error: insertError } = await supabase.from('messages').insert({
-                content: publicUrl,
-                type: 'image',
-                sender_id: senderId,
-                receiver_id: selectedConversation.type === 'direct' ? selectedConversation.user.id : null,
-                course_id: selectedConversation.type === 'group' && selectedConversation.id === selectedConversation.course_id ? selectedConversation.id : null,
-                group_id: selectedConversation.type === 'group' && selectedConversation.id !== selectedConversation.course_id ? selectedConversation.id : null,
-                read: false
+            // Use backend API for sending image message (handles RLS/FK properly)
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/messages/${selectedConversation.user.id}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    content: publicUrl,
+                    type: selectedConversation.type,
+                    msgType: 'image'
+                })
             });
 
-            if (insertError) throw insertError;
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'فشل إرسال الصورة');
+            }
 
             cancelImageSelection();
             toast.success('تم إرسال الصورة');
-        } catch (err) {
+        } catch (err: any) {
             console.error('Failed to send image:', err);
-            toast.error('فشل إرسال الصورة');
+            toast.error(err.message || 'فشل إرسال الصورة');
         } finally {
             setUploadingImage(false);
         }
@@ -780,27 +992,29 @@ export default function MessagesPage() {
         setUploadingImage(true);
         setShowStickerPicker(false);
         try {
-            // For Owner: Use System User ID for direct messages (Shared Inbox)
-            const SYSTEM_USER_ID = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
-            const senderId = (currentUser.role === 'owner' && selectedConversation.type === 'direct')
-                ? SYSTEM_USER_ID
-                : currentUser.id;
-
-            const { error } = await supabase.from('messages').insert({
-                content: stickerUrl,
-                type: 'image', // Stickers as images
-                metadata: { isSticker: true },
-                sender_id: senderId,
-                receiver_id: selectedConversation.type === 'direct' ? selectedConversation.user.id : null,
-                course_id: selectedConversation.type === 'group' && selectedConversation.id === selectedConversation.course_id ? selectedConversation.id : null,
-                group_id: selectedConversation.type === 'group' && selectedConversation.id !== selectedConversation.course_id ? selectedConversation.id : null,
-                reply_to_id: replyingTo?.id || null,
-                read: false
+            // Use backend API for sending stickers (handles RLS/FK properly)
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}/api/messages/${selectedConversation.user.id}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    content: stickerUrl,
+                    type: selectedConversation.type,
+                    msgType: 'sticker',
+                    replyToId: replyingTo?.id || null
+                })
             });
-            if (error) throw error;
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'فشل إرسال الملصق');
+            }
             toast.success('تم إرسال الملصق');
-        } catch (err) {
-            toast.error('فشل إرسال الملصق');
+        } catch (err: any) {
+            toast.error(err.message || 'فشل إرسال الملصق');
         } finally {
             setUploadingImage(false);
         }
@@ -1019,7 +1233,7 @@ export default function MessagesPage() {
                         <div className={`flex-1 flex flex-col bg-[#F3F4F6] ${!showMobileChat ? 'hidden md:flex' : 'fixed top-0 left-0 right-0 bottom-4 z-[10000] flex md:relative md:inset-auto md:z-auto md:bottom-auto'}`}>
                             {selectedConversation ? (
                                 <>
-                                    <div className="px-3 py-2.5 bg-white border-b border-gray-200 flex items-center gap-2 shadow-sm">
+                                    <div className="px-3 py-2.5 bg-primary/10 border-b border-primary/20 flex items-center gap-2">
                                         <button
                                             onClick={() => {
                                                 setShowMobileChat(false);
@@ -1208,18 +1422,63 @@ export default function MessagesPage() {
                                     )}
 
                                     {showStickerPicker && (
-                                        <div className="absolute bottom-20 right-4 z-50 shadow-xl rounded-xl bg-white border border-gray-200 p-2 w-64 max-h-64 overflow-y-auto">
-                                            <div className="grid grid-cols-3 gap-2">
+                                        <div className="absolute bottom-20 right-4 z-50 shadow-xl rounded-xl bg-white border border-gray-200 p-2 w-72 max-h-80 overflow-y-auto custom-scrollbar">
+                                            <div className="grid grid-cols-4 gap-2">
+                                                {/* Custom Sticker Upload Button */}
+                                                <button
+                                                    onClick={() => customStickerInputRef.current?.click()}
+                                                    className="aspect-square flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-500 hover:bg-blue-50 transition-colors gap-1 group bg-gray-50"
+                                                >
+                                                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform">
+                                                        <Plus className="w-5 h-5 text-gray-400 group-hover:text-blue-500" />
+                                                    </div>
+                                                    <span className="text-[10px] font-medium text-gray-500 group-hover:text-blue-600">جديد</span>
+                                                </button>
+
+                                                {/* User Saved Stickers */}
+                                                {userStickers.map((sticker) => (
+                                                    <div key={sticker.id} className="relative group aspect-square">
+                                                        <button
+                                                            onClick={() => handleSendSticker(sticker.url)}
+                                                            className="w-full h-full p-2 hover:bg-gray-100 rounded-xl transition-colors border border-transparent hover:border-gray-200"
+                                                        >
+                                                            <img
+                                                                src={sticker.url}
+                                                                alt="Sticker"
+                                                                className="w-full h-full object-contain drop-shadow-sm group-hover:scale-110 transition-transform duration-200"
+                                                                loading="lazy"
+                                                            />
+                                                        </button>
+                                                        {/* Delete Button */}
+                                                        <button
+                                                            onClick={(e) => handleDeleteSticker(sticker.id, e)}
+                                                            className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:scale-110 z-10"
+                                                            title="حذف"
+                                                        >
+                                                            <X className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                                ))}
+
+                                                {/* Default Stickers */}
                                                 {STICKERS.map((sticker, index) => (
                                                     <button
                                                         key={index}
                                                         onClick={() => handleSendSticker(sticker)}
-                                                        className="hover:bg-gray-100 rounded-lg p-1 transition-colors"
+                                                        className="aspect-square p-2 hover:bg-gray-100 rounded-xl transition-colors group border border-transparent hover:border-gray-200"
                                                     >
+
                                                         <img src={sticker} alt="Sticker" className="w-full h-auto object-contain" />
                                                     </button>
                                                 ))}
                                             </div>
+                                            <input
+                                                type="file"
+                                                ref={customStickerInputRef}
+                                                className="hidden"
+                                                accept="image/png,image/jpeg,image/webp,image/gif"
+                                                onChange={handleCustomStickerSelect}
+                                            />
                                         </div>
                                     )}
 
@@ -1432,7 +1691,7 @@ function ChatItem({ conv, selected, onSelect }: { conv: Conversation, selected: 
     );
 }
 
-function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Message, isMe: boolean, isGroup: boolean, onReply?: () => void, onHide?: () => void, canHide?: boolean }) {
+function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Message, isMe: boolean, isGroup: boolean, onReply?: (msg: Message) => void, onHide?: (id: string) => void, canHide?: boolean }) {
     const [swipeX, setSwipeX] = useState(0);
     const [isSwiping, setIsSwiping] = useState(false);
     const touchStartX = useRef(0);
@@ -1458,7 +1717,7 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
 
     const handleTouchEnd = () => {
         if (Math.abs(swipeX) >= swipeThreshold && onReply) {
-            onReply();
+            onReply(msg);
             if (navigator.vibrate) navigator.vibrate(50);
         }
         setSwipeX(0);
@@ -1498,11 +1757,12 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
 
     return (
         <div
-            className={`flex w-full group relative mb-3 ${isMe ? 'justify-start' : 'justify-end'}`}
+            className={`flex w-full group relative mb-2 ${isMe ? 'justify-start' : 'justify-end'}`}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
         >
+            {/* Swipe Reply Indicator */}
             {Math.abs(swipeX) > 10 && (
                 <div
                     className={`absolute ${swipeX > 0 ? 'right-auto -left-12' : 'left-auto -right-12'} top-1/2 -translate-y-1/2 flex items-center justify-center transition-all z-10`}
@@ -1511,131 +1771,153 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
                         transform: `translateY(-50%) scale(${0.5 + (Math.abs(swipeX) / swipeThreshold) * 0.5})`
                     }}
                 >
-                    <div className={`w-10 h-10 rounded-full ${Math.abs(swipeX) >= swipeThreshold ? 'bg-primary' : 'bg-gray-200'} flex items-center justify-center transition-colors shadow-md`}>
+                    <div className={`w-10 h-10 rounded-full ${Math.abs(swipeX) >= swipeThreshold ? 'bg-[#25D366]' : 'bg-gray-200'} flex items-center justify-center transition-colors shadow-md`}>
                         <Reply className={`w-5 h-5 ${Math.abs(swipeX) >= swipeThreshold ? 'text-white' : 'text-gray-500'}`} />
                     </div>
                 </div>
             )}
 
-            <div className="flex flex-col max-w-[75%] md:max-w-[55%]">
+            <div className="flex flex-col max-w-[70%] md:max-w-[55%]">
+                {/* Sender name in groups */}
                 {isGroup && !isMe && (
-                    <div className="flex items-center gap-2 mb-1 flex-row-reverse">
-                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-purple-600 flex items-center justify-center overflow-hidden">
-                            {msg.senderAvatar ? (
-                                <img src={msg.senderAvatar} alt="" className="w-full h-full object-cover" />
-                            ) : (
-                                <span className="text-white text-[9px] font-bold">
-                                    {(msg.senderName || 'م').charAt(0)}
-                                </span>
-                            )}
-                        </div>
-                        <span className={`text-sm font-bold ${getNameColor(msg.senderId)}`}>
+                    <div className="flex items-center gap-2 mb-1 flex-row-reverse px-3">
+                        <span className={`text-[13px] font-semibold ${getNameColor(msg.senderId)}`}>
                             {msg.senderName || 'مستخدم'}
                         </span>
                     </div>
                 )}
 
                 <div
-                    className="flex items-center gap-1 transition-transform duration-100"
+                    className="flex items-end gap-1 transition-transform duration-100 relative group/bubble"
                     style={{ transform: `translateX(${swipeX}px)` }}
                 >
-                    {onReply && (
-                        <button
-                            onClick={onReply}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-full hover:bg-gray-200 flex items-center justify-center hidden md:flex"
-                        >
-                            <Reply className="w-4 h-4 text-gray-500" />
-                        </button>
-                    )}
-
-                    <div className={`max-w-[85%] relative group flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-
-                        {/* Reply Section (Outside or Integrated top) - Instagram sets it stacked */}
-                        {msg.replyTo && (
-                            <div className={`mb-1 min-w-[120px] max-w-full rounded-2xl px-4 py-2 text-xs flex items-center gap-2 cursor-pointer transition-opacity hover:opacity-80 ${isMe ? 'bg-gray-200/50 self-end mr-1' : 'bg-gray-200 self-start ml-1'}`}>
-                                <div className={`w-0.5 h-8 rounded-full ${isMe ? 'bg-purple-500' : 'bg-gray-400'}`}></div>
-                                {(msg.replyTo.content?.startsWith('http') &&
-                                    (msg.replyTo.content.length > 50 ||
-                                        /\.(gif|jpg|jpeg|png|webp|svg)/i.test(msg.replyTo.content))) && (
-                                        <img
-                                            src={msg.replyTo.content}
-                                            alt="صورة"
-                                            className="w-8 h-8 rounded-md object-cover"
-                                        />
-                                    )}
-                                <div className="flex-1 min-w-0">
-                                    <p className="font-bold text-gray-700 truncate">{msg.replyTo.senderName || 'مستخدم'}</p>
-                                    <p className="text-gray-500 truncate">
-                                        {(msg.replyTo.content?.startsWith('http') &&
-                                            (msg.replyTo.content.length > 50 ||
-                                                /\.(gif|jpg|jpeg|png|webp|svg)/i.test(msg.replyTo.content)))
-                                            ? '📷 صورة'
-                                            : msg.replyTo.content}
-                                    </p>
-                                </div>
+                    {/* Desktop Reply Button - appears on hover */}
+                    <button
+                        onClick={() => onReply?.(msg)}
+                        className={`hidden md:flex absolute ${isMe ? '-left-10' : '-right-10'} top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-gray-100 hover:bg-[#3478F6] items-center justify-center opacity-0 group-hover/bubble:opacity-100 transition-all shadow-sm hover:shadow-md`}
+                        title="رد"
+                    >
+                        <Reply className="w-4 h-4 text-gray-500 hover:text-white" />
+                    </button>
+                    {/* Check if sticker - render without bubble */}
+                    {(msg.metadata?.isSticker || msg.content.includes('/stickers/')) ? (
+                        <div className={`flex flex-col ${isMe ? 'items-start' : 'items-end'}`}>
+                            <img
+                                src={msg.content.trim()}
+                                alt="sticker"
+                                className="w-32 h-32 object-contain cursor-pointer hover:scale-105 transition-transform"
+                                onClick={() => window.open(msg.content.trim(), '_blank')}
+                            />
+                            <div className="flex items-center gap-1 mt-1 px-1">
+                                <span className="text-[11px] text-gray-500">
+                                    {new Date(msg.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                {isMe && (
+                                    msg.read
+                                        ? <CheckCheck className="w-4 h-4 text-[#53BDEB]" />
+                                        : <CheckCheck className="w-4 h-4 text-gray-400" />
+                                )}
                             </div>
-                        )}
-
-                        {/* Main Bubble */}
-                        <div className={`px-5 py-3 shadow-sm relative text-[15px] leading-relaxed break-words whitespace-pre-wrap ${isMe
-                            ? 'bg-gradient-to-l from-[#7F5FE6] to-[#A45EE0] text-white rounded-[22px] rounded-br-[4px]'
-                            : 'bg-white text-gray-900 border border-gray-100 rounded-[22px] rounded-bl-[4px]'
-                            }`}>
-
-                            {msg.type === 'image' || msg.type === 'sticker' ||
-                                /\.(gif|jpg|jpeg|png|webp)/i.test(msg.content.trim()) ||
-                                msg.content.includes('giphy.com') ||
-                                msg.content.includes('jsdelivr.net') ||
-                                msg.content.includes('twemoji') ||
-                                msg.content.includes('zobj.net') ||
-                                msg.content.includes('supabase.co/storage') ||
-                                msg.content.includes('raw.githubusercontent.com') ? (
-                                <div className="rounded-xl overflow-hidden -mx-2 -my-1 cursor-pointer" onClick={() => window.open(msg.content.trim(), '_blank')}>
-                                    <img
-                                        src={msg.content.trim()}
-                                        alt="img"
-                                        className={`h-auto object-contain ${msg.content.includes('zobj.net') || msg.content.includes('twemoji') || msg.content.includes('jsdelivr.net') || msg.content.includes('raw.githubusercontent.com')
-                                            ? 'w-24 max-h-24 mx-auto'
-                                            : 'w-full max-h-[300px]'
-                                            }`}
-                                        loading="lazy"
-                                    />
+                        </div>
+                    ) : (
+                        /* Professional Chat Bubble Design - Compact */
+                        <div className={`rounded-[18px] ${isMe
+                            ? 'bg-[#3478F6] shadow-sm shadow-blue-500/15'
+                            : 'bg-white shadow-sm shadow-gray-200/40 border border-gray-100'
+                            }`}
+                        >
+                            {/* Link Preview (for URLs) */}
+                            {msg.content.startsWith('http') && !(/\.(gif|jpg|jpeg|png|webp)/i.test(msg.content.trim())) && (
+                                <div className={`p-3 border-b ${isMe ? 'border-white/10' : 'border-gray-100'}`}>
+                                    <div className={`flex items-center gap-3 ${isMe ? 'text-white' : 'text-gray-800'}`}>
+                                        <div className={`w-12 h-12 rounded-xl ${isMe ? 'bg-white/20' : 'bg-gray-100'} flex items-center justify-center shrink-0`}>
+                                            <LinkIcon className="w-5 h-5" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className={`text-[13px] font-semibold truncate ${isMe ? 'text-white' : 'text-gray-900'}`}>
+                                                رابط خارجي
+                                            </p>
+                                            <p className={`text-[11px] truncate ${isMe ? 'text-white/60' : 'text-gray-500'}`}>
+                                                {msg.content.substring(0, 40)}...
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
-                            ) : (
-                                msg.content
                             )}
+
+                            {/* Image Message */}
+                            {(msg.type === 'image' ||
+                                /\.(gif|jpg|jpeg|png|webp)/i.test(msg.content.trim()) ||
+                                msg.content.includes('supabase.co/storage')) && (
+                                    <div className="p-1">
+                                        <div className="rounded-[18px] overflow-hidden cursor-pointer" onClick={() => window.open(msg.content.trim(), '_blank')}>
+                                            <img
+                                                src={msg.content.trim()}
+                                                alt="img"
+                                                className="w-full max-h-[280px] object-cover"
+                                                loading="lazy"
+                                            />
+                                        </div>
+                                        <div className={`flex items-center justify-end gap-1 px-2 py-1`}>
+                                            <span className={`text-[11px] ${isMe ? 'text-white/70' : 'text-gray-400'}`}>
+                                                {new Date(msg.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                            {isMe && (
+                                                msg.read
+                                                    ? <CheckCheck className="w-4 h-4 text-white" />
+                                                    : <CheckCheck className="w-4 h-4 text-white/50" />
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                            {/* Text Message */}
+                            {!(msg.type === 'image' ||
+                                /\.(gif|jpg|jpeg|png|webp)/i.test(msg.content.trim()) ||
+                                msg.content.includes('supabase.co/storage')) && (
+                                    <div className="px-3 py-1.5">
+                                        {/* Reply Section - Compact Professional */}
+                                        {msg.replyTo && (
+                                            <div className={`mb-1 p-1.5 rounded-lg ${isMe ? 'bg-white/10' : 'bg-gray-50'} border-r-[2.5px] ${isMe ? 'border-white/40' : 'border-[#3478F6]'}`}>
+                                                <div className="flex items-center gap-1.5">
+                                                    <div className={`w-6 h-6 rounded-md ${isMe ? 'bg-white/20' : 'bg-[#3478F6]/10'} flex items-center justify-center shrink-0`}>
+                                                        <Reply className={`w-3 h-3 ${isMe ? 'text-white/70' : 'text-[#3478F6]'}`} />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className={`font-semibold text-[11px] ${isMe ? 'text-white/90' : 'text-[#3478F6]'}`}>
+                                                            {msg.replyTo.senderName || 'مستخدم'}
+                                                        </p>
+                                                        <p className={`text-[11px] truncate ${isMe ? 'text-white/50' : 'text-gray-500'}`}>
+                                                            {(msg.replyTo.content?.startsWith('http') &&
+                                                                (msg.replyTo.content.length > 50 ||
+                                                                    /\.(gif|jpg|jpeg|png|webp|svg)/i.test(msg.replyTo.content)))
+                                                                ? '📷 صورة'
+                                                                : msg.replyTo.content?.substring(0, 30)}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Message Text */}
+                                        <p className={`text-[13.5px] leading-snug break-words whitespace-pre-wrap ${isMe ? 'text-white' : 'text-gray-800'}`}>
+                                            {msg.content}
+                                        </p>
+
+                                        {/* Time and Status - Inline Compact */}
+                                        <div className="flex items-center justify-end gap-1 mt-0.5">
+                                            <span className={`text-[10px] font-medium ${isMe ? 'text-white/60' : 'text-gray-400'}`}>
+                                                {new Date(msg.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                            {isMe && (
+                                                msg.read
+                                                    ? <CheckCheck className="w-3.5 h-3.5 text-white" />
+                                                    : <CheckCheck className="w-3.5 h-3.5 text-white/50" />
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                         </div>
-
-                        {/* Status / Time */}
-                        <div className="flex items-center gap-1 mt-1 px-1">
-                            <span className="text-[10px] text-gray-400">
-                                {new Date(msg.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                            {isMe && (
-                                msg.read
-                                    ? <CheckCheck className="w-3 h-3 text-purple-600" />
-                                    : <Check className="w-3 h-3 text-gray-300" />
-                            )}
-                        </div>
-                    </div>
-
-                    {isMe && onReply && (
-                        <button
-                            onClick={onReply}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-full hover:bg-gray-200 flex items-center justify-center hidden md:flex"
-                        >
-                            <Reply className="w-4 h-4 text-gray-500" />
-                        </button>
-                    )}
-
-                    {canHide && onHide && (
-                        <button
-                            onClick={onHide}
-                            className="opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-full hover:bg-red-100 flex items-center justify-center hidden md:flex"
-                            title="إخفاء الرسالة"
-                        >
-                            <Trash2 className="w-4 h-4 text-red-500" />
-                        </button>
                     )}
                 </div>
             </div>
