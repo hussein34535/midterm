@@ -1518,7 +1518,7 @@ export default function MessagesPage() {
                                         </div>
                                     )}
 
-                                    <div className="px-3 pt-3 pb-1 bg-white border-t border-gray-200 relative shrink-0 safe-area-bottom">
+                                    <div className="px-3 py-3 bg-white border-t border-gray-200 relative shrink-0 safe-area-bottom">
                                         <form onSubmit={selectedImage ? (e) => { e.preventDefault(); handleSendImage(); } : handleSendMessage} className="flex items-center gap-2 overflow-hidden">
                                             <button
                                                 type="button"
