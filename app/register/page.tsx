@@ -137,15 +137,15 @@ export default function RegisterPage() {
                                 الاسم المستعار
                             </label>
                             <div className="relative">
-                                <User className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                                 <input
                                     type="text"
                                     placeholder="مثال: نجمة الصباح"
-                                    className="input-mobile pr-16"
+                                    className="input-mobile !pr-11"
                                     value={formData.nickname}
                                     onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
                                     required
                                 />
+                                <User className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground z-10 pointer-events-none" />
                             </div>
                             <p className="text-xs text-muted-foreground pr-1">
                                 هذا الاسم سيظهر للآخرين في الجلسات
