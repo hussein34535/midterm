@@ -136,49 +136,75 @@ export default function MessagesPage() {
 
                     // System/Legacy Check Helpers
                     const isSystem = (id: string, email?: string) => email === 'system@iwaa.com'; // We rely on email check or fetch
-                    const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
+                    const legacyId = '87de5cca-9c37-465b-844f-4ef80ba95c7d';
 
-                    let isRelevantToMe =
+                    // Debugging: Log IDs to see why mismatch happens
+                    console.log(`🔍 Checking Relevance: Me=${currentUser.id}, Receiver=${newMessage.receiver_id}, Sender=${newMessage.sender_id}`);
+
+                    // Use !! to ensure boolean, not null
+                    let isRelevantToMe: boolean =
                         newMessage.receiver_id === currentUser.id ||
                         newMessage.sender_id === currentUser.id ||
-                        newMessage.course_id !== null ||
-                        newMessage.group_id !== null;
+                        !!newMessage.course_id ||
+                        !!newMessage.group_id;
 
                     if (currentUser.role === 'owner') {
-                        // Owner sees messages involving System or Legacy
-                        const senderIsSystem = newMessage.sender?.email === 'system@iwaa.com';
-                        const receiverIsSystem = newMessage.receiver?.email === 'system@iwaa.com';
+                        // Special Logic for Owners (Shared Inbox / Impersonation)
+                        const involvesLegacy =
+                            newMessage.receiver_id === legacyId ||
+                            newMessage.sender_id === legacyId;
 
-                        isRelevantToMe = isRelevantToMe ||
-                            senderIsSystem || receiverIsSystem ||
-                            newMessage.receiver_id === legacyId || newMessage.sender_id === legacyId;
+                        if (involvesLegacy) {
+                            console.log('👑 Owner Realtime: Message involves System/Legacy ID -> RELEVANT');
+                            isRelevantToMe = true;
+                        }
+
+                        // CRITICAL FIX: If owner is viewing a specific conversation, 
+                        // and the message is to/from that user, it's relevant!
+                        // This handles "replying as owner" scenario where sender_id != owner.id
+                        // We check selectedConversation later, but for now, mark as possibly relevant
+                        // to avoid early return.
+                        // Actually, let's just let ALL messages through for owners and filter later.
+                        // This is safe because owners have admin privileges.
+                        isRelevantToMe = true; // Owners see all for now, filter at selectedConversation level
                     }
 
-                    console.log('📨 isRelevantToMe:', isRelevantToMe);
+                    console.log('📨 isRelevantToMe Result:', isRelevantToMe);
 
                     if (!isRelevantToMe) return;
 
                     if (selectedConversation) {
-                        const isRelevantToSelected =
-                            (selectedConversation.type === 'direct' && (
-                                // Standard Check
-                                (newMessage.sender_id === selectedConversation.user.id && newMessage.receiver_id === currentUser.id) ||
-                                (newMessage.sender_id === currentUser.id && newMessage.receiver_id === selectedConversation.user.id) ||
+                        // Debug: Log the selectedConversation user ID for comparison
+                        console.log('📨 Selected Conversation User ID:', selectedConversation.user?.id, 'Type:', selectedConversation.type);
 
-                                // Owner: Legacy <-> Target User
-                                (currentUser.role === 'owner' && (
-                                    (newMessage.sender_id === selectedConversation.user.id && newMessage.receiver_id === legacyId) ||
-                                    (newMessage.sender_id === legacyId && newMessage.receiver_id === selectedConversation.user.id)
-                                )) ||
+                        let isRelevantToSelected = false;
 
-                                // Owner: System <-> Target User (Based on Email)
-                                (currentUser.role === 'owner' && (
-                                    (newMessage.sender_id === selectedConversation.user.id && newMessage.receiver?.email === 'system@iwaa.com') ||
-                                    (newMessage.sender?.email === 'system@iwaa.com' && newMessage.receiver_id === selectedConversation.user.id)
-                                ))
-                            )) ||
-                            (selectedConversation.type === 'group' && newMessage.group_id === selectedConversation.id) ||
-                            (selectedConversation.type === 'group' && newMessage.course_id === selectedConversation.id && !newMessage.group_id);
+                        if (selectedConversation.type === 'direct') {
+                            const targetUserId = selectedConversation.user?.id;
+
+                            // Standard Check: Message between currentUser and target
+                            const isStandardMatch =
+                                (newMessage.sender_id === targetUserId && newMessage.receiver_id === currentUser.id) ||
+                                (newMessage.sender_id === currentUser.id && newMessage.receiver_id === targetUserId);
+
+                            // Owner Check: Message involves target user AND (legacy OR owner) on the other side
+                            const isOwnerMatch = currentUser.role === 'owner' && (
+                                // Legacy <-> Target
+                                (newMessage.sender_id === targetUserId && newMessage.receiver_id === legacyId) ||
+                                (newMessage.sender_id === legacyId && newMessage.receiver_id === targetUserId) ||
+                                // Owner ID <-> Target (if owner sends as themselves, not legacy)
+                                (newMessage.sender_id === targetUserId && newMessage.receiver_id === currentUser.id) ||
+                                (newMessage.sender_id === currentUser.id && newMessage.receiver_id === targetUserId) ||
+                                // Any message involving target user (owner can see all interactions with selected user)
+                                newMessage.sender_id === targetUserId || newMessage.receiver_id === targetUserId
+                            );
+
+                            isRelevantToSelected = isStandardMatch || isOwnerMatch;
+                        } else if (selectedConversation.type === 'group') {
+                            isRelevantToSelected =
+                                newMessage.group_id === selectedConversation.id ||
+                                (newMessage.course_id === selectedConversation.id && !newMessage.group_id);
+                        }
 
                         console.log('📨 isRelevantToSelected:', isRelevantToSelected, 'selectedConv:', selectedConversation.id);
 
@@ -534,8 +560,8 @@ export default function MessagesPage() {
                     // Clean Owner Logic: Fetch all messages involving ME, SYSTEM, or LEGACY <-> TARGET USER
 
                     // IDs helper
-                    const legacyId = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
-                    const realSystemId = CACHED_SYSTEM_ID || '23886de5-16da-49b0-9d6d-85ac55d2ba12'; // Use cached or fallback
+                    const legacyId = '87de5cca-9c37-465b-844f-4ef80ba95c7d'; // 'إدارة منصة إيواء' (system@iwaa.com)
+                    const realSystemId = '87de5cca-9c37-465b-844f-4ef80ba95c7d'; // Same as legacy for now
 
                     const targetId = id;
                     const myId = currentUser.id;
@@ -543,8 +569,7 @@ export default function MessagesPage() {
                     const conditions = [
                         `and(sender_id.eq.${targetId},receiver_id.eq.${myId})`,
                         `and(sender_id.eq.${myId},receiver_id.eq.${targetId})`,
-                        `and(sender_id.eq.${targetId},receiver_id.eq.${realSystemId})`,
-                        `and(sender_id.eq.${realSystemId},receiver_id.eq.${targetId})`,
+                        // Also include messages involving the System ID 
                         `and(sender_id.eq.${targetId},receiver_id.eq.${legacyId})`,
                         `and(sender_id.eq.${legacyId},receiver_id.eq.${targetId})`
                     ];
@@ -643,7 +668,7 @@ export default function MessagesPage() {
         try {
             // For Owner: Use System User ID for direct messages to maintain single conversation
             // (Shared Inbox - all replies go from System account, not Owner's personal account)
-            const SYSTEM_USER_ID = 'b1cb10e6-002e-4377-850e-2c3bcbdfb648'; // system@iwaa.com
+            const SYSTEM_USER_ID = '87de5cca-9c37-465b-844f-4ef80ba95c7d'; // 'إدارة منصة إيواء' (system@iwaa.com)
             const senderId = (currentUser.role === 'owner' && selectedConversation.type === 'direct')
                 ? SYSTEM_USER_ID
                 : currentUser.id;
@@ -991,7 +1016,7 @@ export default function MessagesPage() {
                             </div>
                         </div>
 
-                        <div className={`flex-1 flex flex-col bg-[#f0f2f5] ${!showMobileChat ? 'hidden md:flex' : 'fixed top-0 left-0 right-0 bottom-4 z-[10000] flex md:relative md:inset-auto md:z-auto md:bottom-auto'}`}>
+                        <div className={`flex-1 flex flex-col bg-[#F3F4F6] ${!showMobileChat ? 'hidden md:flex' : 'fixed top-0 left-0 right-0 bottom-4 z-[10000] flex md:relative md:inset-auto md:z-auto md:bottom-auto'}`}>
                             {selectedConversation ? (
                                 <>
                                     <div className="px-3 py-2.5 bg-white border-b border-gray-200 flex items-center gap-2 shadow-sm">
@@ -1106,14 +1131,15 @@ export default function MessagesPage() {
                                         ) : (
                                             messages.map((msg) => {
                                                 const senderId = msg.sender_id || msg.senderId;
+                                                const SYSTEM_ID = '87de5cca-9c37-465b-844f-4ef80ba95c7d';
+
                                                 const isSystem = msg.sender?.role === 'admin' || msg.sender?.email === 'system@iwaa.com';
                                                 const isOwner = currentUser?.role === 'owner';
 
-                                                // Owner Impersonation Check
-                                                const isLegacySender = senderId === 'b1cb10e6-002e-4377-850e-2c3bcbdfb648';
-                                                const isSystemSender = senderId === '23886de5-16da-49b0-9d6d-85ac55d2ba12';
+                                                // Owner Impersonation Check - Both old/new system IDs might appear in DB
+                                                const isLegacySender = senderId === SYSTEM_ID || senderId === 'b1cb10e6-002e-4377-850e-2c3bcbdfb648'; // Keep old for backward compat
 
-                                                const isMe = senderId === currentUser.id || (isOwner && (isSystem || isSystemSender || isLegacySender));
+                                                const isMe = senderId === currentUser.id || (isOwner && (isSystem || isLegacySender));
 
                                                 return (
                                                     <ChatBubble
@@ -1513,7 +1539,7 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
                     className="flex items-center gap-1 transition-transform duration-100"
                     style={{ transform: `translateX(${swipeX}px)` }}
                 >
-                    {!isMe && onReply && (
+                    {onReply && (
                         <button
                             onClick={onReply}
                             className="opacity-0 group-hover:opacity-100 transition-opacity w-7 h-7 rounded-full hover:bg-gray-200 flex items-center justify-center hidden md:flex"
@@ -1522,24 +1548,24 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
                         </button>
                     )}
 
-                    <div className={`min-w-[60px] px-3 py-2 rounded-2xl shadow-sm overflow-hidden ${isMe
-                        ? 'bg-[#dcf8c6] rounded-bl-sm'
-                        : 'bg-white rounded-br-sm'
-                        }`}>
+                    <div className={`max-w-[85%] relative group flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+
+                        {/* Reply Section (Outside or Integrated top) - Instagram sets it stacked */}
                         {msg.replyTo && (
-                            <div className="mb-2 p-2 bg-black/5 rounded-lg border-r-2 border-primary overflow-hidden max-w-full flex items-center gap-2">
+                            <div className={`mb-1 min-w-[120px] max-w-full rounded-2xl px-4 py-2 text-xs flex items-center gap-2 cursor-pointer transition-opacity hover:opacity-80 ${isMe ? 'bg-gray-200/50 self-end mr-1' : 'bg-gray-200 self-start ml-1'}`}>
+                                <div className={`w-0.5 h-8 rounded-full ${isMe ? 'bg-purple-500' : 'bg-gray-400'}`}></div>
                                 {(msg.replyTo.content?.startsWith('http') &&
                                     (msg.replyTo.content.length > 50 ||
                                         /\.(gif|jpg|jpeg|png|webp|svg)/i.test(msg.replyTo.content))) && (
                                         <img
                                             src={msg.replyTo.content}
                                             alt="صورة"
-                                            className="w-8 h-8 rounded object-cover flex-shrink-0"
+                                            className="w-8 h-8 rounded-md object-cover"
                                         />
                                     )}
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-[10px] text-primary font-bold truncate">{msg.replyTo.senderName || 'مستخدم'}</p>
-                                    <p className="text-[11px] text-gray-600 truncate">
+                                    <p className="font-bold text-gray-700 truncate">{msg.replyTo.senderName || 'مستخدم'}</p>
+                                    <p className="text-gray-500 truncate">
                                         {(msg.replyTo.content?.startsWith('http') &&
                                             (msg.replyTo.content.length > 50 ||
                                                 /\.(gif|jpg|jpeg|png|webp|svg)/i.test(msg.replyTo.content)))
@@ -1550,33 +1576,45 @@ function ChatBubble({ msg, isMe, isGroup, onReply, onHide, canHide }: { msg: Mes
                             </div>
                         )}
 
-                        {msg.type === 'image' || msg.type === 'sticker' ||
-                            /\.(gif|jpg|jpeg|png|webp)/i.test(msg.content.trim()) ||
-                            msg.content.includes('giphy.com') ||
-                            msg.content.includes('jsdelivr.net') ||
-                            msg.content.includes('twemoji') ||
-                            msg.content.includes('zobj.net') ||
-                            msg.content.includes('supabase.co/storage') ? (
-                            <div className="rounded-lg overflow-hidden my-1 cursor-pointer" onClick={() => window.open(msg.content.trim(), '_blank')}>
-                                <img
-                                    src={msg.content.trim()}
-                                    alt="img"
-                                    className={`h-auto object-contain ${msg.content.includes('zobj.net') || msg.content.includes('twemoji') || msg.content.includes('jsdelivr.net')
-                                        ? 'w-20 max-h-20'
-                                        : 'w-full max-h-[200px]'
-                                        }`}
-                                    loading="lazy"
-                                />
-                            </div>
-                        ) : (
-                            <p className="text-sm text-gray-900 leading-relaxed whitespace-pre-wrap break-all" dir="auto">{msg.content}</p>
-                        )}
-                        <div className="flex items-center justify-end gap-1 mt-0.5">
-                            <span className="text-[10px] text-gray-500 whitespace-nowrap">
+                        {/* Main Bubble */}
+                        <div className={`px-5 py-3 shadow-sm relative text-[15px] leading-relaxed break-words whitespace-pre-wrap ${isMe
+                            ? 'bg-gradient-to-l from-[#7F5FE6] to-[#A45EE0] text-white rounded-[22px] rounded-br-[4px]'
+                            : 'bg-white text-gray-900 border border-gray-100 rounded-[22px] rounded-bl-[4px]'
+                            }`}>
+
+                            {msg.type === 'image' || msg.type === 'sticker' ||
+                                /\.(gif|jpg|jpeg|png|webp)/i.test(msg.content.trim()) ||
+                                msg.content.includes('giphy.com') ||
+                                msg.content.includes('jsdelivr.net') ||
+                                msg.content.includes('twemoji') ||
+                                msg.content.includes('zobj.net') ||
+                                msg.content.includes('supabase.co/storage') ||
+                                msg.content.includes('raw.githubusercontent.com') ? (
+                                <div className="rounded-xl overflow-hidden -mx-2 -my-1 cursor-pointer" onClick={() => window.open(msg.content.trim(), '_blank')}>
+                                    <img
+                                        src={msg.content.trim()}
+                                        alt="img"
+                                        className={`h-auto object-contain ${msg.content.includes('zobj.net') || msg.content.includes('twemoji') || msg.content.includes('jsdelivr.net') || msg.content.includes('raw.githubusercontent.com')
+                                            ? 'w-24 max-h-24 mx-auto'
+                                            : 'w-full max-h-[300px]'
+                                            }`}
+                                        loading="lazy"
+                                    />
+                                </div>
+                            ) : (
+                                msg.content
+                            )}
+                        </div>
+
+                        {/* Status / Time */}
+                        <div className="flex items-center gap-1 mt-1 px-1">
+                            <span className="text-[10px] text-gray-400">
                                 {new Date(msg.createdAt).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
                             </span>
                             {isMe && (
-                                msg.read ? <CheckCheck className="w-3.5 h-3.5 text-blue-500" /> : <Check className="w-3.5 h-3.5 text-gray-400" />
+                                msg.read
+                                    ? <CheckCheck className="w-3 h-3 text-purple-600" />
+                                    : <Check className="w-3 h-3 text-gray-300" />
                             )}
                         </div>
                     </div>

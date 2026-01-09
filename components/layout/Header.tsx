@@ -38,7 +38,7 @@ export default function Header() {
         window.addEventListener('storage', checkUser);
         window.addEventListener('user-login', checkUser);
 
-        // Fetch unread count from local API route (faster)
+        // Fetch unread count from local API route (only on mount)
         const fetchUnread = async () => {
             const token = localStorage.getItem('token');
             if (token) {
@@ -53,8 +53,43 @@ export default function Header() {
                 } catch (e) { /* ignore */ }
             }
         };
-        fetchUnread();
-        const unreadInterval = setInterval(fetchUnread, 30000);
+        fetchUnread(); // Fetch once on mount - no polling!
+
+        // Supabase Realtime for new messages (Genius Mode: Enabled via RLS)
+        let cleanupRealtime: (() => void) | undefined;
+
+        const setupRealtime = async () => {
+            const storedUser = localStorage.getItem('user');
+            if (!storedUser) return;
+
+            const parsedUser = JSON.parse(storedUser);
+            const { createClient } = await import('@supabase/supabase-js');
+            const supabase = createClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+            );
+
+            const channel = supabase.channel('header-unread')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: 'INSERT',
+                        schema: 'public',
+                        table: 'messages',
+                        filter: `receiver_id=eq.${parsedUser.id}`
+                    },
+                    (payload) => {
+                        console.log('🔔 Header Realtime received:', payload);
+                        // Force refresh even if filter seems weird for now to test flow
+                        fetchUnread();
+                    }
+                )
+                .subscribe();
+
+            cleanupRealtime = () => channel.unsubscribe();
+        };
+
+        setupRealtime();
 
         // Socket.io for real-time guest message notifications (owners only)
         const socket = io(API_URL);
@@ -98,7 +133,6 @@ export default function Header() {
             window.removeEventListener('user-login', checkUser);
             document.removeEventListener('mousedown', handleClickOutside);
             window.removeEventListener('unreadCountUpdated', handleUnreadUpdate);
-            clearInterval(unreadInterval);
             socket.disconnect();
         }
     }, [])

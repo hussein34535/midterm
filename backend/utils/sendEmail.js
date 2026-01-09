@@ -1,43 +1,64 @@
+const SibApiV3Sdk = require('sib-api-v3-sdk');
 const { Resend } = require('resend');
+
+// Configure Brevo API Client
+const defaultClient = SibApiV3Sdk.ApiClient.instance;
+const apiKey = defaultClient.authentications['api-key'];
+// We set this dynamically inside the function to ensure env vars are loaded
 
 const sendEmail = async (to, subject, html) => {
     try {
         console.log(`📨 Attempting to send email to: ${to}`);
 
-        // 1. Try Resend API (HTTP - Bypasses SMTP ports)
-        if (process.env.RESEND_API_KEY) {
-            const resend = new Resend(process.env.RESEND_API_KEY);
+        // 🔍 DEV MODE: Always log OTP to console to unblock user if email fails
+        const tokenMatch = html.match(/>\s*(\d{6})\s*<\/span>/) || html.match(/(\d{6})/);
+        if (tokenMatch) {
+            console.log('==================================================');
+            console.log(`🔑 DEV OTP CODE: [ ${tokenMatch[1]} ]`);
+            console.log('==================================================');
+        }
 
+        // 1. Try Brevo API (Highest Priority)
+        if (process.env.BREVO_API_KEY) {
+            apiKey.apiKey = process.env.BREVO_API_KEY;
+            const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
+            const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
+
+            sendSmtpEmail.subject = subject;
+            sendSmtpEmail.htmlContent = html;
+            sendSmtpEmail.sender = {
+                "name": process.env.BREVO_SENDER_NAME || "Iwaa Support",
+                "email": process.env.BREVO_SENDER_EMAIL || "support@iwaa.com"
+            };
+            sendSmtpEmail.to = [{ "email": to }];
+
+            const data = await apiInstance.sendTransacEmail(sendSmtpEmail);
+            console.log('✅ Email sent via Brevo API:', data.messageId);
+            return true;
+        }
+
+        // 2. Try Resend API (Backup)
+        if (process.env.RESEND_API_KEY) {
+            // ... existing Resend logic ... (keeping code for fallback)
+            const resend = new Resend(process.env.RESEND_API_KEY);
             const { data, error } = await resend.emails.send({
-                from: 'Iwaa <onboarding@resend.dev>', // Only works for verified email without custom domain
+                from: 'Iwaa <onboarding@resend.dev>',
                 to: [to],
                 subject: subject,
                 html: html,
             });
-
-            if (error) {
-                console.warn('⚠️ Resend API Warning:', error.name, error.message);
-
-                // Smart Fallback: If domain not verified (403 or validation_error), log as mock
-                if (error.name === 'validation_error' || error.statusCode === 403) {
-                    console.log('💡 Falling back to MOCK email (domain not verified).');
-                    return mockEmailLog(to, subject, html);
-                }
-                return false;
+            if (!error) {
+                console.log('✅ Email sent via Resend:', data.id);
+                return true;
             }
-
-            console.log('✅ Email sent via Resend:', data.id);
-            return true;
+            console.warn('⚠️ Resend failed, falling back to mock.');
         }
 
-        // 2. Mock (No API Key)
-        else {
-            return mockEmailLog(to, subject, html);
-        }
+        // 3. Fallback
+        return mockEmailLog(to, subject, html);
 
     } catch (error) {
-        console.error('❌ Error sending email:', error);
-        // Final safety net: Log content so user can proceed even if mailer fails
+        console.error('❌ Error sending email:', error.response ? error.response.text : error.message);
         return mockEmailLog(to, subject, html);
     }
 };

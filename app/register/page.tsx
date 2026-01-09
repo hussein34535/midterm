@@ -77,7 +77,7 @@ export default function RegisterPage() {
             const guestToken = localStorage.getItem('iwaa_guest_token');
 
             // Call real API
-            await authAPI.register({
+            const response = await authAPI.register({
                 nickname: formData.nickname,
                 email: formData.email,
                 password: formData.password,
@@ -85,13 +85,15 @@ export default function RegisterPage() {
                 guestToken: guestToken || undefined
             });
 
-            // Backend handles verification automatically now
+            // Redirect to Dashboard (Auto-Login Restored)
             toast.success("تم إنشاء الحساب بنجاح! جاري الدخول...");
-
-            // Allow token save in api.ts to propagate
             setTimeout(() => {
                 router.push('/dashboard');
             }, 1000);
+
+            /* Verification Skipped
+            if (response.requiresVerification) { ... }
+            */
         } catch (error: any) {
             toast.error(error.message || "حدث خطأ ما، يرجى المحاولة مرة أخرى");
         } finally {

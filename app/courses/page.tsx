@@ -13,6 +13,7 @@ interface Course {
     title: string;
     description: string;
     price: number;
+    session_price?: number; // سعر الجلسة من قاعدة البيانات
     total_sessions: number;
     specialist?: {
         nickname: string;
@@ -98,6 +99,7 @@ export default function CoursesPage() {
                                         sessionsCount={course.total_sessions}
                                         seatsRemaining={10}
                                         price={course.price}
+                                        sessionPrice={course.session_price}
                                         specialist={{
                                             nickname: course.specialist?.nickname || 'أخصائي',
                                             title: 'أخصائي نفسي'

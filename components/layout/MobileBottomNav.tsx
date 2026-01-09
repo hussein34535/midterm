@@ -29,7 +29,7 @@ export default function MobileBottomNav() {
             } catch (e) { }
         }
 
-        // Fetch unread count from local API route (faster than Render)
+        // Fetch unread count from Vercel API (only once on mount - FAST!)
         const fetchUnread = async () => {
             const token = localStorage.getItem('token');
 
@@ -46,19 +46,42 @@ export default function MobileBottomNav() {
             }
         };
 
-        fetchUnread();
-        const unreadInterval = setInterval(fetchUnread, 5000);
+        fetchUnread(); // Fetch once on mount - no polling!
+
+        // 🔔 Socket.io for instant updates (from Render backend)
+        const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+        let socket: any = null;
+
+        const setupSocket = async () => {
+            const storedUser = localStorage.getItem('user');
+            if (!storedUser) return;
+
+            const parsedUser = JSON.parse(storedUser);
+            const { io } = await import('socket.io-client');
+            socket = io(API_URL);
+
+            // Join personal notification room
+            socket.emit('join-user-room', parsedUser.id);
+
+            // Listen for unread count updates
+            socket.on('unread-count-update', () => {
+                fetchUnread(); // Refresh count immediately
+            });
+        };
+
+        setupSocket();
 
         const handleUnreadUpdate = (e: CustomEvent) => {
             setUnreadCount(e.detail?.count || 0);
         };
 
-        // Listen for login/logout events (Triggered by authAPI)
+        // Listen for login/logout events
         const handleLogin = () => {
             const storedUser = localStorage.getItem('user');
             if (storedUser) {
                 try {
                     setUser(JSON.parse(storedUser));
+                    fetchUnread();
                 } catch (e) { }
             }
         };
@@ -78,7 +101,7 @@ export default function MobileBottomNav() {
         window.addEventListener('chatClosed', handleChatClose);
 
         return () => {
-            clearInterval(unreadInterval);
+            realtimeCleanup?.();
             window.removeEventListener('unreadCountUpdated', handleUnreadUpdate as EventListener);
             window.removeEventListener('user-login', handleLogin);
             window.removeEventListener('user-logout', handleLogout);
@@ -100,7 +123,7 @@ export default function MobileBottomNav() {
     // 1. Admin (Rightmost - first in visual RTL)
     if (user.role === 'owner') {
         navItems.push({
-            name: "الإدارة",
+            name: "لوحة التحكم",
             href: "/admin",
             icon: Crown,
             isSpecial: true,

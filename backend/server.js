@@ -84,7 +84,8 @@ const roomUsers = new Map(); // roomId -> Set<userId>
 
 // Socket.io Events
 io.on('connection', (socket) => {
-    console.log('🔌 New Client Connected:', socket.id);
+    // Connection logged only in dev - too noisy for production
+    // console.log('🔌 New Client Connected:', socket.id);
 
     socket.on('join-room', (data) => {
         // Support both old format (string) and new format (object with user info)
@@ -97,7 +98,7 @@ io.on('connection', (socket) => {
         } : { socketId: socket.id, name: 'مستخدم', avatar: null, agoraUid: null };
 
         socket.join(roomId);
-        console.log(`👤 User ${userInfo.name} (${socket.id}) joined room: ${roomId}`);
+        // console.log(`👤 User ${userInfo.name} (${socket.id}) joined room: ${roomId}`);
 
         // Track users with their info
         if (!roomUsers.has(roomId)) {
@@ -110,10 +111,18 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('room-users-update', usersList);
     });
 
+    // 🔔 Join personal user room for notifications (unread count, etc.)
+    socket.on('join-user-room', (userId) => {
+        if (userId) {
+            socket.join(`user_${userId}`);
+            // console.log(`🔔 User ${userId} joined personal notification room`);
+        }
+    });
+
     socket.on('moderation-action', (data) => {
         // data = { action: 'mute', targetUid: '123', channelName: 'abc' }
         const { channelName, action, targetUid } = data;
-        console.log(`🛡️ Moderation [${action}] on ${targetUid} in ${channelName}`);
+        // console.log(`🛡️ Moderation [${action}] on ${targetUid} in ${channelName}`);
 
         // Broadcast to everyone in the room (including sender to confirm)
         io.to(channelName).emit('moderation-event', data);
@@ -124,8 +133,7 @@ io.on('connection', (socket) => {
         // data = { roomId, message, sender: { name, avatar, agoraUid } }
         const { roomId, message, sender } = data;
         const timestamp = new Date().toISOString();
-
-        console.log(`💬 [${roomId}] ${sender.name}: ${message}`);
+        // console.log(`💬 [${roomId}] ${sender.name}: ${message}`);
 
         // Broadcast to everyone in the room
         io.to(roomId).emit('chat-message', {
@@ -154,7 +162,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        console.log('❌ Client Disconnected:', socket.id);
+        // console.log('❌ Client Disconnected:', socket.id);
     });
 });
 

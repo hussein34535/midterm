@@ -694,8 +694,12 @@ const emitRealtimeMessage = (req, message) => {
     // Emit to Receiver (Direct Message)
     if (message.receiver_id) {
         io.to(`user_${message.receiver_id}`).emit('receive_message', message);
-        // Also emit to 'system' if message is to system (Shared Inbox case)
-        // (Not needed if we impersonate system, as receiver is the user)
+        // 🔔 Notify receiver about new unread message (for badge update)
+        io.to(`user_${message.receiver_id}`).emit('unread-count-update', {
+            senderId: message.sender_id,
+            senderName: message.sender?.nickname,
+            preview: message.content?.substring(0, 50)
+        });
     }
 
     // Emit to Group/Course (Group Message)

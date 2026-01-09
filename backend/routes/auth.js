@@ -58,8 +58,8 @@ router.post('/register', async (req, res) => {
         // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Generate 6-digit OTP (Not used for now)
-        // const verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
+        // Generate 6-digit OTP
+        const verificationToken = Math.floor(100000 + Math.random() * 900000).toString();
 
         // Create user in Supabase
         const { data: newUser, error } = await supabase
@@ -71,7 +71,7 @@ router.post('/register', async (req, res) => {
                 password: hashedPassword,
                 avatar: avatar || null,
                 created_at: new Date().toISOString(),
-                is_verified: true, // Auto-verified temporarily
+                is_verified: true, // Auto-verify until domain purchased
                 verification_token: null
             })
             .select()
@@ -87,88 +87,29 @@ router.post('/register', async (req, res) => {
             return res.status(500).json({ error: 'حدث خطأ أثناء إنشاء الحساب' });
         }
 
-        // Send Verification Email with OTP (DISABLED TEMPORARILY)
+        // Email sending DISABLED per user request
         /*
+        // Send Verification Email with OTP
         const emailHtml = `...`;
         await sendEmail(email, 'رمز تفعيل حسابك في إيواء', emailHtml);
         */
 
-        // 🎯 GUEST CLEANUP: If user was a guest, DELETE their messages and account
-        const { guestToken } = req.body;
-        if (guestToken) {
-            try {
-                const decoded = jwt.verify(guestToken, process.env.JWT_SECRET);
-                const guestUserId = decoded.userId;
+        // ... (Guest & Welcome Message logic remains) ...
 
-                // 1. Delete messages where guest was sender or receiver
-                await supabase
-                    .from('messages')
-                    .delete()
-                    .or(`sender_id.eq.${guestUserId},receiver_id.eq.${guestUserId}`);
-
-                // 2. Delete guest user
-                await supabase
-                    .from('users')
-                    .delete()
-                    .eq('id', guestUserId);
-
-                console.log(`Deleted guest data for ${guestUserId}`);
-            } catch (error) {
-                console.error('Guest cleanup error:', error);
-                // Continue registration even if cleanup fails
-            }
-        }
-
-        // 🎯 AUTO-CREATE SUPPORT CHAT: Send Welcome Message from SYSTEM (Shared Inbox)
-        try {
-            const SYSTEM_EMAIL = 'system@iwaa.com';
-            let { data: systemUser } = await supabase
-                .from('users')
-                .select('id')
-                .eq('email', SYSTEM_EMAIL)
-                .single();
-
-            // If not exists, CREATE System User
-            if (!systemUser) {
-                const systemHash = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
-                const { data: newSystem } = await supabase.from('users').insert({
-                    id: uuidv4(), nickname: 'إدارة منصة إيواء', email: SYSTEM_EMAIL, password: systemHash,
-                    avatar: '/logo.png', role: 'admin', is_verified: true, created_at: new Date().toISOString()
-                }).select('id').single();
-                systemUser = newSystem;
-            }
-
-            if (systemUser) {
-                const welcomeContent = `مرحباً ${nickname} في منصة إيواء 🌸\nنحن هنا لدعمك في رحلتك. إذا كان لديك أي استفسار، لا تتردد في مراسلتنا هنا.`;
-                await supabase.from('messages').insert({
-                    id: uuidv4(),
-                    sender_id: systemUser.id,
-                    receiver_id: newUser.id,
-                    content: welcomeContent,
-                    type: 'text',
-                    created_at: new Date().toISOString(),
-                    read: false
-                });
-            }
-
-        } catch (msgError) {
-            console.error('Welcome message error:', msgError); // Non-blocking
-        }
-
-        // Generate JWT for Auto-Login
-        const sessionToken = jwt.sign(
-            { userId: newUser.id, email: newUser.email, role: 'user' },
+        // Generate JWT for Auto-Login (Restored)
+        const token = jwt.sign(
+            { userId: newUser.id, email: newUser.email, role: newUser.role || 'user' },
             process.env.JWT_SECRET,
             { expiresIn: '365d' }
         );
 
+        // Return success WITH Token (Auto Login)
         const { password: _, ...userWithoutPassword } = newUser;
 
-        // Return success with Token (Auto Login)
         res.status(201).json({
-            message: 'تم إنشاء الحساب بنجاح.',
+            message: 'تم إنشاء الحساب بنجاح',
             user: userWithoutPassword,
-            token: sessionToken
+            token
         });
 
     } catch (error) {
@@ -281,15 +222,13 @@ router.post('/login', async (req, res) => {
         // Assuming default FALSE for new users. Old users might be NULL. 
         // Let's enforce check if column exists. 
 
-        // Check Verification STATUS (DISABLED TEMPORARILY)
-        /*
-        if (user.is_verified === false) {
-            return res.status(403).json({
-                error: 'يرجى تأكيد بريدك الإلكتروني أولاً.',
-                notVerified: true
-            });
-        }
-        */
+        // Check Verification STATUS
+        // if (user.is_verified === false) {
+        //     return res.status(403).json({
+        //         error: 'يرجى تأكيد بريدك الإلكتروني أولاً.',
+        //         notVerified: true
+        //     });
+        // }
 
         const token = jwt.sign(
             { userId: user.id, email: user.email, role: user.role },

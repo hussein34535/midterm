@@ -7,6 +7,7 @@ interface CourseCardProps {
     title: string;
     description: string;
     price: string | number;
+    sessionPrice?: string | number; // سعر الجلسة من قاعدة البيانات
     // Flexible props to support different usages
     instructor?: string;
     duration?: string;
@@ -31,6 +32,7 @@ export default function CourseCard({
     rating,
     reviews,
     price,
+    sessionPrice,
     description,
     sessionsCount,
     specialist
@@ -65,15 +67,33 @@ export default function CourseCard({
             </div>
 
             {/* Footer / Price */}
-            <div className="mt-auto pt-4 border-t border-border/50 flex items-center justify-between relative z-10">
-                <div className="text-right">
-                    <p className="text-xs text-muted-foreground mb-0.5">سعر الكورس</p>
-                    <p className="text-lg font-black text-foreground">{price} <span className="text-xs font-normal text-muted-foreground">ج.م</span></p>
-                </div>
+            <div className="mt-auto pt-4 border-t border-border/50 relative z-10">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        {/* سعر الجلسة أولاً */}
+                        {sessionPrice && Number(sessionPrice) > 0 && (
+                            <div className="text-right">
+                                <p className="text-xs text-muted-foreground mb-0.5">سعر الجلسة</p>
+                                <p className="text-lg font-bold text-foreground">{sessionPrice} <span className="text-xs font-normal text-muted-foreground">ج.م</span></p>
+                            </div>
+                        )}
+                        {/* سعر الكورس كامل */}
+                        <div className="text-right border-r border-border/50 pr-4">
+                            <p className="text-xs text-muted-foreground mb-0.5">الكورس كامل</p>
+                            <p className="text-sm font-semibold text-foreground">{price} <span className="text-xs font-normal text-muted-foreground">ج.م</span></p>
+                        </div>
+                        {/* التوفير */}
+                        {sessionPrice && Number(sessionPrice) > 0 && sessionsCount && sessionsCount > 1 && (Number(sessionPrice) * sessionsCount) > Number(price) && (
+                            <p className="text-xs text-green-600">
+                                وفّر {Math.round((Number(sessionPrice) * sessionsCount) - Number(price))} ج.م
+                            </p>
+                        )}
+                    </div>
 
-                <Link href={`/courses/${id}`} className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary hover:bg-primary hover:text-primary-foreground transition-all group/btn shadow-sm">
-                    <ArrowRight className="w-5 h-5 group-hover/btn:-translate-x-0.5 transition-transform" />
-                </Link>
+                    <Link href={`/courses/${id}`} className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary hover:bg-primary hover:text-primary-foreground transition-all group/btn shadow-sm">
+                        <ArrowRight className="w-5 h-5 group-hover/btn:-translate-x-0.5 transition-transform" />
+                    </Link>
+                </div>
             </div>
         </div>
     );
