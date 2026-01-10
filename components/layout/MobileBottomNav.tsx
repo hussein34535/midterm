@@ -100,6 +100,18 @@ export default function MobileBottomNav() {
         window.addEventListener('chatOpened', handleChatOpen);
         window.addEventListener('chatClosed', handleChatClose);
 
+        // Visibility change handler - refresh when user returns to tab
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                fetchUnread();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        // Focus handler - refresh when window gains focus  
+        const handleFocus = () => fetchUnread();
+        window.addEventListener('focus', handleFocus);
+
         return () => {
             socket?.disconnect();
             window.removeEventListener('unreadCountUpdated', handleUnreadUpdate as EventListener);
@@ -107,6 +119,8 @@ export default function MobileBottomNav() {
             window.removeEventListener('user-logout', handleLogout);
             window.removeEventListener('chatOpened', handleChatOpen);
             window.removeEventListener('chatClosed', handleChatClose);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('focus', handleFocus);
         };
     }, []);
 

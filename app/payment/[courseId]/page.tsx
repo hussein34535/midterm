@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, use, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import {
@@ -14,7 +14,8 @@ import {
     Building2,
     Wallet,
     Loader2,
-    Ticket
+    Ticket,
+    Sparkles
 } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
@@ -24,6 +25,7 @@ interface Course {
     title: string;
     price: number;
     session_price?: number;
+    total_sessions?: number;
 }
 
 interface PageProps {
@@ -32,12 +34,18 @@ interface PageProps {
 
 export default function PaymentPage({ params }: PageProps) {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { courseId } = use(params);
+
+    // Get payment type and session number from URL
+    const urlType = searchParams.get('type');
+    const urlSessionNumber = searchParams.get('session');
 
     const [course, setCourse] = useState<Course | null>(null);
     const [loading, setLoading] = useState(true);
     const [selectedMethod, setSelectedMethod] = useState<string | null>(null);
-    const [paymentType, setPaymentType] = useState<'full' | 'session'>('full');
+    const [paymentType, setPaymentType] = useState<'full' | 'session'>(urlType === 'session' ? 'session' : 'full');
+    const [sessionNumber, setSessionNumber] = useState<number>(urlSessionNumber ? parseInt(urlSessionNumber) : 1);
     const [couponCode, setCouponCode] = useState('');
     const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; value: number; type: 'percentage' | 'fixed' } | null>(null);
     const [checkingCoupon, setCheckingCoupon] = useState(false);
@@ -209,7 +217,8 @@ export default function PaymentPage({ params }: PageProps) {
                 body: JSON.stringify({
                     payment_method: selectedMethod,
                     amount: getFinalPrice(), // Send discounted price
-                    payment_type: paymentType,
+                    payment_type: paymentType === 'session' ? 'session' : 'course',
+                    session_number: paymentType === 'session' ? sessionNumber : null, // For session payments
                     coupon_code: appliedCoupon?.code, // Send coupon code
                     payment_screenshot: screenshotPreview, // Send as base64
                     sender_number: senderNumber // Send sender number
@@ -262,10 +271,13 @@ export default function PaymentPage({ params }: PageProps) {
                             <CreditCard className="w-10 h-10 text-primary" />
                         </div>
                         <h1 className="text-3xl font-serif font-bold text-foreground mb-2">
-                            إتمام الدفع
+                            {paymentType === 'session' ? `دفع الجلسة ${sessionNumber}` : 'إتمام الدفع'}
                         </h1>
                         <p className="text-muted-foreground">
                             كورس: <span className="font-semibold text-primary">{course.title}</span>
+                            {paymentType === 'session' && course.total_sessions && (
+                                <span className="text-xs mr-2">(الجلسة {sessionNumber} من {course.total_sessions})</span>
+                            )}
                         </p>
                     </div>
 
@@ -355,10 +367,25 @@ export default function PaymentPage({ params }: PageProps) {
                             )}
                         </div>
 
-                        {paymentType === 'full' && course.session_price && course.session_price > 0 && (
-                            <p className="text-xs text-green-600 mt-2 font-medium">
-                                * توفير عند الدفع الكامل
-                            </p>
+                        {/* Savings Badge */}
+                        {paymentType === 'full' && course.session_price && course.session_price > 0 && course.total_sessions && (
+                            (() => {
+                                const savings = (course.session_price * course.total_sessions) - course.price;
+                                if (savings > 0) {
+                                    return (
+                                        <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-xl flex items-center justify-between animate-in fade-in slide-in-from-top-2">
+                                            <div className="flex items-center gap-2">
+                                                <Sparkles className="w-4 h-4 text-green-600 fill-green-600" />
+                                                <span className="text-sm font-bold text-green-700">لقد وفرت {savings} ج.م بهذا الاختيار!</span>
+                                            </div>
+                                            <span className="text-xs font-bold text-white bg-green-600 px-2 py-1 rounded-full">
+                                                وفر {Math.round((savings / (course.session_price * course.total_sessions)) * 100)}%
+                                            </span>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()
                         )}
                     </div>
 

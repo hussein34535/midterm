@@ -55,7 +55,7 @@ export default function Header() {
         };
         fetchUnread(); // Fetch once on mount - no polling!
 
-        // Supabase Realtime for new messages (Genius Mode: Enabled via RLS)
+        // Supabase Realtime for new messages
         let cleanupRealtime: (() => void) | undefined;
 
         const setupRealtime = async () => {
@@ -63,28 +63,28 @@ export default function Header() {
             if (!storedUser) return;
 
             const parsedUser = JSON.parse(storedUser);
-            const { createClient } = await import('@supabase/supabase-js');
-            const supabase = createClient(
-                process.env.NEXT_PUBLIC_SUPABASE_URL!,
-                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-            );
+            const { supabase } = await import('@/lib/supabaseClient');
 
-            const channel = supabase.channel('header-unread')
+            // Subscribe to ALL message changes (insert and update)
+            // Filter on client-side for better reliability
+            // Subscribe to message changes for this user
+            const channel = supabase.channel('header-unread-v3')
                 .on(
                     'postgres_changes',
                     {
-                        event: 'INSERT',
+                        event: 'INSERT', // Focus on new messages
                         schema: 'public',
                         table: 'messages',
                         filter: `receiver_id=eq.${parsedUser.id}`
                     },
                     (payload) => {
                         console.log('🔔 Header Realtime received:', payload);
-                        // Force refresh even if filter seems weird for now to test flow
                         fetchUnread();
                     }
                 )
-                .subscribe();
+                .subscribe((status, err) => {
+                    console.log('📡 Header Realtime subscription status:', status, err || '');
+                });
 
             cleanupRealtime = () => channel.unsubscribe();
         };
@@ -112,6 +112,18 @@ export default function Header() {
             }
         });
 
+        // Visibility change handler - refresh when user returns to tab
+        const handleVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                fetchUnread();
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        // Focus handler - refresh when window gains focus  
+        const handleFocus = () => fetchUnread();
+        window.addEventListener('focus', handleFocus);
+
         const handleClickOutside = (event: MouseEvent) => {
             const target = event.target as HTMLElement;
             if (!target.closest('.user-menu-container')) {
@@ -133,6 +145,9 @@ export default function Header() {
             window.removeEventListener('user-login', checkUser);
             document.removeEventListener('mousedown', handleClickOutside);
             window.removeEventListener('unreadCountUpdated', handleUnreadUpdate);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('focus', handleFocus);
+            if (cleanupRealtime) cleanupRealtime();
             socket.disconnect();
         }
     }, [])

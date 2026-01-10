@@ -569,6 +569,7 @@ router.get('/payments/:id', requireAdmin, async (req, res) => {
 /**
  * PATCH /api/admin/payments/:id
  * Update payment status (Owner only - confirm/reject)
+ * Handles both full course payments and per-session payments
  */
 router.patch('/payments/:id', requireOwner, async (req, res) => {
     try {
@@ -582,7 +583,7 @@ router.patch('/payments/:id', requireOwner, async (req, res) => {
 
         const { data: payment, error: fetchError } = await supabase
             .from('payments')
-            .select('user_id, course_id')
+            .select('user_id, course_id, payment_type, metadata')
             .eq('id', id)
             .single();
 
@@ -593,7 +594,11 @@ router.patch('/payments/:id', requireOwner, async (req, res) => {
         // Update payment status
         const { error } = await supabase
             .from('payments')
-            .update({ status })
+            .update({
+                status,
+                confirmed_by: req.userId,
+                confirmed_at: new Date().toISOString()
+            })
             .eq('id', id);
 
         if (error) {
@@ -601,8 +606,48 @@ router.patch('/payments/:id', requireOwner, async (req, res) => {
             return res.status(500).json({ error: 'حدث خطأ أثناء تحديث الدفعة' });
         }
 
-        // If confirmed, create full enrollment with group assignment
+        // Handle confirmation based on payment type
         if (status === 'confirmed' || status === 'completed') {
+
+            // === SESSION PAYMENT ===
+            if (payment.payment_type === 'session') {
+                const sessionNumber = payment.metadata?.session_number;
+
+                if (sessionNumber) {
+                    // Check if already recorded
+                    const { data: existing } = await supabase
+                        .from('session_payments')
+                        .select('id')
+                        .eq('user_id', payment.user_id)
+                        .eq('course_id', payment.course_id)
+                        .eq('session_number', sessionNumber)
+                        .single();
+
+                    if (!existing) {
+                        // Record the paid session
+                        await supabase
+                            .from('session_payments')
+                            .insert({
+                                id: uuidv4(),
+                                user_id: payment.user_id,
+                                course_id: payment.course_id,
+                                session_number: sessionNumber,
+                                payment_id: id,
+                                paid_at: new Date().toISOString()
+                            });
+
+                        console.log(`✅ Session ${sessionNumber} marked as paid for user ${payment.user_id}`);
+                    }
+                }
+
+                return res.json({
+                    message: `تم تأكيد دفع الجلسة ${sessionNumber} بنجاح`,
+                    type: 'session',
+                    session_number: sessionNumber
+                });
+            }
+
+            // === FULL COURSE PAYMENT ===
             // Check if enrollment already exists
             const { data: existingEnroll } = await supabase
                 .from('enrollments')
@@ -732,7 +777,7 @@ router.patch('/payments/:id', requireOwner, async (req, res) => {
             }
         }
 
-        res.json({ message: 'تم تحديث حالة الدفعة بنجاح' });
+        res.json({ message: 'تم تحديث حالة الدفعة بنجاح', type: 'course' });
     } catch (error) {
         console.error('Payment update error:', error);
         res.status(500).json({ error: 'حدث خطأ' });

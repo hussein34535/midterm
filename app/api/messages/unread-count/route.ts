@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
         }
 
-        const userId = decoded.id;
+        const userId = decoded.userId || decoded.id; // Support both formats
         const userRole = decoded.role;
 
         // Build receiver IDs list
@@ -43,14 +43,22 @@ export async function GET(request: NextRequest) {
             receiverIds.push('b1cb10e6-002e-4377-850e-2c3bcbdfb648'); // Legacy ID
         }
 
-        // Count unread messages
-        const { count } = await supabase
+        // Count unread DIRECT messages (where receiver_id matches user)
+        // Also include messages where sender_id is null (system messages)
+        const { count: directCount, error } = await supabase
             .from('messages')
             .select('*', { count: 'exact', head: true })
             .in('receiver_id', receiverIds)
             .eq('read', false);
 
-        return NextResponse.json({ unreadCount: count || 0 });
+        if (error) {
+            console.error('Unread count query error:', error);
+        }
+
+        // Log for debugging
+        console.log(`[Unread API] User: ${userId}, Role: ${userRole}, ReceiverIDs: ${receiverIds.join(',')}, Count: ${directCount}`);
+
+        return NextResponse.json({ unreadCount: directCount || 0 });
     } catch (error) {
         console.error('Unread count error:', error);
         return NextResponse.json({ error: 'Server error' }, { status: 500 });

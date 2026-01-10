@@ -1,159 +1,225 @@
-# إيواء - منصة الدعم والتطوير الذاتي
+# إِواء - Iwaa Mental Health Platform
 
 <div align="center">
 
-![إيواء Logo](public/logo.png)
+![Iwaa Logo](public/logo.png)
 
-**منصة عربية متكاملة للتدريب والإرشاد النفسي عن بُعد**
+**منصة عربية متكاملة للصحة النفسية والدعم العاطفي**
 
-[![Next.js](https://img.shields.io/badge/Next.js-15-black?style=flat-square&logo=next.js)](https://nextjs.org/)
-[![Node.js](https://img.shields.io/badge/Node.js-Express-green?style=flat-square&logo=node.js)](https://nodejs.org/)
-[![Supabase](https://img.shields.io/badge/Supabase-Database-3ECF8E?style=flat-square&logo=supabase)](https://supabase.com/)
-[![Agora](https://img.shields.io/badge/Agora-VoIP-099DFD?style=flat-square)](https://agora.io/)
+[![Next.js](https://img.shields.io/badge/Next.js-16.1-black?logo=next.js)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19.2-blue?logo=react)](https://reactjs.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-Database-green?logo=supabase)](https://supabase.com/)
+[![Socket.io](https://img.shields.io/badge/Socket.io-Realtime-white?logo=socket.io)](https://socket.io/)
 
 </div>
 
 ---
 
-## 🌟 نظرة عامة
+## 📋 نظرة عامة
 
-**إيواء** هي منصة عربية متكاملة تربط بين الأخصائيين والمستفيدين، توفر:
-
-- 🎓 **كورسات تفاعلية** مع جلسات صوتية جماعية
-- 💬 **شات جماعي** لكل كورس (Group Chats)
-- 📅 **جدولة ذكية** للجلسات من داخل المحادثات
-- 📞 **مكالمات صوتية** عالية الجودة (Agora RTC)
-- 👥 **إدارة كاملة** للمستخدمين والأخصائيين
+**إِواء** هي منصة صحة نفسية شاملة تربط المستخدمين بمتخصصين معتمدين للحصول على الدعم النفسي والعاطفي. تتميز بواجهة مستخدم سلسة باللغة العربية مع دعم المحادثات الفورية والجلسات المرئية.
 
 ---
 
-## 🛠 التقنيات المستخدمة
+## ✨ المميزات الرئيسية
 
-| Frontend | Backend | Database | Real-time |
-|----------|---------|----------|-----------|
-| Next.js 15 | Node.js / Express | Supabase (PostgreSQL) | Socket.IO |
-| React 19 | JWT Auth | Row Level Security | Agora RTC |
-| TailwindCSS | RESTful API | UUID Primary Keys | WebSockets |
+### 👥 للمستخدمين
+- 🔐 **تسجيل دخول آمن** - نظام مصادقة كامل مع تأكيد البريد الإلكتروني
+- 💬 **محادثات فورية** - دردشة لحظية مع المتخصصين
+- 📞 **جلسات فيديو** - مكالمات فيديو آمنة عبر Agora
+- 📚 **كورسات تعليمية** - محتوى تثقيفي للصحة النفسية
+- 😊 **ستيكرز مخصصة** - إضافة لمسة شخصية للمحادثات
+- 🎨 **أفاتارات متنوعة** - اختيار صورة شخصية من مكتبة غنية
+
+### 👨‍⚕️ للمتخصصين
+- 📊 **لوحة تحكم** - إدارة الجلسات والعملاء
+- 📅 **جدولة المواعيد** - تنظيم جلسات الاستشارة
+- 💰 **إدارة المدفوعات** - تتبع الأرباح والفواتير
+
+### 🛠️ للمديرين
+- 👤 **إدارة المستخدمين** - موافقة/رفض المتخصصين
+- 📈 **إحصائيات** - تقارير شاملة عن المنصة
+- 🎫 **كوبونات خصم** - إنشاء وإدارة العروض
+- ⚙️ **إعدادات النظام** - التحكم الكامل بالمنصة
 
 ---
 
-## 📁 هيكل المشروع
+## 🏗️ البنية التقنية
 
 ```
-midterm/
-├── app/                    # Next.js App Router
-│   ├── admin/              # لوحة الأدمن
-│   ├── specialist/         # لوحة الأخصائي
-│   ├── dashboard/          # لوحة المستخدم
-│   ├── messages/           # نظام المحادثات
-│   └── session/[id]/       # غرفة الجلسة الصوتية
-├── backend/
-│   ├── routes/             # API Endpoints
-│   │   ├── auth.js         # تسجيل الدخول
-│   │   ├── courses.js      # الكورسات
-│   │   ├── messages.js     # الرسائل والشات
-│   │   └── admin.js        # إدارة النظام
-│   └── server.js           # Express Server
-├── components/
-│   ├── voice/              # مكونات المكالمة الصوتية
-│   └── layout/             # Header, Footer
-├── database/
-│   └── schema.sql          # Database Schema
-└── public/                 # Static Assets
+iwaa/
+├── app/                    # Next.js App Router (Frontend)
+│   ├── admin/             # لوحة تحكم المديرين
+│   ├── courses/           # صفحات الكورسات
+│   ├── dashboard/         # لوحة تحكم المتخصصين
+│   ├── messages/          # نظام المحادثات
+│   ├── session/           # جلسات الفيديو
+│   ├── settings/          # إعدادات المستخدم
+│   ├── specialist/        # ملفات المتخصصين
+│   └── ...                # صفحات أخرى
+│
+├── backend/               # Express.js API Server
+│   ├── routes/            # API Endpoints
+│   │   ├── auth.js        # المصادقة والتسجيل
+│   │   ├── messages.js    # المحادثات والرسائل
+│   │   ├── courses.js     # الكورسات
+│   │   ├── sessions.js    # الجلسات
+│   │   ├── admin.js       # وظائف المدير
+│   │   └── ...
+│   ├── middleware/        # JWT Authentication
+│   ├── utils/             # Email helpers
+│   └── server.js          # Entry point
+│
+├── components/            # React Components
+│   ├── ui/               # Shadcn/UI components
+│   └── layout/           # Header, Footer, Nav
+│
+├── lib/                   # Utilities
+│   ├── supabase/         # Supabase client
+│   └── utils.ts          # Helper functions
+│
+└── public/               # Static assets
+    ├── avatars/          # صور الأفاتار
+    └── stickers/         # الستيكرز
 ```
+
+---
+
+## 🛠️ التقنيات المستخدمة
+
+| التقنية | الاستخدام |
+|---------|----------|
+| **Next.js 16** | Frontend Framework |
+| **React 19** | UI Library |
+| **TypeScript** | Type Safety |
+| **Tailwind CSS 4** | Styling |
+| **Shadcn/UI** | Component Library |
+| **Express.js** | Backend API |
+| **Supabase** | Database & Storage |
+| **Socket.io** | Real-time Messaging |
+| **Agora** | Video Calls |
+| **JWT** | Authentication |
+| **Resend/Nodemailer** | Email Service |
 
 ---
 
 ## 🚀 التشغيل المحلي
 
-### 1. تثبيت المتطلبات
+### المتطلبات
+- Node.js 18+
+- npm أو yarn
+- حساب Supabase
+- حساب Agora (للفيديو)
 
+### الخطوات
+
+#### 1. استنساخ المشروع
 ```bash
-# Frontend
-cd midterm
-npm install
+git clone <repository-url>
+cd iwaa
+```
 
-# Backend
+#### 2. إعداد Frontend
+```bash
+npm install
+```
+
+إنشاء ملف `.env.local`:
+```env
+NEXT_PUBLIC_API_URL=http://localhost:5000
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXT_PUBLIC_AGORA_APP_ID=your_agora_app_id
+```
+
+#### 3. إعداد Backend
+```bash
 cd backend
 npm install
 ```
 
-### 2. إعداد المتغيرات البيئية
-
-**Frontend** (`app/.env.local`):
-```env
-NEXT_PUBLIC_API_URL=http://localhost:5000
-```
-
-**Backend** (`backend/.env`):
+إنشاء ملف `backend/.env`:
 ```env
 PORT=5000
-SUPABASE_URL=your_supabase_url
-SUPABASE_SERVICE_KEY=your_service_key
 JWT_SECRET=your_jwt_secret
+SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_KEY=your_supabase_service_key
+RESEND_API_KEY=your_resend_api_key
+AGORA_APP_ID=your_agora_app_id
+AGORA_APP_CERTIFICATE=your_agora_certificate
 ```
 
-### 3. إعداد قاعدة البيانات
-
-شغّل محتويات `database/schema.sql` في Supabase SQL Editor.
-
-### 4. التشغيل
-
+#### 4. تشغيل المشروع
 ```bash
-# Terminal 1 - Backend
-cd backend && npm run dev
+# Terminal 1 - Frontend
+npm run dev
 
-# Terminal 2 - Frontend
-cd midterm && npm run dev
+# Terminal 2 - Backend
+cd backend
+npm run dev
 ```
 
----
-
-## 👤 الأدوار والصلاحيات
-
-| الدور | الصلاحيات |
-|-------|----------|
-| **Owner** | إدارة كاملة، إنشاء كورسات، تعيين أخصائيين |
-| **Specialist** | إدارة جلساته، شات مع المشتركين، جدولة |
-| **User** | التسجيل في الكورسات، حضور الجلسات، الشات |
+- **Frontend**: http://localhost:3000
+- **Backend**: http://localhost:5000
 
 ---
 
-## 📡 API Endpoints
+## 📱 الصفحات الرئيسية
 
-### Auth
-- `POST /api/auth/register` - تسجيل جديد
-- `POST /api/auth/login` - تسجيل دخول
-
-### Courses
-- `GET /api/courses` - جلب الكورسات
-- `POST /api/courses/:id/payment` - الدفع والتسجيل
-
-### Messages
-- `GET /api/messages/conversations` - المحادثات
-- `GET /api/messages/:id?type=group` - رسائل المحادثة
-- `POST /api/messages/:id/schedule` - جدولة جلسة
+| الصفحة | الرابط | الوصف |
+|--------|--------|-------|
+| الرئيسية | `/` | الصفحة الترحيبية |
+| تسجيل الدخول | `/login` | دخول المستخدمين |
+| التسجيل | `/register` | إنشاء حساب جديد |
+| الكورسات | `/courses` | عرض الكورسات المتاحة |
+| الرسائل | `/messages` | المحادثات الفورية |
+| الجلسة | `/session/[id]` | جلسة الفيديو |
+| الإعدادات | `/settings` | إعدادات الحساب |
+| لوحة التحكم | `/admin` | إدارة المنصة (للمديرين) |
 
 ---
 
-## 🎨 الثيم والألوان
+## 🔌 API Endpoints الرئيسية
 
-المنصة تستخدم ثيم "Warm & Nostalgic" بألوان دافئة:
+### المصادقة (`/api/auth`)
+- `POST /register` - تسجيل مستخدم جديد
+- `POST /login` - تسجيل الدخول
+- `POST /verify-email` - تأكيد البريد
+- `POST /forgot-password` - استعادة كلمة المرور
 
-- **Primary**: Terracotta `oklch(0.62 0.18 30)`
-- **Background**: Cream `oklch(0.97 0.008 70)`
-- **Accent**: Sunset Orange `oklch(0.75 0.12 40)`
+### الرسائل (`/api/messages`)
+- `GET /conversations` - جلب المحادثات
+- `GET /:id` - جلب رسائل محادثة
+- `POST /:id` - إرسال رسالة
+- `POST /stickers/save` - حفظ ستيكر
+
+### الكورسات (`/api/courses`)
+- `GET /` - جلب الكورسات
+- `GET /:id` - تفاصيل كورس
+- `POST /enroll` - التسجيل بكورس
 
 ---
 
-## 📄 الرخصة
+## 🔒 الأمان
 
-هذا المشروع للاستخدام التعليمي والتطويري.
+- ✅ تشفير كلمات المرور باستخدام bcrypt
+- ✅ JWT tokens للمصادقة
+- ✅ Row Level Security في Supabase
+- ✅ CORS محدد للـ origins المصرح بها
+- ✅ Input validation على جميع الـ endpoints
+- ✅ NSFW detection للصور
+
+---
+
+## 📧 التواصل
+
+للمساعدة أو الاستفسارات:
+- 📧 Email: support@iwaa.com
 
 ---
 
 <div align="center">
 
-**صُنع بـ ❤️ لمجتمعنا العربي**
+**صنع بـ ❤️ لدعم الصحة النفسية في العالم العربي**
 
 </div>

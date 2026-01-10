@@ -487,18 +487,18 @@ router.delete('/:id', authMiddleware, requireOwner, async (req, res) => {
 
 /**
  * POST /api/courses/:id/payment
- * Record payment and enroll user
+ * Record payment for course OR individual session
  */
 router.post('/:id/payment', authMiddleware, async (req, res) => {
     try {
         const courseId = req.params.id;
         const userId = req.userId;
-        const { payment_method, payment_code, amount, payment_type } = req.body;
+        const { payment_method, payment_code, amount, payment_type, session_number } = req.body;
 
         // Get course to verify price
         const { data: course, error: courseError } = await supabase
             .from('courses')
-            .select('id, title, price, session_price')
+            .select('id, title, price, session_price, total_sessions')
             .eq('id', courseId)
             .single();
 
@@ -506,34 +506,65 @@ router.post('/:id/payment', authMiddleware, async (req, res) => {
             return res.status(404).json({ error: 'الكورس غير موجود' });
         }
 
-        // Validate Amount
-        let expectedAmount = course.price;
+        // Determine expected amount based on payment type
+        let expectedAmount = course.price || 0;
         if (payment_type === 'session') {
             expectedAmount = course.session_price || 0;
+
+            // Validate session_number for session payments
+            if (!session_number || session_number < 1 || session_number > course.total_sessions) {
+                return res.status(400).json({ error: 'رقم الجلسة غير صحيح' });
+            }
+
+            // Check if this session is already paid
+            const { data: existingSessionPayment } = await supabase
+                .from('session_payments')
+                .select('id')
+                .eq('user_id', userId)
+                .eq('course_id', courseId)
+                .eq('session_number', session_number)
+                .single();
+
+            if (existingSessionPayment) {
+                return res.status(400).json({ error: 'هذه الجلسة مدفوعة بالفعل' });
+            }
+
+            // Ensure sequential payment (must pay previous sessions first)
+            if (session_number > 1) {
+                const { count: paidCount } = await supabase
+                    .from('session_payments')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('user_id', userId)
+                    .eq('course_id', courseId)
+                    .lt('session_number', session_number);
+
+                if ((paidCount || 0) < session_number - 1) {
+                    return res.status(400).json({ error: 'يجب دفع الجلسات السابقة أولاً' });
+                }
+            }
+        } else {
+            // Full course payment - check if already enrolled
+            const { data: existing } = await supabase
+                .from('enrollments')
+                .select('id')
+                .eq('user_id', userId)
+                .eq('course_id', courseId)
+                .single();
+
+            if (existing) {
+                return res.status(400).json({ error: 'أنت مشترك بالفعل في هذا الكورس' });
+            }
         }
 
-        // Allow some flexibility or strict check? Strict for now.
-        // If client sends amount, it must match expected.
+        // Validate amount if provided
         if (amount && Number(amount) !== Number(expectedAmount)) {
             return res.status(400).json({ error: 'المبلغ المدفوع غير صحيح' });
         }
 
         const finalAmount = amount || expectedAmount;
 
-        // Check if already enrolled
-        const { data: existing } = await supabase
-            .from('enrollments')
-            .select('id')
-            .eq('user_id', userId)
-            .eq('course_id', courseId)
-            .single();
-
-        if (existing) {
-            return res.status(400).json({ error: 'أنت مشترك بالفعل في هذا الكورس' });
-        }
-
         // Record payment
-        const { payment_screenshot, sender_number } = req.body; // Screenshot as base64
+        const { payment_screenshot, sender_number, coupon_id: couponId } = req.body;
 
         const { data: payment, error: payError } = await supabase
             .from('payments')
@@ -542,12 +573,14 @@ router.post('/:id/payment', authMiddleware, async (req, res) => {
                 user_id: userId,
                 course_id: courseId,
                 amount: finalAmount,
-                original_amount: expectedAmount, // Track original price
+                original_amount: expectedAmount,
                 payment_method: payment_method || 'unknown',
-                payment_code: payment_code,
+                payment_code: payment_code || null,
                 sender_number: sender_number || null,
                 screenshot: payment_screenshot || null,
-                coupon_id: couponId, // Link to coupon
+                coupon_id: couponId || null,
+                payment_type: payment_type || 'course',
+                session_id: null, // Will link to session if needed
                 status: 'pending',
                 created_at: new Date().toISOString()
             })
@@ -559,15 +592,152 @@ router.post('/:id/payment', authMiddleware, async (req, res) => {
             return res.status(500).json({ error: 'حدث خطأ في تسجيل الدفع' });
         }
 
-        // NOTE: Enrollment will be created ONLY when admin confirms payment
-        // See admin/payments endpoint for confirmation logic
+        // Store session_number in payment metadata for admin confirmation
+        if (payment_type === 'session' && session_number) {
+            await supabase
+                .from('payments')
+                .update({
+                    metadata: { session_number: session_number }
+                })
+                .eq('id', payment.id);
+        }
+
+        const message = payment_type === 'session'
+            ? `تم إرسال طلب دفع الجلسة ${session_number}! سيتم تفعيلها بعد التحقق`
+            : 'تم إرسال طلب الدفع بنجاح! سيتم تفعيل اشتراكك خلال ساعات بعد التحقق من الدفع';
 
         res.status(201).json({
-            message: 'تم إرسال طلب الدفع بنجاح! سيتم تفعيل اشتراكك خلال ساعات بعد التحقق من الدفع',
-            payment
+            message,
+            payment,
+            session_number: session_number || null
         });
     } catch (error) {
         console.error('Payment error:', error);
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+/**
+ * GET /api/courses/:id/my-paid-sessions
+ * Get list of paid sessions for current user
+ */
+router.get('/:id/my-paid-sessions', authMiddleware, async (req, res) => {
+    try {
+        const courseId = req.params.id;
+        const userId = req.userId;
+
+        // Check for full course enrollment first
+        const { data: enrollment } = await supabase
+            .from('enrollments')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('course_id', courseId)
+            .single();
+
+        if (enrollment) {
+            // User has full course access - return all sessions as paid
+            const { data: course } = await supabase
+                .from('courses')
+                .select('total_sessions')
+                .eq('id', courseId)
+                .single();
+
+            const allSessions = [];
+            for (let i = 1; i <= (course?.total_sessions || 0); i++) {
+                allSessions.push({ session_number: i, paid: true, full_course: true });
+            }
+            return res.json({ paid_sessions: allSessions, full_course: true });
+        }
+
+        // Get individual paid sessions
+        const { data: paidSessions, error } = await supabase
+            .from('session_payments')
+            .select('session_number, paid_at')
+            .eq('user_id', userId)
+            .eq('course_id', courseId)
+            .order('session_number', { ascending: true });
+
+        if (error) {
+            console.error('Paid sessions fetch error:', error);
+            return res.status(500).json({ error: 'حدث خطأ' });
+        }
+
+        res.json({
+            paid_sessions: paidSessions || [],
+            full_course: false
+        });
+    } catch (error) {
+        console.error('My paid sessions error:', error);
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+/**
+ * GET /api/courses/:id/next-session-to-pay
+ * Get the next session that needs to be paid
+ */
+router.get('/:id/next-session-to-pay', authMiddleware, async (req, res) => {
+    try {
+        const courseId = req.params.id;
+        const userId = req.userId;
+
+        // Check for full enrollment
+        const { data: enrollment } = await supabase
+            .from('enrollments')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('course_id', courseId)
+            .single();
+
+        if (enrollment) {
+            return res.json({ next_session: null, message: 'الكورس مدفوع بالكامل' });
+        }
+
+        // Get course info
+        const { data: course } = await supabase
+            .from('courses')
+            .select('total_sessions, session_price')
+            .eq('id', courseId)
+            .single();
+
+        if (!course) {
+            return res.status(404).json({ error: 'الكورس غير موجود' });
+        }
+
+        // Get highest paid session number
+        const { data: paidSessions } = await supabase
+            .from('session_payments')
+            .select('session_number')
+            .eq('user_id', userId)
+            .eq('course_id', courseId)
+            .order('session_number', { ascending: false })
+            .limit(1);
+
+        const lastPaidSession = paidSessions?.[0]?.session_number || 0;
+        const nextSession = lastPaidSession + 1;
+
+        if (nextSession > course.total_sessions) {
+            return res.json({ next_session: null, message: 'جميع الجلسات مدفوعة' });
+        }
+
+        // Check for pending payment
+        const { data: pendingPayment } = await supabase
+            .from('payments')
+            .select('id, status')
+            .eq('user_id', userId)
+            .eq('course_id', courseId)
+            .eq('payment_type', 'session')
+            .eq('status', 'pending')
+            .single();
+
+        res.json({
+            next_session: nextSession,
+            price: course.session_price,
+            total_sessions: course.total_sessions,
+            has_pending_payment: !!pendingPayment
+        });
+    } catch (error) {
+        console.error('Next session error:', error);
         res.status(500).json({ error: 'حدث خطأ' });
     }
 });

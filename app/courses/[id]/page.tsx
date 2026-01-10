@@ -109,13 +109,41 @@ export default async function CourseDetailsPage({ params }: PageProps) {
                             {/* Price Card */}
                             <div className="w-full md:w-80 shrink-0">
                                 <div className="bg-secondary/50 rounded-2xl p-6 border border-border">
-                                    <div className="flex items-baseline gap-2 mb-2">
-                                        <span className="text-4xl font-black text-foreground">{course.price}</span>
-                                        <span className="text-sm font-medium text-muted-foreground">ج.م</span>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground mb-6">شامل جميع الجلسات والمتابعة</p>
+                                    {/* Full Course Price */}
+                                    {course.price > 0 && (
+                                        <div className="mb-4">
+                                            <div className="flex items-baseline gap-2 mb-1">
+                                                <span className="text-4xl font-black text-foreground">{course.price}</span>
+                                                <span className="text-sm font-medium text-muted-foreground">ج.م</span>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">شامل جميع الجلسات والمتابعة</p>
+                                        </div>
+                                    )}
 
-                                    <EnrollmentButton courseId={course.id} coursePrice={course.price} />
+                                    {/* Session Price Option */}
+                                    {course.session_price > 0 && (
+                                        <div className={course.price > 0 ? "pt-4 border-t border-border" : ""}>
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="text-sm text-muted-foreground">أو ادفع بالجلسة:</span>
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="text-2xl font-bold text-primary">{course.session_price}</span>
+                                                    <span className="text-xs text-muted-foreground">ج.م / جلسة</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* No Price Set */}
+                                    {(!course.price || course.price === 0) && (!course.session_price || course.session_price === 0) && (
+                                        <p className="text-center text-muted-foreground mb-4">مجاني</p>
+                                    )}
+
+                                    <EnrollmentButton
+                                        courseId={course.id}
+                                        coursePrice={course.price}
+                                        sessionPrice={course.session_price}
+                                        totalSessions={course.total_sessions}
+                                    />
                                 </div>
                             </div>
                         </div>

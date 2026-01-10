@@ -71,21 +71,29 @@ export default function CourseCard({
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         {/* سعر الجلسة أولاً */}
-                        {sessionPrice && Number(sessionPrice) > 0 && (
+                        {Number(sessionPrice) > 0 && (
                             <div className="text-right">
                                 <p className="text-xs text-muted-foreground mb-0.5">سعر الجلسة</p>
                                 <p className="text-lg font-bold text-foreground">{sessionPrice} <span className="text-xs font-normal text-muted-foreground">ج.م</span></p>
                             </div>
                         )}
                         {/* سعر الكورس كامل */}
-                        <div className="text-right border-r border-border/50 pr-4">
-                            <p className="text-xs text-muted-foreground mb-0.5">الكورس كامل</p>
-                            <p className="text-sm font-semibold text-foreground">{price} <span className="text-xs font-normal text-muted-foreground">ج.م</span></p>
-                        </div>
+                        {Number(price) > 0 && (
+                            <div className={`text-right ${Number(sessionPrice) > 0 ? 'border-r border-border/50 pr-4' : ''}`}>
+                                <p className="text-xs text-muted-foreground mb-0.5">الكورس كامل</p>
+                                <p className="text-sm font-semibold text-foreground">{price} <span className="text-xs font-normal text-muted-foreground">ج.م</span></p>
+                            </div>
+                        )}
+                        {/* مجاني لو مفيش أسعار */}
+                        {Number(price) === 0 && Number(sessionPrice) === 0 && (
+                            <div className="text-right">
+                                <p className="text-lg font-bold text-green-600">مجاني</p>
+                            </div>
+                        )}
                         {/* التوفير */}
-                        {sessionPrice && Number(sessionPrice) > 0 && sessionsCount && sessionsCount > 1 && (Number(sessionPrice) * sessionsCount) > Number(price) && (
+                        {Number(sessionPrice) > 0 && Number(sessionsCount) > 1 && Number(price) > 0 && (Number(sessionPrice) * Number(sessionsCount)) > Number(price) && (
                             <p className="text-xs text-green-600">
-                                وفّر {Math.round((Number(sessionPrice) * sessionsCount) - Number(price))} ج.م
+                                وفّر {Math.round((Number(sessionPrice) * Number(sessionsCount)) - Number(price))} ج.م
                             </p>
                         )}
                     </div>
