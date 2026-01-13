@@ -8,6 +8,40 @@ const apiKey = defaultClient.authentications['api-key'];
 
 const sendEmail = async (to, subject, html) => {
     try {
+        // 🎨 Branded Template Wrapper
+        const logoUrl = 'https://iwaaforyou.com/logo.png';
+        const brandedHtml = `
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f6f6f6; }
+        .container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #eaeaea; }
+        .header { background-color: #ffffff; padding: 25px; text-align: center; border-bottom: 3px solid #fce7f3; }
+        .logo { height: 50px; width: auto; object-fit: contain; }
+        .content { padding: 30px 25px; color: #333333; line-height: 1.6; text-align: right; direction: rtl; }
+        .footer { background-color: #fafafa; padding: 20px; text-align: center; font-size: 13px; color: #888888; border-top: 1px solid #eeeeee; }
+        a { color: #E85C3F; text-decoration: none; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="${logoUrl}" alt="إيواء | Iwaa" class="logo">
+        </div>
+        <div class="content">
+            ${html}
+        </div>
+        <div class="footer">
+            <p style="margin: 0;">© ${new Date().getFullYear()} إيواء - مساحتك الآمنة للدعم النفسي</p>
+            <p style="margin: 5px 0 0 0; font-size: 11px;">Iwaa for Mental Health Support</p>
+        </div>
+    </div>
+</body>
+</html>
+        `;
+
         // 1. Try Resend API (Primary)
         if (process.env.RESEND_API_KEY) {
             const resend = new Resend(process.env.RESEND_API_KEY);
@@ -15,7 +49,7 @@ const sendEmail = async (to, subject, html) => {
                 from: 'إيواء <info@iwaaforyou.com>',
                 to: [to],
                 subject: subject,
-                html: html,
+                html: brandedHtml,
             });
 
             if (!error) {
@@ -32,7 +66,7 @@ const sendEmail = async (to, subject, html) => {
             const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
 
             sendSmtpEmail.subject = subject;
-            sendSmtpEmail.htmlContent = html;
+            sendSmtpEmail.htmlContent = brandedHtml;
             sendSmtpEmail.sender = {
                 "name": process.env.BREVO_SENDER_NAME || "Iwaa Support",
                 "email": process.env.BREVO_SENDER_EMAIL || "support@iwaa.com"
