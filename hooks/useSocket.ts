@@ -22,7 +22,7 @@ export const useSocket = (userId?: string) => {
             console.log('🔌 Socket Connected:', socket.id);
 
             // Join user-specific room for private notifications
-            socket.emit('join-room', `user_${userId}`);
+            socket.emit('join-user-room', userId); // Backend expects just userId, not the room string
         });
 
         socket.on('connect_error', (err) => {

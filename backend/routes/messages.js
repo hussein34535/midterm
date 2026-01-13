@@ -850,19 +850,21 @@ router.post('/:id', authMiddleware, async (req, res) => {
                         </div>
                     `;
 
-                    // Send to all owners (only if they're OFFLINE)
+                    // Check if ANY owner is online - if so, skip all emails
                     const io = req.app.get('io');
 
-                    for (const owner of (allOwners || [])) {
-                        if (owner.email && !owner.email.includes('@iwaa.guest')) {
-                            // Check if owner is online via Socket.IO
-                            const ownerRoom = io?.sockets?.adapter?.rooms?.get(`user_${owner.id}`);
-                            const isOnline = ownerRoom && ownerRoom.size > 0;
+                    const anyOwnerOnline = (allOwners || []).some(owner => {
+                        const ownerRoom = io?.sockets?.adapter?.rooms?.get(`user_${owner.id}`);
+                        return ownerRoom && ownerRoom.size > 0;
+                    });
 
-                            if (isOnline) {
-                                console.log(`   ⚡ Owner ${owner.nickname} is ONLINE - skipping email.`);
-                            } else {
-                                console.log(`   📧 Owner ${owner.nickname} is OFFLINE - sending email to: ${owner.email}`);
+                    if (anyOwnerOnline) {
+                        console.log(`   ⚡ At least one owner is ONLINE - skipping all emails.`);
+                    } else {
+                        console.log(`   📧 All owners are OFFLINE - sending emails to all.`);
+                        for (const owner of (allOwners || [])) {
+                            if (owner.email && !owner.email.includes('@iwaa.guest')) {
+                                console.log(`   📧 Sending to: ${owner.nickname} (${owner.email})`);
                                 sendEmail(owner.email, `رسالة جديدة من ${senderName}`, emailHtml)
                                     .then(() => console.log(`   ✅ Email sent to ${owner.email}`))
                                     .catch(err => console.error(`   ❌ Email error to ${owner.email}:`, err));

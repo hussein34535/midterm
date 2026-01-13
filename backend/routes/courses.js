@@ -7,6 +7,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const supabase = require('../lib/supabase');
 const { authMiddleware, requireOwner, requireSpecialist } = require('../middleware/auth');
+const sendEmail = require('../utils/sendEmail');
 const router = express.Router();
 
 /**
@@ -605,6 +606,47 @@ router.post('/:id/payment', authMiddleware, async (req, res) => {
         const message = payment_type === 'session'
             ? `تم إرسال طلب دفع الجلسة ${session_number}! سيتم تفعيلها بعد التحقق`
             : 'تم إرسال طلب الدفع بنجاح! سيتم تفعيل اشتراكك خلال ساعات بعد التحقق من الدفع';
+
+        // 🔔 Notify owners about new payment
+        try {
+            // Get user info for notification
+            const { data: payingUser } = await supabase
+                .from('users')
+                .select('nickname, email')
+                .eq('id', userId)
+                .single();
+
+            const { data: allOwners } = await supabase
+                .from('users')
+                .select('id, email, nickname')
+                .eq('role', 'owner');
+
+            if (allOwners && allOwners.length > 0) {
+                const paymentTypeText = payment_type === 'session' ? `جلسة ${session_number}` : 'كورس كامل';
+                const notifyHtml = `
+                    <div style="text-align: right; direction: rtl; font-family: Arial, sans-serif;">
+                        <h2>دفعة جديدة 💳</h2>
+                        <p><strong>المستخدم:</strong> ${payingUser?.nickname || 'مستخدم'}</p>
+                        <p><strong>البريد:</strong> ${payingUser?.email || 'غير معروف'}</p>
+                        <p><strong>الكورس:</strong> ${course.title}</p>
+                        <p><strong>النوع:</strong> ${paymentTypeText}</p>
+                        <p><strong>المبلغ:</strong> ${finalAmount} جنيه</p>
+                        <p><strong>الحالة:</strong> قيد المراجعة ⏳</p>
+                        <p><strong>الوقت:</strong> ${new Date().toLocaleString('ar-EG')}</p>
+                        <br>
+                        <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/admin" style="background-color: #E85C3F; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">مراجعة الدفعات</a>
+                    </div>
+                `;
+                for (const owner of allOwners) {
+                    if (owner.email && !owner.email.includes('@iwaa.guest')) {
+                        sendEmail(owner.email, `دفعة جديدة: ${payingUser?.nickname || 'مستخدم'} - ${course.title}`, notifyHtml).catch(e => console.error('Payment notify error:', e));
+                    }
+                }
+                console.log('📧 Owner notification sent for new payment:', payment.id);
+            }
+        } catch (notifyError) {
+            console.error('Owner payment notify error:', notifyError);
+        }
 
         res.status(201).json({
             message,

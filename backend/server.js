@@ -115,7 +115,7 @@ io.on('connection', (socket) => {
     socket.on('join-user-room', (userId) => {
         if (userId) {
             socket.join(`user_${userId}`);
-            // console.log(`🔔 User ${userId} joined personal notification room`);
+            console.log(`🔔 User ${userId} joined personal room user_${userId}`);
         }
     });
 

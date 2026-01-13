@@ -93,6 +93,16 @@ export default function Header() {
 
         // Socket.io for real-time guest message notifications (owners only)
         const socket = io(API_URL);
+
+        // 🔔 Join user-specific room for presence tracking (online status)
+        socket.on('connect', () => {
+            const storedUser = localStorage.getItem('user');
+            if (storedUser) {
+                const parsedUser = JSON.parse(storedUser);
+                socket.emit('join-user-room', parsedUser.id);
+                console.log('🔌 Socket connected, joined user room:', parsedUser.id);
+            }
+        });
         socket.on('new-guest-message', (data: { from: string, preview: string }) => {
             // Only show notification for owners
             const storedUser = localStorage.getItem('user');

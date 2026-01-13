@@ -137,6 +137,33 @@ router.post('/register', async (req, res) => {
         // NO Auto-Login - Require email verification first
         const { password: _, ...userWithoutPassword } = newUser;
 
+        // 🔔 Notify owners about new registration
+        try {
+            const { data: allOwners } = await supabase
+                .from('users')
+                .select('id, email, nickname')
+                .eq('role', 'owner');
+
+            if (allOwners && allOwners.length > 0) {
+                const notifyHtml = `
+                    <div style="text-align: right; direction: rtl; font-family: Arial, sans-serif;">
+                        <h2>تسجيل جديد 🎉</h2>
+                        <p><strong>الاسم:</strong> ${nickname}</p>
+                        <p><strong>البريد:</strong> ${email}</p>
+                        <p><strong>الوقت:</strong> ${new Date().toLocaleString('ar-EG')}</p>
+                    </div>
+                `;
+                for (const owner of allOwners) {
+                    if (owner.email && !owner.email.includes('@iwaa.guest')) {
+                        sendEmail(owner.email, `تسجيل جديد: ${nickname}`, notifyHtml).catch(e => console.error('Owner notify error:', e));
+                    }
+                }
+                console.log('📧 Owner notification sent for new registration:', email);
+            }
+        } catch (notifyError) {
+            console.error('Owner registration notify error:', notifyError);
+        }
+
         res.status(201).json({
             message: 'تم إنشاء الحساب بنجاح! يرجى التحقق من بريدك الإلكتروني لتفعيل الحساب.',
             requiresVerification: true,
