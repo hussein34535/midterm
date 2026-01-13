@@ -8,7 +8,9 @@ const jwt = require('jsonwebtoken');
 const router = express.Router();
 const { createClient } = require('@supabase/supabase-js');
 const multer = require('multer');
+const multler = require('multer');
 const sharp = require('sharp');
+const sendEmail = require('../utils/sendEmail');
 
 // Configure Multer for memory storage
 const upload = multer({
@@ -801,9 +803,85 @@ router.post('/:id', authMiddleware, async (req, res) => {
             .single();
 
         if (error) {
-            console.error('Message insert error:', error);
-            return res.status(500).json({ error: `فشل في إرسال الرسالة: ${error.message}`, details: error });
+            console.error('Message send error:', error);
+            return res.status(500).json({ error: 'فشل إرسال الرسالة' });
         }
+
+
+
+        // 🔔 Notify Receiver via Email if they are an OWNER (Support)
+        console.log('🔔 [MSG] Checking if should send owner notification...');
+        console.log(`   type=${type}, receiverId (id)=${id}`);
+
+        if (type !== 'group') {
+            try {
+                // Check if receiver is an Owner
+                console.log('   Fetching receiver role...');
+                const { data: receiver, error: recvErr } = await supabase
+                    .from('users')
+                    .select('email, role, nickname')
+                    .eq('id', id)
+                    .single();
+
+                console.log(`   Receiver fetch result:`, { receiver, error: recvErr });
+
+                // If receiver is admin/system account, notify ALL actual owners
+                if (receiver && (receiver.role === 'owner' || receiver.role === 'admin') && receiver.email) {
+                    console.log(`   ✅ Receiver IS owner/admin (${receiver.nickname})`);
+
+                    // Fetch ALL owners to notify them
+                    const { data: allOwners } = await supabase
+                        .from('users')
+                        .select('id, email, nickname')
+                        .eq('role', 'owner');
+
+                    console.log(`   Found ${allOwners?.length || 0} owners to notify.`);
+
+                    const senderName = message.sender?.nickname || req.userNickname || 'مستخدم';
+                    const emailHtml = `
+                        <div style="text-align: right; direction: rtl; font-family: Arial, sans-serif;">
+                            <h2>رسالة دعم فني جديدة 📩</h2>
+                            <p><strong>من:</strong> ${senderName} (ID: ${req.userId})</p>
+                            <p><strong>الرسالة:</strong></p>
+                            <blockquote style="background: #f9f9f9; padding: 15px; border-right: 4px solid #E85C3F;">
+                                ${content.substring(0, 200)}${content.length > 200 ? '...' : ''}
+                            </blockquote>
+                            <p>يرجى تسجيل الدخول للمنصة للرد.</p>
+                        </div>
+                    `;
+
+                    // Send to all owners (only if they're OFFLINE)
+                    const io = req.app.get('io');
+
+                    for (const owner of (allOwners || [])) {
+                        if (owner.email && !owner.email.includes('@iwaa.guest')) {
+                            // Check if owner is online via Socket.IO
+                            const ownerRoom = io?.sockets?.adapter?.rooms?.get(`user_${owner.id}`);
+                            const isOnline = ownerRoom && ownerRoom.size > 0;
+
+                            if (isOnline) {
+                                console.log(`   ⚡ Owner ${owner.nickname} is ONLINE - skipping email.`);
+                            } else {
+                                console.log(`   📧 Owner ${owner.nickname} is OFFLINE - sending email to: ${owner.email}`);
+                                sendEmail(owner.email, `رسالة جديدة من ${senderName}`, emailHtml)
+                                    .then(() => console.log(`   ✅ Email sent to ${owner.email}`))
+                                    .catch(err => console.error(`   ❌ Email error to ${owner.email}:`, err));
+                            }
+                        }
+                    }
+                } else {
+                    console.log(`   ❌ Receiver is NOT owner/admin. Role: ${receiver?.role}`);
+                }
+            } catch (notifyError) {
+                console.error('Notification error:', notifyError);
+            }
+        } else {
+            console.log('   Skipping notification - this is a group message.');
+        }
+
+
+
+
 
         // Fetch replyTo data if exists
         let replyTo = null;

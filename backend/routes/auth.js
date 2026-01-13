@@ -87,12 +87,23 @@ router.post('/register', async (req, res) => {
             return res.status(500).json({ error: 'حدث خطأ أثناء إنشاء الحساب' });
         }
 
-        // Email sending DISABLED per user request
-        /*
         // Send Verification Email with OTP
-        const emailHtml = `...`;
+        const emailHtml = `
+            <div style="text-align: right; direction: rtl; font-family: Arial, sans-serif;">
+                <h2>مرحباً ${nickname}! 👋</h2>
+                <p>شكراً لتسجيلك في منصة إيواء. لتفعيل حسابك، يرجى استخدام الرمز التالي:</p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <span style="background-color: #f3f4f6; color: #1f2937; padding: 15px 30px; font-size: 24px; letter-spacing: 5px; font-weight: bold; border-radius: 10px; border: 2px dashed #E85C3F;">
+                        ${verificationToken}
+                    </span>
+                </div>
+                <p>نتمنى لك رحلة تعافي موفقة معنا.</p>
+            </div>
+        `;
+        console.log('📤 [AUTH] Calling sendEmail for registration verification...');
+        console.log(`   Email: ${email}, Token: ${verificationToken}`);
         await sendEmail(email, 'رمز تفعيل حسابك في إيواء', emailHtml);
-        */
+        console.log('📤 [AUTH] sendEmail call completed.');
 
         // ... (Guest & Welcome Message logic remains) ...
 
@@ -123,20 +134,13 @@ router.post('/register', async (req, res) => {
             // Don't fail registration if welcome message fails
         }
 
-        // Generate JWT for Auto-Login (Restored)
-        const token = jwt.sign(
-            { userId: newUser.id, email: newUser.email, role: newUser.role || 'user' },
-            process.env.JWT_SECRET,
-            { expiresIn: '365d' }
-        );
-
-        // Return success WITH Token (Auto Login)
+        // NO Auto-Login - Require email verification first
         const { password: _, ...userWithoutPassword } = newUser;
 
         res.status(201).json({
-            message: 'تم إنشاء الحساب بنجاح',
-            user: userWithoutPassword,
-            token
+            message: 'تم إنشاء الحساب بنجاح! يرجى التحقق من بريدك الإلكتروني لتفعيل الحساب.',
+            requiresVerification: true,
+            email: email
         });
 
     } catch (error) {
@@ -249,13 +253,14 @@ router.post('/login', async (req, res) => {
         // Assuming default FALSE for new users. Old users might be NULL. 
         // Let's enforce check if column exists. 
 
-        // Check Verification STATUS
-        // if (user.is_verified === false) {
-        //     return res.status(403).json({
-        //         error: 'يرجى تأكيد بريدك الإلكتروني أولاً.',
-        //         notVerified: true
-        //     });
-        // }
+        // Check Verification STATUS - ENABLED
+        if (user.is_verified === false) {
+            return res.status(403).json({
+                error: 'يرجى تأكيد بريدك الإلكتروني أولاً.',
+                notVerified: true,
+                email: user.email
+            });
+        }
 
         const token = jwt.sign(
             { userId: user.id, email: user.email, role: user.role },
@@ -669,8 +674,8 @@ router.post('/guest-message', async (req, res) => {
 
         // Find ALL Owners
         const { data: owners } = await supabase
-            .from('users')
-            .select('id')
+            .from('users') /* FIX: Should fetch EMAIL too */
+            .select('id, email')
             .eq('role', 'owner');
 
         if (!owners || owners.length === 0) {
@@ -707,6 +712,24 @@ router.post('/guest-message', async (req, res) => {
                 timestamp: new Date().toISOString()
             });
         }
+
+        // 🔔 Send Email Notification to Owners
+        owners.forEach(owner => {
+            if (owner.email && !owner.email.includes('@iwaa.guest')) {
+                const emailHtml = `
+                    <div style="text-align: right; direction: rtl; font-family: Arial, sans-serif;">
+                        <h2>رسالة زائر جديدة 📩</h2>
+                        <p><strong>من:</strong> ${guestUser.nickname}</p>
+                        <p><strong>الرسالة:</strong></p>
+                        <blockquote style="background: #f9f9f9; padding: 15px; border-right: 4px solid #E85C3F;">
+                            ${message}
+                        </blockquote>
+                        <p>يرجى تسجيل الدخول للمنصة للرد.</p>
+                    </div>
+                `;
+                sendEmail(owner.email, `رسالة زائر جديدة من ${guestUser.nickname}`, emailHtml).catch(console.error);
+            }
+        });
 
         res.json({
             message: 'تم إرسال رسالتك بنجاح!',

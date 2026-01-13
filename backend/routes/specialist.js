@@ -7,6 +7,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const supabase = require('../lib/supabase');
 const { authMiddleware, requireSpecialist } = require('../middleware/auth');
+const sendEmail = require('../utils/sendEmail');
 const router = express.Router();
 
 // All specialist routes require authentication and specialist role
@@ -285,9 +286,54 @@ router.post('/groups/:groupId/schedule', async (req, res) => {
             return res.status(500).json({ error: 'حدث خطأ في الجدولة' });
         }
 
-        // Send notification to group members (TODO)
+        // Send notification to group members
+        try {
+            // Get all group members emails
+            const { data: members } = await supabase
+                .from('enrollments')
+                .select(`
+                    user:users!inner(email, nickname)
+                `)
+                .eq('group_id', groupId);
 
-        res.status(201).json({ message: 'تم جدولة الجلسة للمجموعة', session: groupSession });
+            if (members && members.length > 0) {
+                const sessionDate = new Date(scheduled_at).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+                const emails = members
+                    .filter(m => m.user && m.user.email)
+                    .map(m => m.user.email);
+
+                // Send individually to personalize? Or BCC? 
+                // Personalize is better.
+                for (const member of members) {
+                    if (!member.user || !member.user.email) continue;
+
+                    const emailHtml = `
+                        <div style="text-align: right; direction: rtl; font-family: Arial, sans-serif;">
+                            <h2>موعد جلسة جديد 📅</h2>
+                            <p>مرحباً <strong>${member.user.nickname}</strong>،</p>
+                            <p>تم تحديد موعد لجلسة جديدة في مجموعتك <strong>${group.name}</strong>.</p>
+                            
+                            <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #bbf7d0;">
+                                <h3 style="margin-top: 0; color: #166534;">${sessionData.title}</h3>
+                                <p style="font-size: 18px; margin-bottom: 0;">⏰ الموعد: <strong>${sessionDate}</strong></p>
+                            </div>
+
+                            <p>يرجى التواجد في الموعد المحدد. رابط الجلسة سيكون متاحاً في صفحة المجموعة.</p>
+                        </div>
+                    `;
+
+                    sendEmail(member.user.email, `موعد جلسة جديد: ${sessionData.title}`, emailHtml).catch(e => console.error(`Failed to notify ${member.user.email}`, e));
+                }
+                console.log(`📧 Notification sent to ${members.length} members.`);
+            }
+
+        } catch (notifyError) {
+            console.error('Session notification error:', notifyError);
+            // Don't fail the request
+        }
+
+        res.status(201).json({ message: 'تم جدولة الجلسة للمجموعة وإشعار الأعضاء', session: groupSession });
 
     } catch (error) {
         console.error('Schedule exception:', error);
