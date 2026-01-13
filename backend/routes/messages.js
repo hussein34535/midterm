@@ -810,38 +810,26 @@ router.post('/:id', authMiddleware, async (req, res) => {
 
 
         // 🔔 Notify Receiver via Email if they are an OWNER (Support)
-        console.log('🔔 [MSG] Checking if should send owner notification...');
-        console.log(`   type=${type}, receiverId (id)=${id}`);
-
         if (type !== 'group') {
             try {
-                // Check if receiver is an Owner
-                console.log('   Fetching receiver role...');
-                const { data: receiver, error: recvErr } = await supabase
+                const { data: receiver } = await supabase
                     .from('users')
-                    .select('email, role, nickname')
+                    .select('email, role, nickname, id')
                     .eq('id', id)
                     .single();
 
-                console.log(`   Receiver fetch result:`, { receiver, error: recvErr });
-
                 // If receiver is admin/system account, notify ALL actual owners
                 if (receiver && (receiver.role === 'owner' || receiver.role === 'admin') && receiver.email) {
-                    console.log(`   ✅ Receiver IS owner/admin (${receiver.nickname})`);
-
-                    // Fetch ALL owners to notify them
                     const { data: allOwners } = await supabase
                         .from('users')
                         .select('id, email, nickname')
                         .eq('role', 'owner');
 
-                    console.log(`   Found ${allOwners?.length || 0} owners to notify.`);
-
                     const senderName = message.sender?.nickname || req.userNickname || 'مستخدم';
                     const emailHtml = `
                         <div style="text-align: right; direction: rtl; font-family: Arial, sans-serif;">
                             <h2>رسالة دعم فني جديدة 📩</h2>
-                            <p><strong>من:</strong> ${senderName} (ID: ${req.userId})</p>
+                            <p><strong>من:</strong> ${senderName}</p>
                             <p><strong>الرسالة:</strong></p>
                             <blockquote style="background: #f9f9f9; padding: 15px; border-right: 4px solid #E85C3F;">
                                 ${content.substring(0, 200)}${content.length > 200 ? '...' : ''}
@@ -852,33 +840,44 @@ router.post('/:id', authMiddleware, async (req, res) => {
 
                     // Check if ANY owner is online - if so, skip all emails
                     const io = req.app.get('io');
-
                     const anyOwnerOnline = (allOwners || []).some(owner => {
                         const ownerRoom = io?.sockets?.adapter?.rooms?.get(`user_${owner.id}`);
                         return ownerRoom && ownerRoom.size > 0;
                     });
 
-                    if (anyOwnerOnline) {
-                        console.log(`   ⚡ At least one owner is ONLINE - skipping all emails.`);
-                    } else {
-                        console.log(`   📧 All owners are OFFLINE - sending emails to all.`);
+                    if (!anyOwnerOnline) {
                         for (const owner of (allOwners || [])) {
                             if (owner.email && !owner.email.includes('@iwaa.guest')) {
-                                console.log(`   📧 Sending to: ${owner.nickname} (${owner.email})`);
-                                sendEmail(owner.email, `رسالة جديدة من ${senderName}`, emailHtml)
-                                    .then(() => console.log(`   ✅ Email sent to ${owner.email}`))
-                                    .catch(err => console.error(`   ❌ Email error to ${owner.email}:`, err));
+                                sendEmail(owner.email, `رسالة جديدة من ${senderName}`, emailHtml).catch(() => { });
                             }
                         }
                     }
-                } else {
-                    console.log(`   ❌ Receiver is NOT owner/admin. Role: ${receiver?.role}`);
+                } else if ((req.userRole === 'owner' || req.userRole === 'admin' || req.userRole === 'specialist') && receiver?.role === 'user') {
+                    // Notify user when staff sends message
+                    const io = req.app.get('io');
+                    const userRoom = io?.sockets?.adapter?.rooms?.get(`user_${receiver.id || id}`);
+                    const isOnline = userRoom && userRoom.size > 0;
+
+                    if (!isOnline && receiver?.email) {
+                        const userEmailHtml = `
+                            <div style="text-align: right; direction: rtl; font-family: Arial, sans-serif;">
+                                <h2>رسالة جديدة من فريق إيواء 💌</h2>
+                                <p>مرحباً ${receiver.nickname || 'عزيزي/عزيزتي'}،</p>
+                                <p>لديك رسالة جديدة على منصة إيواء:</p>
+                                <div style="background: #f9f9f9; padding: 15px; border-radius: 10px; margin: 15px 0; border-right: 4px solid #E85C3F;">
+                                    <p style="margin: 0;">"${content.substring(0, 100)}${content.length > 100 ? '...' : ''}"</p>
+                                </div>
+                                <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/messages" style="display: inline-block; background: #E85C3F; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">
+                                    عرض الرسالة
+                                </a>
+                            </div>
+                        `;
+                        sendEmail(receiver.email, 'رسالة جديدة من فريق إيواء', userEmailHtml).catch(() => { });
+                    }
                 }
             } catch (notifyError) {
                 console.error('Notification error:', notifyError);
             }
-        } else {
-            console.log('   Skipping notification - this is a group message.');
         }
 
 

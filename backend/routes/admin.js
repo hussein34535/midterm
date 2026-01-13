@@ -7,6 +7,7 @@ const express = require('express');
 const supabase = require('../lib/supabase');
 const { authMiddleware, requireAdmin, requireOwner } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
+const sendEmail = require('../utils/sendEmail');
 const router = express.Router();
 
 // All admin routes require authentication
@@ -775,6 +776,43 @@ router.patch('/payments/:id', requireOwner, async (req, res) => {
                         });
                 }
             }
+        }
+
+        // 🔔 Send confirmation email to user
+        try {
+            const { data: user } = await supabase
+                .from('users')
+                .select('email, nickname')
+                .eq('id', payment.user_id)
+                .single();
+
+            const { data: course } = await supabase
+                .from('courses')
+                .select('title')
+                .eq('id', payment.course_id)
+                .single();
+
+            if (user?.email && status === 'confirmed') {
+                const confirmHtml = `
+                    <div style="text-align: right; direction: rtl; font-family: Arial, sans-serif;">
+                        <h2>تم تأكيد الدفع بنجاح! ✅</h2>
+                        <p>مرحباً ${user.nickname || 'عزيزي/عزيزتي'}،</p>
+                        <p>تم تأكيد دفعتك وتفعيل اشتراكك في:</p>
+                        <div style="background: #e8f5e9; padding: 15px; border-radius: 10px; margin: 15px 0; border-right: 4px solid #4caf50;">
+                            <p style="margin: 0; font-weight: bold; font-size: 18px;">${course?.title || 'الكورس'}</p>
+                        </div>
+                        <p>يمكنك الآن الوصول للمحتوى والانضمام للمجموعة.</p>
+                        <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard" style="display: inline-block; background: #4caf50; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;">
+                            الذهاب للوحة التحكم
+                        </a>
+                    </div>
+                `;
+                sendEmail(user.email, `تم تفعيل اشتراكك: ${course?.title || 'كورس'}`, confirmHtml)
+                    .then(() => console.log('✅ Payment confirmation email sent to:', user.email))
+                    .catch(err => console.error('❌ Payment email error:', err));
+            }
+        } catch (emailErr) {
+            console.error('Payment confirmation email error:', emailErr);
         }
 
         res.json({ message: 'تم تحديث حالة الدفعة بنجاح', type: 'course' });

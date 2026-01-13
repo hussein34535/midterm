@@ -85,15 +85,21 @@ export default function RegisterPage() {
                 guestToken: guestToken || undefined
             });
 
-            // Redirect to Dashboard (Auto-Login Restored)
-            toast.success("تم إنشاء الحساب بنجاح! جاري الدخول...");
-            setTimeout(() => {
-                router.push('/dashboard');
-            }, 1000);
-
-            /* Verification Skipped
-            if (response.requiresVerification) { ... }
-            */
+            // Check if verification required
+            if (response.requiresVerification) {
+                toast.success('تم إنشاء الحساب! يرجى إدخال رمز التفعيل المرسل لبريدك.');
+                setTimeout(() => {
+                    router.push(`/verify-code?email=${encodeURIComponent(response.email || formData.email)}`);
+                }, 500);
+            } else if (response.token) {
+                // Old flow (auto-login) - fallback
+                localStorage.setItem('token', response.token);
+                localStorage.setItem('user', JSON.stringify(response.user));
+                toast.success("تم إنشاء الحساب بنجاح! جاري الدخول...");
+                setTimeout(() => {
+                    router.push('/dashboard');
+                }, 1000);
+            }
         } catch (error: any) {
             toast.error(error.message || "حدث خطأ ما، يرجى المحاولة مرة أخرى");
         } finally {

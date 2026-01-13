@@ -74,27 +74,26 @@ export default function CourseCard({
                         {Number(sessionPrice) > 0 && (
                             <div className="text-right">
                                 <p className="text-xs text-muted-foreground mb-0.5">سعر الجلسة</p>
-                                <p className="text-lg font-bold text-foreground">{sessionPrice} <span className="text-xs font-normal text-muted-foreground">ج.م</span></p>
+                                <p className="text-lg font-bold text-primary">{sessionPrice} <span className="text-xs font-normal text-muted-foreground">ج.م</span></p>
                             </div>
                         )}
-                        {/* سعر الكورس كامل */}
+                        {/* سعر الكورس كامل + التوفير جنبه */}
                         {Number(price) > 0 && (
                             <div className={`text-right ${Number(sessionPrice) > 0 ? 'border-r border-border/50 pr-4' : ''}`}>
                                 <p className="text-xs text-muted-foreground mb-0.5">الكورس كامل</p>
-                                <p className="text-sm font-semibold text-foreground">{price} <span className="text-xs font-normal text-muted-foreground">ج.م</span></p>
+                                <div className="flex items-center gap-2">
+                                    {/* سعر أكبر لو لوحده */}
+                                    <p className={`font-bold text-foreground ${Number(sessionPrice) > 0 ? 'text-sm' : 'text-xl text-primary'}`}>
+                                        {price} <span className={`font-normal text-muted-foreground ${Number(sessionPrice) > 0 ? 'text-xs' : 'text-sm'}`}>ج.م</span>
+                                    </p>
+                                    {/* شارة التوفير بجانب السعر */}
+                                    {Number(sessionPrice) > 0 && Number(sessionsCount) > 1 && (Number(sessionPrice) * Number(sessionsCount)) > Number(price) && (
+                                        <span className="bg-green-100 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-green-200">
+                                            وفّر {Math.round((Number(sessionPrice) * Number(sessionsCount)) - Number(price))} ج.م
+                                        </span>
+                                    )}
+                                </div>
                             </div>
-                        )}
-                        {/* مجاني لو مفيش أسعار */}
-                        {Number(price) === 0 && Number(sessionPrice) === 0 && (
-                            <div className="text-right">
-                                <p className="text-lg font-bold text-green-600">مجاني</p>
-                            </div>
-                        )}
-                        {/* التوفير */}
-                        {Number(sessionPrice) > 0 && Number(sessionsCount) > 1 && Number(price) > 0 && (Number(sessionPrice) * Number(sessionsCount)) > Number(price) && (
-                            <p className="text-xs text-green-600">
-                                وفّر {Math.round((Number(sessionPrice) * Number(sessionsCount)) - Number(price))} ج.م
-                            </p>
                         )}
                     </div>
 

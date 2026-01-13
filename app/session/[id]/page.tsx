@@ -86,6 +86,7 @@ export default function SessionPage() {
                         ) : (
                             <VoiceCall
                                 channelName={`iwaa-session-${sessionId}`}
+                                groupId={sessionId}
                                 userName={user.nickname || "مستخدم"}
                                 userAvatar={user.avatar}
                                 userRole={user.role}

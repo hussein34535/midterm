@@ -109,12 +109,18 @@ export default async function CourseDetailsPage({ params }: PageProps) {
                             {/* Price Card */}
                             <div className="w-full md:w-80 shrink-0">
                                 <div className="bg-secondary/50 rounded-2xl p-6 border border-border">
-                                    {/* Full Course Price */}
+                                    {/* Full Course Price with Savings */}
                                     {course.price > 0 && (
                                         <div className="mb-4">
                                             <div className="flex items-baseline gap-2 mb-1">
                                                 <span className="text-4xl font-black text-foreground">{course.price}</span>
                                                 <span className="text-sm font-medium text-muted-foreground">ج.م</span>
+                                                {/* Savings Badge */}
+                                                {course.session_price > 0 && course.total_sessions > 1 && (course.session_price * course.total_sessions) > course.price && (
+                                                    <span className="bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+                                                        وفّر {Math.round((course.session_price * course.total_sessions) - course.price)} ج.م
+                                                    </span>
+                                                )}
                                             </div>
                                             <p className="text-xs text-muted-foreground">شامل جميع الجلسات والمتابعة</p>
                                         </div>

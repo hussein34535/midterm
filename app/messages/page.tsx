@@ -438,7 +438,15 @@ export default function MessagesPage() {
                     if (!myCourseIds.includes(cId) && currentUser.role !== 'owner') return;
 
                     convId = cId;
-                    const info = courseMap.get(convId) || { name: 'Conversation', id: convId };
+                    const info = courseMap.get(convId);
+
+                    // Skip orphan groups that have no valid course data
+                    if (!info && currentUser.role !== 'owner') return;
+                    if (!info) {
+                        // Owner: still skip orphan groups with no name
+                        return;
+                    }
+
                     otherUser = {
                         id: convId,
                         nickname: info.name || (msg.course_id ? 'Course Chat' : 'Group Chat'),

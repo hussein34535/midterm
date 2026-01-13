@@ -328,6 +328,32 @@ router.post('/groups/:groupId/schedule', async (req, res) => {
                 console.log(`📧 Notification sent to ${members.length} members.`);
             }
 
+            // 📧 Notify the Specialist (course owner) too
+            const { data: specialist } = await supabase
+                .from('users')
+                .select('email, nickname')
+                .eq('id', req.userId)
+                .single();
+
+            if (specialist?.email) {
+                const sessionDate = new Date(scheduled_at).toLocaleDateString('ar-EG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const specialistHtml = `
+                    <div style="text-align: right; direction: rtl; font-family: Arial, sans-serif;">
+                        <h2>تم جدولة جلسة بنجاح ✅</h2>
+                        <p>مرحباً <strong>${specialist.nickname || 'أخصائي'}</strong>،</p>
+                        <p>تم تحديد موعد الجلسة التالية:</p>
+                        <div style="background: #e8f5e9; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #c8e6c9;">
+                            <h3 style="margin-top: 0;">${sessionData.title}</h3>
+                            <p>المجموعة: <strong>${group.name}</strong></p>
+                            <p>الموعد: <strong>${sessionDate}</strong></p>
+                        </div>
+                    </div>
+                `;
+                sendEmail(specialist.email, `تم جدولة الجلسة: ${sessionData.title}`, specialistHtml)
+                    .then(() => console.log(`📧 Specialist notified: ${specialist.email}`))
+                    .catch(e => console.error('Specialist notify error:', e));
+            }
+
         } catch (notifyError) {
             console.error('Session notification error:', notifyError);
             // Don't fail the request
@@ -531,6 +557,72 @@ router.get('/stats', async (req, res) => {
             }
         });
     } catch (error) {
+        res.status(500).json({ error: 'حدث خطأ' });
+    }
+});
+
+/**
+ * POST /api/specialist/notify-session-start
+ * Send email notification to all group members that session is starting NOW
+ */
+router.post('/notify-session-start', async (req, res) => {
+    try {
+        const { groupId, sessionTitle } = req.body;
+
+        if (!groupId) {
+            return res.status(400).json({ error: 'معرف المجموعة مطلوب' });
+        }
+
+        // Get group info
+        const { data: group } = await supabase
+            .from('course_groups')
+            .select('name, course_id')
+            .eq('id', groupId)
+            .single();
+
+        if (!group) {
+            return res.status(404).json({ error: 'المجموعة غير موجودة' });
+        }
+
+        // Get all group members with emails
+        const { data: members } = await supabase
+            .from('enrollments')
+            .select(`
+                user:users!inner(email, nickname)
+            `)
+            .eq('group_id', groupId);
+
+        if (!members || members.length === 0) {
+            return res.json({ message: 'لا يوجد أعضاء في المجموعة', sent: 0 });
+        }
+
+        const sessionName = sessionTitle || group.name;
+        let sentCount = 0;
+
+        // Send emails to all members
+        for (const member of members) {
+            if (member.user?.email) {
+                const emailHtml = `
+                    <div style="text-align: right; direction: rtl; font-family: Arial, sans-serif;">
+                        <h2>🎙️ الجلسة بدأت الآن!</h2>
+                        <p>مرحباً <strong>${member.user.nickname || 'عزيزي/عزيزتي'}</strong>،</p>
+                        <p>جلسة <strong>${sessionName}</strong> بدأت الآن!</p>
+                        <div style="background: #e8f5e9; padding: 20px; border-radius: 10px; margin: 20px 0; border: 1px solid #c8e6c9;">
+                            <p style="margin: 0; font-size: 18px;">انضم الآن للغرفة الصوتية</p>
+                        </div>
+                        <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/groups/${groupId}" style="display: inline-block; background: #4caf50; color: white; padding: 14px 28px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">
+                            انضم للجلسة
+                        </a>
+                    </div>
+                `;
+                sendEmail(member.user.email, `🎙️ الجلسة بدأت: ${sessionName}`, emailHtml).catch(() => { });
+                sentCount++;
+            }
+        }
+
+        res.json({ message: `تم إشعار ${sentCount} عضو`, sent: sentCount });
+    } catch (error) {
+        console.error('Notify session start error:', error);
         res.status(500).json({ error: 'حدث خطأ' });
     }
 });

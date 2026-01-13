@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Mic, MicOff, PhoneOff, Phone, Loader2, Users, Clock, AlertTriangle, MessageCircle } from "lucide-react";
+import { Mic, MicOff, PhoneOff, Phone, Loader2, Users, Clock, AlertTriangle, MessageCircle, Mail } from "lucide-react";
 import ParticipantsList from "./ParticipantsList";
 import ChatBox from "./ChatBox";
 import { io } from "socket.io-client";
@@ -11,6 +11,7 @@ const APP_ID = process.env.NEXT_PUBLIC_AGORA_APP_ID || "19d2ae52aa924cc48c65e996
 
 interface VoiceCallProps {
     channelName: string;
+    groupId?: string;
     onEndCall?: () => void;
     userName?: string;
     userAvatar?: string;
@@ -20,6 +21,7 @@ interface VoiceCallProps {
 
 export default function VoiceCall({
     channelName,
+    groupId,
     onEndCall,
     userName = "مستخدم",
     userAvatar,
@@ -47,6 +49,7 @@ export default function VoiceCall({
     const [socketConnected, setSocketConnected] = useState(false);
     const [chatMessages, setChatMessages] = useState<any[]>([]);
     const [isChatOpen, setIsChatOpen] = useState(false);
+    const [isNotifying, setIsNotifying] = useState(false);
 
     const canControl = userRole === 'specialist' || userRole === 'owner';
 
@@ -390,6 +393,33 @@ export default function VoiceCall({
         sendModerationAction(uid, 'kick');
     };
 
+    // Notify all group members about session start
+    const notifySessionStart = async () => {
+        if (!groupId || isNotifying) return;
+        setIsNotifying(true);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/api/specialist/notify-session-start`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ groupId, sessionTitle: channelName })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showNotification(`📧 تم إشعار ${data.sent} عضو`);
+            } else {
+                showNotification(data.error || 'حدث خطأ');
+            }
+        } catch (err) {
+            showNotification('فشل الإرسال');
+        } finally {
+            setIsNotifying(false);
+        }
+    };
+
     if (!agoraLoaded) {
         return (
             <div className="bg-gradient-to-b from-background to-muted/30 rounded-3xl p-8 text-center max-w-lg mx-auto border border-border" dir="rtl">
@@ -465,7 +495,7 @@ export default function VoiceCall({
                         {/* Chat Button */}
                         <button
                             onClick={() => setIsChatOpen(true)}
-                            className="w-14 h-14 rounded-full bg-secondary text-foreground flex items-center justify-center hover:bg-secondary/80 transition-all hover:scale-110 active:scale-95 shadow-lg btn-ripple"
+                            className="w-14 h-14 rounded-full bg-secondary text-foreground flex items-center justify-center hover:bg-secondary/80 transition-all hover:scale-110 active:scale-95 shadow-lg btn-ripple relative"
                             title="الدردشة"
                         >
                             <MessageCircle className="w-6 h-6" />
@@ -475,6 +505,18 @@ export default function VoiceCall({
                                 </span>
                             )}
                         </button>
+
+                        {/* Notify Session Button - Specialist/Owner Only */}
+                        {canControl && groupId && (
+                            <button
+                                onClick={notifySessionStart}
+                                disabled={isNotifying}
+                                className="w-14 h-14 rounded-full bg-green-500 text-white flex items-center justify-center hover:bg-green-600 transition-all hover:scale-110 active:scale-95 shadow-lg shadow-green-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="إشعار الأعضاء بالجلسة"
+                            >
+                                {isNotifying ? <Loader2 className="w-6 h-6 animate-spin" /> : <Mail className="w-6 h-6" />}
+                            </button>
+                        )}
 
                         {/* Mute Button (Disabled if force muted) */}
                         <button

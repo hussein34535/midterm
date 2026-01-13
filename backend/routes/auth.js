@@ -71,8 +71,8 @@ router.post('/register', async (req, res) => {
                 password: hashedPassword,
                 avatar: avatar || null,
                 created_at: new Date().toISOString(),
-                is_verified: true, // Auto-verify until domain purchased
-                verification_token: null
+                is_verified: false, // Require verification
+                verification_token: verificationToken // Save OTP token
             })
             .select()
             .single();
@@ -231,6 +231,31 @@ router.post('/verify-email', async (req, res) => {
             .single();
 
         const { password: _, ...userWithoutPassword } = fullUser;
+
+        // 📧 Send welcome email after verification
+        try {
+            const welcomeHtml = `
+                <div style="text-align: right; direction: rtl; font-family: Arial, sans-serif;">
+                    <h2>مرحباً بك في إيواء! 🎉</h2>
+                    <p>مرحباً <strong>${fullUser.nickname || 'عزيزي/عزيزتي'}</strong>،</p>
+                    <p>تم تفعيل حسابك بنجاح! يمكنك الآن:</p>
+                    <ul style="line-height: 2;">
+                        <li>الانضمام للكورسات والجلسات</li>
+                        <li>التواصل مع الأخصائيين</li>
+                        <li>المشاركة في مجموعات الدعم</li>
+                    </ul>
+                    <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard" style="display: inline-block; background: #E85C3F; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; margin-top: 15px;">
+                        ابدأ رحلتك الآن
+                    </a>
+                    <p style="margin-top: 30px; color: #666;">نتمنى لك رحلة تعافي موفقة 💚</p>
+                </div>
+            `;
+            sendEmail(user.email, 'مرحباً بك في إيواء - تم تفعيل حسابك', welcomeHtml)
+                .then(() => console.log('📧 Welcome email sent to:', user.email))
+                .catch(e => console.error('Welcome email error:', e));
+        } catch (emailErr) {
+            console.error('Welcome email exception:', emailErr);
+        }
 
         res.json({
             message: 'تم تفعيل الحساب بنجاح! جاري تحويلك...',
